@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CluePanel } from '../components/CluePanel';
 import { PlayerList } from '../components/PlayerList';
 import { PuzzleCard } from '../components/PuzzleCard';
 import { HintBar } from '../components/HintBar';
+import { PrivateCluePanel } from '../components/PrivateCluePanel';
 import { useRoom } from '../hooks/useRoom';
-import type { DmResponseMsg, InterventionMsg, PlayerMsg, RoomMessage, SystemMsg } from '../hooks/useRoom';
+import type { DmResponseMsg, InterventionMsg, PlayerMsg, PrivateMessage, RoomMessage, SystemMsg } from '../hooks/useRoom';
 import type { RoomPlayer } from '../api';
 
 // ---------------------------------------------------------------------------
@@ -140,6 +141,68 @@ function MessageList({ msgs, playerName, dmTyping }: { msgs: RoomMessage[]; play
       })}
       {dmTyping && <DmTypingBubble />}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Private chat area
+// ---------------------------------------------------------------------------
+
+function PrivateChatArea({ msgs, dmTyping }: { msgs: PrivateMessage[]; dmTyping: boolean }) {
+  return (
+    <>
+      {msgs.length === 0 && (
+        <div className="room-private-empty">
+          向DM私密提问，其他玩家不会看到你们的对话
+        </div>
+      )}
+      {msgs.map((m, i) => {
+        if (m.type === 'private_question') {
+          return (
+            <div key={i} className="room-msg room-msg--private-q">
+              <div className="room-bubble room-bubble--private">{m.text}</div>
+              <span className="private-badge">私密提问</span>
+              <span className="room-msg-time">{formatTime(m.timestamp)}</span>
+            </div>
+          );
+        }
+        return (
+          <div key={i} className="room-msg room-msg--dm room-msg--private-dm">
+            <div className="room-dm-header">
+              <span className="room-dm-label">DM</span>
+              <span className="private-badge">🔒 仅你可见</span>
+              <span className="room-msg-time" style={{ marginLeft: 'auto' }}>{formatTime(m.timestamp)}</span>
+            </div>
+            <div className="room-bubble room-bubble--dm">{m.response}</div>
+          </div>
+        );
+      })}
+      {dmTyping && <DmTypingBubble />}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Game intro modal (information asymmetry explainer)
+// ---------------------------------------------------------------------------
+
+function IntroModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-icon">🔐</div>
+        <h3 className="modal-title">信息不对等游戏</h3>
+        <p className="modal-body">
+          每位玩家持有不同的秘密线索。<br />
+          你可以用自己的话描述你知道的内容，<br />
+          但不能直接展示原始线索文字。<br />
+          合作拼出完整真相即可获胜！
+        </p>
+        <button className="btn btn-primary" onClick={onClose} style={{ width: '100%' }}>
+          知道了，开始游戏
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -283,12 +346,30 @@ export function RoomPage() {
   const {
     messages, players, clues, connected, progress, truth, puzzle, error,
     questionsByPlayer, cluesByPlayer, dmTyping, sendMessage,
+    privateClues, privateMessages, leakWarning, sendPrivateMessage,
   } = useRoom(roomId, playerName);
 
   const [input, setInput] = useState('');
   const [showCluePanel, setShowCluePanel] = useState(false);
   const cluePanelRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Phase 3 state
+  const [chatMode, setChatMode] = useState<'public' | 'private'>('public');
+  const [privateInput, setPrivateInput] = useState('');
+  const [showPrivatePanel, setShowPrivatePanel] = useState(false);
+  const [showIntroModal, setShowIntroModal] = useState(false);
+  const hasShownIntroRef = useRef(false);
+  const privateEndRef = useRef<HTMLDivElement>(null);
+  const privatePanelRef = useRef<HTMLDivElement>(null);
+
+  // Show intro modal once when private clues first arrive
+  useEffect(() => {
+    if (privateClues.length > 0 && !hasShownIntroRef.current) {
+      hasShownIntroRef.current = true;
+      setShowIntroModal(true);
+    }
+  }, [privateClues.length]);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -300,6 +381,14 @@ export function RoomPage() {
     sendMessage(text);
     setInput('');
     setTimeout(scrollToBottom, 50);
+  }
+
+  function handlePrivateSend() {
+    const text = privateInput.trim();
+    if (!text || !connected || !!truth) return;
+    sendPrivateMessage(text);
+    setPrivateInput('');
+    setTimeout(() => privateEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   }
 
   if (!playerName) {
@@ -328,6 +417,9 @@ export function RoomPage() {
 
   return (
     <div className="game-screen">
+      {/* Intro modal — shown once when private clues arrive */}
+      {showIntroModal && <IntroModal onClose={() => setShowIntroModal(false)} />}
+
       {/* Main column */}
       <div className="game-main">
         {/* Header */}
@@ -341,6 +433,17 @@ export function RoomPage() {
           </span>
           <div className="game-header-right">
             <span className={`conn-dot${connected ? ' conn-dot--on' : ''}`} title={connected ? '已连接' : '连接中…'} />
+            {/* Private clue toggle button */}
+            {privateClues.length > 0 && (
+              <button
+                className={`btn btn-ghost clue-toggle-btn${showPrivatePanel ? ' clue-toggle-btn--active' : ''}`}
+                onClick={() => setShowPrivatePanel((v) => !v)}
+                aria-label="我的秘密线索"
+                style={{ color: showPrivatePanel ? '#6b4fa8' : undefined }}
+              >
+                🔐{showPrivatePanel && <span className="clue-toggle-count" style={{ background: '#6b4fa8' }}>{privateClues.length}</span>}
+              </button>
+            )}
             <button
               className={`btn btn-ghost clue-toggle-btn${clueCount > 0 ? ' clue-toggle-btn--active' : ''}`}
               onClick={() => {
@@ -365,40 +468,101 @@ export function RoomPage() {
         {/* Waiting banner */}
         <WaitingBanner connectedCount={connectedCount} />
 
-        {/* Mobile clue panel */}
+        {/* Mobile private clue panel */}
+        {privateClues.length > 0 && (
+          <div className={`clue-panel-mobile${showPrivatePanel ? ' clue-panel-mobile--open' : ''}`}>
+            <PrivateCluePanel clues={privateClues} panelRef={privatePanelRef} />
+          </div>
+        )}
+
+        {/* Mobile shared clue panel */}
         <div className={`clue-panel-mobile${showCluePanel ? ' clue-panel-mobile--open' : ''}`}>
           <CluePanel clues={clues} panelRef={cluePanelRef} />
         </div>
 
+        {/* Chat mode tabs — only shown when this player has private clues */}
+        {privateClues.length > 0 && (
+          <div className="chat-mode-tabs">
+            <button
+              className={`chat-mode-tab${chatMode === 'public' ? ' chat-mode-tab--active' : ''}`}
+              onClick={() => setChatMode('public')}
+            >
+              公聊
+            </button>
+            <button
+              className={`chat-mode-tab${chatMode === 'private' ? ' chat-mode-tab--active chat-mode-tab--private' : ''}`}
+              onClick={() => setChatMode('private')}
+              disabled={!privateClues.length}
+            >
+              🔒 私聊DM
+            </button>
+          </div>
+        )}
+
         {/* Chat messages */}
         <div className="room-chat">
-          <MessageList msgs={messages} playerName={playerName} dmTyping={dmTyping} />
-          <div ref={chatEndRef} />
+          {chatMode === 'public' ? (
+            <>
+              <MessageList msgs={messages} playerName={playerName} dmTyping={dmTyping} />
+              <div ref={chatEndRef} />
+            </>
+          ) : (
+            <>
+              <PrivateChatArea msgs={privateMessages} dmTyping={dmTyping} />
+              <div ref={privateEndRef} />
+            </>
+          )}
         </div>
+
+        {/* Leak warning */}
+        {leakWarning && (
+          <div className="leak-warning">
+            ⚠️ {leakWarning}
+          </div>
+        )}
 
         {/* Input */}
         <div className="chat-input-row">
-          <input
-            className="chat-input"
-            type="text"
-            placeholder={connected ? '输入问题，按回车发送…' : '连接中…'}
-            value={input}
-            disabled={!connected || !!truth}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-          />
-          <button
-            className="btn btn-primary"
-            onClick={handleSend}
-            disabled={!input.trim() || !connected || !!truth}
-          >
-            发送
-          </button>
+          {chatMode === 'public' ? (
+            <>
+              <input
+                className="chat-input"
+                type="text"
+                placeholder={connected ? '输入问题，按回车发送…' : '连接中…'}
+                value={input}
+                disabled={!connected || !!truth}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                }}
+              />
+              <button className="btn btn-primary" onClick={handleSend} disabled={!input.trim() || !connected || !!truth}>
+                发送
+              </button>
+            </>
+          ) : (
+            <>
+              <input
+                className="chat-input chat-input--private"
+                type="text"
+                placeholder="向DM私密提问，其他玩家看不到…"
+                value={privateInput}
+                disabled={!connected || !!truth}
+                onChange={(e) => setPrivateInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePrivateSend(); }
+                }}
+              />
+              <button
+                className="btn btn-primary"
+                onClick={handlePrivateSend}
+                disabled={!privateInput.trim() || !connected || !!truth}
+                style={{ background: '#6b4fa8', borderColor: '#6b4fa8' }}
+              >
+                私聊
+              </button>
+            </>
+          )}
         </div>
 
         {/* Progress bar */}
@@ -409,6 +573,7 @@ export function RoomPage() {
 
       {/* Right sidebar */}
       <aside className="game-sidebar room-sidebar">
+        {privateClues.length > 0 && <PrivateCluePanel clues={privateClues} />}
         <PlayerList players={players} currentName={playerName} />
         <CluePanel clues={clues} panelRef={cluePanelRef} />
       </aside>

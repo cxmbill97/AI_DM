@@ -1440,3 +1440,274 @@ button {
   align-items: center;
   text-align: center;
 }
+
+/* ============================================================
+   Private accent colour
+   ============================================================ */
+
+:root {
+  --private:    #6b4fa8;
+  --private-bg: #f2edfb;
+  --private-bd: #c9b8e8;
+}
+
+/* ============================================================
+   Private Clue Panel
+   ============================================================ */
+
+.private-clue-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 14px 16px;
+  background: #faf7ff;
+  border: 1.5px solid var(--private-bd);
+  border-radius: var(--r);
+}
+
+.private-clue-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.private-clue-panel-icon { font-size: 15px; flex-shrink: 0; }
+
+.private-clue-panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--private);
+  flex: 1;
+  letter-spacing: 0.3px;
+}
+
+.private-clue-only-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--private);
+  background: var(--private-bg);
+  border: 1.5px solid var(--private-bd);
+  border-radius: 99px;
+  padding: 1px 8px;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.private-clue-panel-hint {
+  font-size: 11px;
+  color: #8b72c4;
+  line-height: 1.6;
+  border-left: 2px solid var(--private-bd);
+  padding-left: 8px;
+  margin: 0;
+}
+
+.private-clue-card {
+  background: #f5f0ff;
+  border: 1.5px solid var(--private-bd);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+}
+
+.private-clue-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--private);
+  margin-bottom: 5px;
+  letter-spacing: 0.2px;
+}
+
+.private-clue-card-content {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+/* ============================================================
+   Chat mode tabs (公聊 / 私聊DM)
+   ============================================================ */
+
+.chat-mode-tabs {
+  display: flex;
+  border-bottom: 1.5px solid var(--border);
+  background: var(--surface);
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+
+.chat-mode-tab {
+  padding: 7px 16px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+  background: transparent;
+  border: none;
+  border-bottom: 2.5px solid transparent;
+  cursor: pointer;
+  margin-bottom: -1.5px;
+  transition: color 0.14s, border-color 0.14s;
+  white-space: nowrap;
+}
+
+.chat-mode-tab:hover:not(:disabled) { color: var(--text-2); }
+
+.chat-mode-tab--active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+.chat-mode-tab--active.chat-mode-tab--private {
+  color: var(--private);
+  border-bottom-color: var(--private);
+}
+
+.chat-mode-tab:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ============================================================
+   Private chat messages
+   ============================================================ */
+
+.room-msg--private-q {
+  align-items: flex-end;
+}
+
+.room-bubble--private {
+  background: var(--private-bg);
+  border: 1.5px solid var(--private-bd);
+  border-radius: var(--r);
+  border-top-right-radius: 4px;
+  padding: 8px 12px;
+  font-size: .95rem;
+  max-width: 75%;
+  word-break: break-word;
+}
+
+.room-msg--private-dm {
+  border-left-color: var(--private) !important;
+}
+
+.private-badge {
+  font-size: .7rem;
+  font-weight: 700;
+  color: var(--private);
+  background: var(--private-bg);
+  border: 1px solid var(--private-bd);
+  border-radius: 99px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.room-private-empty {
+  text-align: center;
+  color: #8b72c4;
+  font-size: 13px;
+  padding: 24px 16px;
+  line-height: 1.7;
+  font-style: italic;
+}
+
+.chat-input--private:focus { border-color: var(--private); }
+
+/* ============================================================
+   Leak warning banner
+   ============================================================ */
+
+.leak-warning {
+  font-size: 12px;
+  color: var(--no);
+  background: var(--no-bg);
+  border-top: 1px solid #f5c2c2;
+  padding: 6px 14px;
+  text-align: center;
+  animation: leak-fade 4s ease forwards;
+}
+
+@keyframes leak-fade {
+  0%   { opacity: 0; }
+  8%   { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ============================================================
+   Game intro modal (shown when private clues first arrive)
+   ============================================================ */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 26, 14, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+  backdrop-filter: blur(2px);
+}
+
+.modal-box {
+  background: var(--surface);
+  border: 2px solid var(--private-bd);
+  border-radius: var(--r);
+  padding: 28px 24px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.modal-icon { font-size: 44px; line-height: 1; margin-bottom: 14px; }
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--private);
+  margin-bottom: 14px;
+}
+
+.modal-body {
+  font-size: 14px;
+  line-height: 1.85;
+  color: var(--text-2);
+  margin-bottom: 20px;
+}
+
+/* ============================================================
+   Desktop: left sidebar for private clues (≥ 768px)
+   ============================================================ */
+
+@media (min-width: 768px) {
+  /* Widen game-screen to fit private clue sidebar */
+  .game-screen {
+    max-width: 1120px;
+  }
+
+  .game-left-sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 12px;
+    align-self: flex-start;
+    margin: 12px 0 0 12px;
+    max-height: calc(100svh - 24px);
+    overflow-y: auto;
+  }
+
+  .game-left-sidebar::-webkit-scrollbar { width: 4px; }
+  .game-left-sidebar::-webkit-scrollbar-track { background: transparent; }
+  .game-left-sidebar::-webkit-scrollbar-thumb {
+    background: var(--private-bd);
+    border-radius: 99px;
+  }
+}
+
+/* Mobile: private clue toggle button */
+.private-toggle-btn {
+  color: var(--private);
+}
+
+.private-toggle-btn--active {
+  background: var(--private-bg) !important;
+}

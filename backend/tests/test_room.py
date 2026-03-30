@@ -91,13 +91,24 @@ def icicle_room(icicle_puzzle):
 def _drain_join(ws: Any) -> dict:
     """Read the initial messages for a freshly joined player.
 
-    Returns the room_snapshot dict (the last of the two initial messages).
-    The system "joined" message is consumed and discarded.
+    Returns the room_snapshot dict.  Also consumes a trailing private_clue
+    message when the puzzle has private clues for this player's slot.
     """
+    from app.puzzle_loader import load_puzzle
+
     sys_msg = ws.receive_json()
     assert sys_msg["type"] == "system", f"expected system, got {sys_msg['type']}"
     snapshot = ws.receive_json()
     assert snapshot["type"] == "room_snapshot", f"expected snapshot, got {snapshot['type']}"
+    # Puzzles with private_clues send a private_clue message immediately after
+    # the snapshot (only to the joining player, not stored in message_history).
+    try:
+        puzzle = load_puzzle(snapshot["puzzle_id"])
+        if puzzle.private_clues:
+            pc = ws.receive_json()
+            assert pc["type"] == "private_clue", f"expected private_clue, got {pc['type']}"
+    except Exception:
+        pass
     return snapshot
 
 

@@ -39,6 +39,11 @@ def load_all_puzzles() -> list[Puzzle]:
     return list(_get_puzzles().values())
 
 
+def load_puzzles() -> dict[str, Puzzle]:
+    """Return the full puzzle dict (alias for _get_puzzles — public API)."""
+    return _get_puzzles()
+
+
 def random_puzzle() -> Puzzle:
     """Return a randomly selected puzzle."""
     puzzles = load_all_puzzles()

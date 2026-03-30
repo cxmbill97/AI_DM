@@ -25,6 +25,20 @@ class Clue(BaseModel):
     unlock_keywords: list[str]  # e.g. ["海难", "船", "遇难"]
 
 
+class PrivateClue(BaseModel):
+    """A private clue fragment given exclusively to one player slot.
+
+    Unlike Clue, PrivateClue has no unlock_keywords — it is distributed
+    directly on room join based on the player's assigned slot (player_1,
+    player_2 …).  Content must NEVER appear in another player's LLM prompt
+    or in any public broadcast.
+    """
+
+    id: str
+    title: str
+    content: str  # shown only to the assigned player
+
+
 class Puzzle(BaseModel):
     id: str
     title: str
@@ -33,6 +47,7 @@ class Puzzle(BaseModel):
     key_facts: list[str]  # decomposed truths used for matching
     hints: list[str]  # escalating hints (Phase 1 fallback, unchanged)
     clues: list[Clue] = []  # discoverable clues (Phase 2); old JSONs without this still load
+    private_clues: dict[str, list[PrivateClue]] = {}  # slot → clues, e.g. {"player_1": [...]}
     difficulty: str  # e.g. "简单" / "中等" / "困难"
     tags: list[str]
 
@@ -158,6 +173,7 @@ class DMOutput(BaseModel):
     response: str
     truth_progress: float
     should_hint: bool
+    audience: str = "public"  # "public" | "private"
 
 
 # ---------------------------------------------------------------------------
@@ -173,3 +189,4 @@ class GameSession(BaseModel):
     consecutive_misses: int = 0
     finished: bool = False
     unlocked_clue_ids: set[str] = set()  # ids of clues the player has earned so far
+    player_slot_map: dict[str, str] = {}  # player_id → "player_1" / "player_2" …

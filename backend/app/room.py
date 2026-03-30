@@ -84,6 +84,16 @@ class Room:
                 return pid
         return None
 
+    def _assign_player_slot(self, player_id: str) -> str:
+        """Assign the next available player_N slot and record it in game_session."""
+        used = set(self.game_session.player_slot_map.values())
+        n = 1
+        while f"player_{n}" in used:
+            n += 1
+        slot = f"player_{n}"
+        self.game_session.player_slot_map[player_id] = slot
+        return slot
+
     def add_player(self, player_id: str, name: str, websocket: "WebSocket") -> None:
         self.players[player_id] = {
             "name": name,
@@ -94,6 +104,7 @@ class Room:
             # Starlette WebSocket is NOT safe for concurrent writes from multiple coroutines.
             "send_lock": asyncio.Lock(),
         }
+        self._assign_player_slot(player_id)
 
     def reconnect_player(self, player_id: str, websocket: "WebSocket") -> None:
         slot = self.players[player_id]

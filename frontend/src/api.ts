@@ -21,6 +21,12 @@ export interface StartResponse {
   surface: string;
 }
 
+export interface PrivateClue {
+  id: string;
+  title: string;
+  content: string;
+}
+
 export interface Clue {
   id: string;
   title: string;

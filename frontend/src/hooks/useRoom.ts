@@ -5,18 +5,22 @@
  * (Vite dev server proxies /ws → backend).
  *
  * Exposes:
- *   messages    — chronological chat + system + DM messages
- *   players     — current player list (updated from room_snapshot + system events)
- *   clues       — unlocked clues accumulated this session
- *   connected   — WebSocket open?
- *   progress    — truth_progress 0–1
- *   truth       — set when game is won
- *   puzzle      — { title, surface } from room_snapshot
- *   sendMessage — send a { type: "chat" } message
+ *   messages           — chronological chat + system + DM messages
+ *   players            — current player list (updated from room_snapshot + system events)
+ *   clues              — unlocked clues accumulated this session
+ *   connected          — WebSocket open?
+ *   progress           — truth_progress 0–1
+ *   truth              — set when game is won
+ *   puzzle             — { title, surface } from room_snapshot
+ *   sendMessage        — send a { type: "chat" } message
+ *   privateClues       — this player's private clues (from private_clue WS message)
+ *   privateMessages    — private DM chat exchange
+ *   leakWarning        — non-null when server sends leak_warning; auto-clears after 4s
+ *   sendPrivateMessage — send a { type: "private_chat" } message
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Clue, RoomPlayer } from '../api';
+import type { Clue, PrivateClue, RoomPlayer } from '../api';
 
 // ---------------------------------------------------------------------------
 // Message shape union (rendered by RoomPage)
@@ -57,6 +61,24 @@ export interface InterventionMsg {
 export type RoomMessage = SystemMsg | PlayerMsg | DmResponseMsg | InterventionMsg;
 
 // ---------------------------------------------------------------------------
+// Private chat message types
+// ---------------------------------------------------------------------------
+
+export interface PrivatePlayerMsg {
+  type: 'private_question';
+  text: string;
+  timestamp: number;
+}
+
+export interface PrivateDMMsg {
+  type: 'private_dm_response';
+  response: string;
+  timestamp: number;
+}
+
+export type PrivateMessage = PrivatePlayerMsg | PrivateDMMsg;
+
+// ---------------------------------------------------------------------------
 // Puzzle info from room_snapshot
 // ---------------------------------------------------------------------------
 
@@ -85,6 +107,11 @@ export function useRoom(roomId: string, playerName: string) {
   const [questionsByPlayer, setQuestionsByPlayer] = useState<Record<string, number>>({});
   const [cluesByPlayer, setCluesByPlayer] = useState<Record<string, number>>({});
   const [dmTyping, setDmTyping] = useState(false);
+
+  // Phase 3: private clues + private chat + leak warning
+  const [privateClues, setPrivateClues] = useState<PrivateClue[]>([]);
+  const [privateMessages, setPrivateMessages] = useState<PrivateMessage[]>([]);
+  const [leakWarning, setLeakWarning] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const retriesRef = useRef(0);
@@ -198,6 +225,36 @@ export function useRoom(roomId: string, playerName: string) {
         if (msg.truth) setTruth(msg.truth);
         return;
       }
+
+      // ---- Phase 3: private clue delivery ----
+      if (type === 'private_clue') {
+        const incoming = (data.clues as PrivateClue[]) ?? [];
+        setPrivateClues((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          return [...prev, ...incoming.filter((c) => !existingIds.has(c.id))];
+        });
+        return;
+      }
+
+      // ---- Phase 3: private DM response ----
+      if (type === 'private_dm_response') {
+        const msg: PrivateDMMsg = {
+          type: 'private_dm_response',
+          response: data.response as string,
+          timestamp: (data.timestamp as number) ?? Date.now() / 1000,
+        };
+        setPrivateMessages((prev) => [...prev, msg]);
+        return;
+      }
+
+      // ---- Phase 3: leak warning ----
+      if (type === 'leak_warning') {
+        const txt = data.text as string;
+        setLeakWarning(txt);
+        // Auto-clear after 4s
+        setTimeout(() => setLeakWarning(null), 4000);
+        return;
+      }
     };
 
     ws.onerror = () => {
@@ -238,6 +295,17 @@ export function useRoom(roomId: string, playerName: string) {
     ws.send(JSON.stringify({ type: 'chat', text }));
   }, []);
 
+  const sendPrivateMessage = useCallback((text: string) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // Optimistically add to local private messages
+    setPrivateMessages((prev) => [
+      ...prev,
+      { type: 'private_question', text, timestamp: Date.now() / 1000 },
+    ]);
+    ws.send(JSON.stringify({ type: 'private_chat', text }));
+  }, []);
+
   return {
     messages,
     players,
@@ -251,5 +319,9 @@ export function useRoom(roomId: string, playerName: string) {
     cluesByPlayer,
     dmTyping,
     sendMessage,
+    privateClues,
+    privateMessages,
+    leakWarning,
+    sendPrivateMessage,
   };
 }

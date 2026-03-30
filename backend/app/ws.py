@@ -24,8 +24,9 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
-from app.dm import dm_proactive_message, dm_turn
+from app.dm import dm_proactive_message, dm_turn, dm_turn_private
 from app.room import RECONNECT_WINDOW_SECS, Room, room_manager
+from app.visibility import VisibilityRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +200,25 @@ async def websocket_endpoint(
     await room.send_to(player_id, snapshot)
 
     # ----------------------------------------------------------------
+    # Deliver this player's private clues (new joins only, not reconnects)
+    # Private clues are never stored in message_history — they must not
+    # appear in reconnect replay and must never reach other players.
+    # ----------------------------------------------------------------
+    if not is_reconnect:
+        slot = room.game_session.player_slot_map.get(player_id, "")
+        private_frags = room.puzzle.private_clues.get(slot, [])
+        if private_frags:
+            private_clue_msg = {
+                "type": "private_clue",
+                "slot": slot,
+                "clues": [
+                    {"id": pc.id, "title": pc.title, "content": pc.content}
+                    for pc in private_frags
+                ],
+            }
+            await room.send_to(player_id, private_clue_msg)
+
+    # ----------------------------------------------------------------
     # Ensure silence-tick background task is running
     # ----------------------------------------------------------------
     _ensure_tick_running(room)
@@ -219,6 +239,39 @@ async def websocket_endpoint(
 
             msg_type = data.get("type")
 
+            # ---- Private chat: player whispers directly to DM ----
+            if msg_type == "private_chat":
+                text = (data.get("text") or "").strip()
+                if not text:
+                    continue
+                if room.game_session.finished:
+                    await room.send_to(
+                        player_id,
+                        {"type": "system", "text": "游戏已结束，无法继续提问"},
+                    )
+                    continue
+                try:
+                    async with room._lock:
+                        private_response = await dm_turn_private(
+                            room.game_session, player_id, text
+                        )
+                except Exception as exc:
+                    logger.exception("dm_turn_private failed for player %s: %s", player_name, exc)
+                    await room.send_to(
+                        player_id,
+                        {"type": "error", "text": "DM 暂时无法回应，请稍后再试"},
+                    )
+                    continue
+                await room.send_to(
+                    player_id,
+                    {
+                        "type": "private_dm_response",
+                        "response": private_response,
+                        "timestamp": time.time(),
+                    },
+                )
+                continue
+
             if msg_type != "chat":
                 # Ignore unknown message types silently
                 continue
@@ -231,11 +284,24 @@ async def websocket_endpoint(
                 await room.send_to(player_id, {"type": "system", "text": "游戏已结束，无法继续提问"})
                 continue
 
+            # ---- Anti-leak: block near-verbatim private clue in public chat ----
+            if room.puzzle.private_clues:
+                registry = VisibilityRegistry(room.game_session)
+                if registry.is_own_clue_verbatim(text, player_id) or \
+                        registry.is_private_content_leaked(text, player_id):
+                    await room.send_to(
+                        player_id,
+                        {
+                            "type": "leak_warning",
+                            "text": "请用自己的话描述你知道的信息，不要直接展示原始线索哦～",
+                            "timestamp": time.time(),
+                        },
+                    )
+                    continue
+
             ts = time.time()
 
-            # --- Intervention engine: reset silence timer, check explicit trigger ---
-            # The explicit trigger is informational — the DM naturally responds via
-            # dm_turn regardless.  We don't need to branch on it at the moment.
+            # --- Intervention engine: reset silence timer ---
             room.intervention.on_player_message(player_id, text)
 
             # Echo the question to all players
@@ -251,7 +317,7 @@ async def websocket_endpoint(
             # Route through DM — serialized so concurrent questions don't race
             try:
                 async with room._lock:
-                    result = await dm_turn(room.game_session, text)
+                    result = await dm_turn(room.game_session, text, player_id=player_id)
             except Exception as exc:
                 logger.exception("dm_turn failed for player %s: %s", player_name, exc)
                 await room.send_to(
