@@ -21,6 +21,13 @@ export interface StartResponse {
   surface: string;
 }
 
+export interface Clue {
+  id: string;
+  title: string;
+  content: string;
+  unlock_keywords: string[];
+}
+
 export interface ChatResponse {
   judgment: string; // 是 / 不是 / 无关 / 部分正确
   response: string;
@@ -28,6 +35,7 @@ export interface ChatResponse {
   should_hint: boolean;
   hint?: string;
   truth?: string; // set when truth_progress >= 1.0 (game over)
+  clue_unlocked?: Clue; // newly unlocked clue this turn, if any
 }
 
 // ---------------------------------------------------------------------------
@@ -68,4 +76,35 @@ export function sendMessage(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id: sessionId, message }),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Multiplayer room types + calls
+// ---------------------------------------------------------------------------
+
+export interface RoomPlayer {
+  id: string;
+  name: string;
+  connected: boolean;
+}
+
+export interface RoomState {
+  room_id: string;
+  puzzle_id: string;
+  title: string;
+  surface: string;
+  players: RoomPlayer[];
+  phase: string;
+}
+
+export function createRoom(puzzleId?: string): Promise<{ room_id: string }> {
+  return apiFetch('/api/rooms', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ puzzle_id: puzzleId ?? null }),
+  });
+}
+
+export function getRoom(roomId: string): Promise<RoomState> {
+  return apiFetch(`/api/rooms/${roomId}`);
 }

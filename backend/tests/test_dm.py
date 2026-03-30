@@ -357,12 +357,13 @@ class TestDMTurn:
     async def test_hint_given_after_miss_threshold(
         self, sample_puzzle: Puzzle, mock_llm
     ) -> None:
-        """After MISS_THRESHOLD consecutive misses, the DM must provide a hint."""
+        """After MISS_THRESHOLD consecutive misses, the DM must provide a clue card."""
         mock_llm.set_response(_valid_dm_json(judgment="无关"))
         # One away from threshold
         session = _fresh_session(sample_puzzle, consecutive_misses=MISS_THRESHOLD - 1)
         result = await dm_turn(session, "无关的问题")
-        assert result.hint is not None
+        # Hints are now delivered as pseudo-clue cards via clue_unlocked
+        assert result.clue_unlocked is not None
         assert result.should_hint is True
 
     async def test_hint_given_when_llm_requests_it(
@@ -371,7 +372,8 @@ class TestDMTurn:
         mock_llm.set_response(_valid_dm_json(should_hint=True))
         session = _fresh_session(sample_puzzle)
         result = await dm_turn(session, "某个问题")
-        assert result.hint is not None
+        # Hints are now delivered as pseudo-clue cards via clue_unlocked
+        assert result.clue_unlocked is not None
 
     async def test_no_hint_when_hints_exhausted(
         self, sample_puzzle: Puzzle, mock_llm

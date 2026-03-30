@@ -560,12 +560,6 @@ button {
   white-space: pre-wrap;
 }
 
-.end-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
 .stat-item { text-align: center; }
 
 .stat-value {
@@ -587,6 +581,243 @@ button {
 }
 
 /* ============================================================
+   CLUE NOTICE  (inline chat notification)
+   ============================================================ */
+
+.message--clue {
+  align-items: center;
+}
+
+.clue-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--primary-bg);
+  border: 1.5px solid var(--primary-bd);
+  border-radius: 99px;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--primary);
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+  max-width: 90%;
+  text-align: left;
+  line-height: 1.5;
+}
+
+.clue-notice:hover {
+  background: #fbe8c8;
+  border-color: var(--primary);
+}
+
+.clue-notice strong {
+  color: var(--text);
+}
+
+/* ============================================================
+   CLUE PANEL
+   ============================================================ */
+
+@keyframes clue-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes clue-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(193, 127, 59, 0.0); }
+  30%  { box-shadow: 0 0 0 4px rgba(193, 127, 59, 0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(193, 127, 59, 0.0); }
+}
+
+.clue-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+}
+
+.clue-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.clue-panel-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.clue-panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  flex: 1;
+  letter-spacing: 0.3px;
+}
+
+.clue-count-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-bg);
+  border: 1.5px solid var(--primary-bd);
+  border-radius: 99px;
+  padding: 1px 9px;
+  white-space: nowrap;
+}
+
+.clue-panel-empty {
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+  line-height: 1.8;
+  padding: 10px 0 4px;
+}
+
+.clue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clue-card {
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  transition: border-color 0.2s;
+}
+
+.clue-card--new {
+  animation:
+    clue-slide-in 0.3s cubic-bezier(.2, .8, .4, 1) both,
+    clue-glow 1.8s ease-out 0.1s both;
+  border-color: var(--primary-bd);
+}
+
+.clue-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 5px;
+  letter-spacing: 0.2px;
+}
+
+.clue-card-content {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+/* ============================================================
+   GAME LAYOUT  (sidebar on desktop, inline on mobile)
+   ============================================================ */
+
+/* Clue toggle button (mobile header) */
+.clue-toggle-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 16px;
+  padding: 4px 8px;
+}
+
+.clue-toggle-btn--active {
+  color: var(--primary);
+}
+
+.clue-toggle-count {
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 99px;
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+/* Mobile clue panel: hidden by default, shows when open */
+.clue-panel-mobile {
+  display: none;
+  margin: 0 12px;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.3s ease, opacity 0.2s;
+  opacity: 0;
+}
+
+.clue-panel-mobile--open {
+  display: block;
+  max-height: 600px;
+  opacity: 1;
+}
+
+/* Desktop sidebar: hidden on mobile */
+.game-sidebar {
+  display: none;
+}
+
+/* game-main fills the column layout */
+.game-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100svh;
+}
+
+/* ============================================================
+   END SCREEN — clue review
+   ============================================================ */
+
+.end-clues {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.end-clue-card {
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+}
+
+.end-clue-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+
+.end-clue-content {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.end-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+/* ============================================================
    Responsive tweaks (≥ 480px)
    ============================================================ */
 
@@ -594,4 +825,618 @@ button {
   .start-title { font-size: 34px; }
   .message-bubble { font-size: 15px; }
   .chat-input { font-size: 15px; }
+}
+
+/* ============================================================
+   Responsive: desktop sidebar layout (≥ 768px)
+   ============================================================ */
+
+@media (min-width: 768px) {
+  /* Expand game-screen to accommodate sidebar */
+  .game-screen {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    max-width: 980px;
+    min-height: 100svh;
+  }
+
+  /* game-main takes remaining space */
+  .game-main {
+    flex: 1;
+    min-width: 0;
+    max-width: 640px;
+  }
+
+  /* Hide mobile clue panel and toggle on desktop */
+  .clue-panel-mobile,
+  .clue-toggle-btn {
+    display: none !important;
+  }
+
+  /* Show desktop sidebar */
+  .game-sidebar {
+    display: block;
+    width: 280px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 12px;
+    align-self: flex-start;
+    margin: 12px 12px 0 0;
+    max-height: calc(100svh - 24px);
+    overflow-y: auto;
+  }
+
+  /* Sidebar scrollbar */
+  .game-sidebar::-webkit-scrollbar { width: 4px; }
+  .game-sidebar::-webkit-scrollbar-track { background: transparent; }
+  .game-sidebar::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 99px; }
+
+  /* Room sidebar stacks player list above clue panel */
+  .room-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* ============================================================
+   Lobby Page
+   ============================================================ */
+
+.lobby-screen {
+  max-width: 540px;
+  margin: 0 auto;
+  padding: 0 0 48px;
+}
+
+.lobby-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px;
+  margin-bottom: 16px;
+}
+
+.lobby-label {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: .03em;
+}
+
+.lobby-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color .15s;
+}
+
+.lobby-input:focus {
+  border-color: var(--primary);
+}
+
+.lobby-input--code {
+  text-transform: uppercase;
+  letter-spacing: .15em;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.lobby-join { margin-bottom: 8px; }
+
+.lobby-join-row {
+  display: flex;
+  gap: 8px;
+}
+
+.lobby-join-row .lobby-input {
+  flex: 1;
+}
+
+.lobby-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  margin: 8px 0 16px;
+  color: var(--text-3);
+  font-size: .8rem;
+}
+
+.lobby-divider::before,
+.lobby-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* Two-button puzzle item actions */
+.puzzle-item-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ============================================================
+   Player List
+   ============================================================ */
+
+.player-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.player-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.player-list-title {
+  font-size: .8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-2);
+}
+
+.player-list-count {
+  font-size: .78rem;
+  color: var(--text-3);
+}
+
+.player-list-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.player-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .9rem;
+  color: var(--text);
+}
+
+.player-item--offline {
+  opacity: .5;
+}
+
+.player-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--border-2);
+}
+
+.player-dot--online {
+  background: var(--yes);
+  box-shadow: 0 0 0 2px var(--yes-bg);
+}
+
+.player-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-you {
+  color: var(--text-3);
+  font-size: .82em;
+}
+
+/* ============================================================
+   Room Chat Messages
+   ============================================================ */
+
+.room-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 240px;
+}
+
+.room-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* System messages: centered, gray */
+.room-msg--system {
+  align-items: center;
+  flex-direction: row;
+  justify-content: center;
+  gap: 8px;
+  font-size: .8rem;
+  color: var(--text-3);
+  font-style: italic;
+}
+
+/* Player messages */
+.room-msg--player {
+  align-items: flex-start;
+}
+
+.room-msg--self {
+  align-items: flex-end;
+}
+
+.room-msg-name {
+  font-size: .78rem;
+  color: var(--text-2);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.room-bubble {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  border-top-left-radius: 4px;
+  padding: 8px 12px;
+  font-size: .95rem;
+  max-width: 75%;
+  word-break: break-word;
+}
+
+.room-msg--self .room-bubble {
+  background: var(--primary-bg);
+  border-color: var(--primary-bd);
+  border-top-left-radius: var(--r);
+  border-top-right-radius: 4px;
+}
+
+.room-msg-time {
+  font-size: .72rem;
+  color: var(--text-3);
+}
+
+/* DM messages */
+.room-msg--dm {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  gap: 6px;
+}
+
+.room-dm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: .8rem;
+}
+
+.room-dm-label {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: .85rem;
+}
+
+.room-dm-asker {
+  color: var(--text-3);
+}
+
+.room-dm-judgment {
+  margin-left: auto;
+  font-weight: 600;
+  font-size: .82rem;
+}
+
+.room-bubble--dm {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+  max-width: 100%;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.room-clue-notice {
+  font-size: .82rem;
+  color: var(--primary);
+  font-weight: 600;
+  padding: 4px 0 0;
+}
+
+.room-hint-notice {
+  font-size: .82rem;
+  color: var(--text-2);
+  font-style: italic;
+  padding: 2px 0 0;
+}
+
+/* DM typing indicator */
+@keyframes dm-dot {
+  0%, 60%, 100% { opacity: 0.2; transform: translateY(0); }
+  30%            { opacity: 1;   transform: translateY(-4px); }
+}
+
+.room-msg--typing {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.dm-typing-dots {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.dm-typing-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: dm-dot 1.2s ease-in-out infinite;
+}
+
+.dm-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.dm-typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* DM proactive intervention — lighter, italic, centered */
+.room-msg--intervention {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  flex-direction: row;
+  background: var(--primary-bg);
+  border: 1px dashed var(--primary-bd);
+  border-radius: var(--r-sm);
+  padding: 8px 14px;
+  font-size: .88rem;
+  font-style: italic;
+  color: var(--text-2);
+  flex-wrap: wrap;
+}
+
+.room-intervention-text {
+  flex: 1;
+  text-align: center;
+}
+
+/* ============================================================
+   Room header extras
+   ============================================================ */
+
+.room-id-badge {
+  font-size: .78rem;
+  color: var(--text-3);
+  font-weight: 400;
+  letter-spacing: .05em;
+}
+
+.game-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Connection indicator dot */
+.conn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-2);
+  flex-shrink: 0;
+}
+
+.conn-dot--on {
+  background: var(--yes);
+}
+
+/* ============================================================
+   Player Avatars
+   ============================================================ */
+
+.player-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--av-bg, var(--surface-2));
+  color: var(--av-color, var(--text-2));
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  user-select: none;
+  font-size: .82rem;
+}
+
+.player-avatar--sm {
+  width: 22px;
+  height: 22px;
+  font-size: .72rem;
+}
+
+/* ============================================================
+   Room: share bar
+   ============================================================ */
+
+.room-share-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: .82rem;
+}
+
+.room-share-label {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.room-share-code {
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: var(--primary);
+  font-size: .92rem;
+}
+
+.room-share-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Room: waiting banner
+   ============================================================ */
+
+.room-waiting-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  background: var(--surface-2);
+  border: 1px dashed var(--border-2);
+  border-radius: var(--r-sm);
+  padding: 9px 16px;
+  margin: 8px 12px 0;
+  font-size: .85rem;
+  color: var(--text-2);
+  font-style: italic;
+}
+
+/* ============================================================
+   Room: player name row above bubble
+   ============================================================ */
+
+.room-msg-name-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+}
+
+/* ============================================================
+   Multiplayer Review Screen
+   ============================================================ */
+
+.mp-review-screen {
+  max-width: 540px;
+  margin: 0 auto;
+  padding: 48px 16px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mp-player-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.mp-player-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+}
+
+.mp-stat-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--av-bg, var(--surface-2));
+  color: var(--av-color, var(--text-2));
+  font-size: .9rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.mp-stat-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: .92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-stat-nums {
+  display: flex;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.mp-stat-num {
+  text-align: center;
+  min-width: 32px;
+}
+
+.mp-stat-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1.2;
+}
+
+.mp-stat-unit {
+  font-size: .68rem;
+  color: var(--text-3);
+  margin-top: 1px;
+}
+
+.mp-mvp-badge {
+  font-size: .72rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ffd700, #ffa020);
+  color: #4a2800;
+  border-radius: 99px;
+  padding: 2px 9px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Room truth overlay (game over) — kept for possible reuse
+   ============================================================ */
+
+.room-truth-overlay {
+  max-width: 540px;
+  margin: 0 auto;
+  padding: 48px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  align-items: center;
+  text-align: center;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { sendMessage } from '../api';
-import type { ChatResponse } from '../api';
+import type { ChatResponse, Clue } from '../api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -17,7 +17,13 @@ interface DMMessage {
   judgment: string;
 }
 
-type Message = PlayerMessage | DMMessage;
+interface ClueNoticeMessage {
+  role: 'clue';
+  clueId: string;
+  clueTitle: string;
+}
+
+type Message = PlayerMessage | DMMessage | ClueNoticeMessage;
 
 // ---------------------------------------------------------------------------
 // Judgment badge config
@@ -48,6 +54,8 @@ interface ChatPanelProps {
   onProgress: (progress: number) => void;
   onFinish: (truth: string) => void;
   onQuestionAsked: () => void;
+  onClueUnlocked?: (clue: Clue) => void;
+  cluePanelRef?: React.RefObject<HTMLDivElement>;
 }
 
 export function ChatPanel({
@@ -57,6 +65,8 @@ export function ChatPanel({
   onProgress,
   onFinish,
   onQuestionAsked,
+  onClueUnlocked,
+  cluePanelRef,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -88,6 +98,13 @@ export function ChatPanel({
       ]);
       onProgress(res.truth_progress);
 
+      if (res.clue_unlocked) {
+        onClueUnlocked?.(res.clue_unlocked);
+        setMessages((prev) => [
+          ...prev,
+          { role: 'clue', clueId: res.clue_unlocked!.id, clueTitle: res.clue_unlocked!.title },
+        ]);
+      }
       if (res.hint) onHint(res.hint);
       if (res.truth) onFinish(res.truth);
     } catch (err) {
@@ -117,12 +134,28 @@ export function ChatPanel({
           </p>
         )}
 
-        {messages.map((m, i) => (
-          <div key={i} className={`message message--${m.role}`}>
-            {m.role === 'dm' && <JudgmentBadge judgment={m.judgment} />}
-            <div className="message-bubble">{m.text}</div>
-          </div>
-        ))}
+        {messages.map((m, i) => {
+          if (m.role === 'clue') {
+            return (
+              <div key={i} className="message message--clue">
+                <button
+                  className="clue-notice"
+                  onClick={() =>
+                    cluePanelRef?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                >
+                  🔍 你发现了新线索：<strong>{m.clueTitle}</strong>
+                </button>
+              </div>
+            );
+          }
+          return (
+            <div key={i} className={`message message--${m.role}`}>
+              {m.role === 'dm' && <JudgmentBadge judgment={m.judgment} />}
+              <div className="message-bubble">{m.text}</div>
+            </div>
+          );
+        })}
 
         {loading && (
           <div className="message message--dm">

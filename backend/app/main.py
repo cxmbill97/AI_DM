@@ -4,21 +4,26 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import APIError
+from pydantic import BaseModel
 
 from app.dm import dm_turn
 from app.models import (
     ChatRequest,
     ChatResponse,
     GameSession,
+    Player,
     PuzzleSummary,
+    RoomState,
     StartRequest,
     StartResponse,
 )
-from app.puzzle_loader import load_puzzle, load_all_puzzles, random_puzzle
+from app.puzzle_loader import load_all_puzzles, load_puzzle, random_puzzle
+from app.room import room_manager
+from app.ws import websocket_endpoint
 
 app = FastAPI(title="AI DM — 海龟汤")
 
@@ -126,3 +131,71 @@ async def chat_endpoint(body: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=422, detail="Message cannot be empty.")
 
     return await dm_turn(session, body.message.strip())
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Multiplayer room REST endpoints
+# ---------------------------------------------------------------------------
+
+
+class CreateRoomRequest(BaseModel):
+    puzzle_id: str | None = None  # None → random puzzle
+
+
+@app.post("/api/rooms")
+async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
+    """Create a new multiplayer room.
+
+    Returns {room_id} — players then connect via WebSocket /ws/{room_id}.
+    """
+    try:
+        puzzle = load_puzzle(body.puzzle_id) if body.puzzle_id else random_puzzle()
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    room_id = room_manager.create_room(puzzle)
+    return {"room_id": room_id}
+
+
+@app.get("/api/rooms/{room_id}", response_model=RoomState)
+async def get_room(room_id: str) -> RoomState:
+    """Return current room state: players, puzzle surface, phase."""
+    room = room_manager.get_room(room_id)
+    if room is None:
+        raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
+
+    players = [
+        Player(id=pid, name=p["name"], connected=p["connected"])
+        for pid, p in room.players.items()
+    ]
+    return RoomState(
+        room_id=room_id,
+        puzzle_id=room.puzzle.id,
+        title=room.puzzle.title,
+        surface=room.puzzle.surface,
+        players=players,
+        phase=room.phase,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — WebSocket endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.websocket("/ws/{room_id}")
+async def ws_endpoint(
+    websocket: WebSocket,
+    room_id: str,
+    player_name: str = "",
+) -> None:
+    """WebSocket connection for multiplayer rooms.
+
+    Query params:
+      player_name  — display name (required)
+
+    Protocol:
+      Client sends: {"type": "chat", "text": "..."}
+      Server sends: dm_response | player_message | system | room_snapshot | error
+    """
+    await websocket_endpoint(websocket, room_id, player_name)

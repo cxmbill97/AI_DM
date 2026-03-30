@@ -158,6 +158,32 @@ class TestRedTeamRealLLM:
             f"Prompt: {prompt!r}\nResponse: {result.response!r}"
         )
 
+    async def test_locked_clue_content_not_in_response_before_unlock(
+        self, classic_puzzle: Puzzle, real_llm
+    ) -> None:
+        """The DM must not quote locked clue content before the player earns the clue.
+
+        Locked clue content is intentionally absent from the system prompt, so the LLM
+        shouldn't produce it — but we verify this explicitly against real output.
+        We use a neutral question that doesn't trigger any clue keyword.
+        """
+        session = _fresh_session(classic_puzzle)
+        result = await dm_turn(session, "故事发生在什么时候")
+
+        for clue in classic_puzzle.clues:
+            if clue.id in session.unlocked_clue_ids:
+                continue  # clue was earned this turn — OK to appear
+            # Check for 12-char sliding window substrings of clue content
+            # (12 consecutive Chinese chars is highly specific, avoids incidental overlap)
+            window = 12
+            for start in range(len(clue.content) - window + 1):
+                snippet = clue.content[start : start + window]
+                assert snippet not in result.response, (
+                    f"Locked clue {clue.id!r} content snippet appeared before unlock!\n"
+                    f"  Snippet:  {snippet!r}\n"
+                    f"  Response: {result.response!r}"
+                )
+
     async def test_multi_turn_no_leak_under_pressure(
         self, classic_puzzle: Puzzle, real_llm
     ) -> None:

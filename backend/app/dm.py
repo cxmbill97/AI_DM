@@ -6,7 +6,7 @@ import json
 import re
 
 from app.llm import chat, strip_think
-from app.models import ChatResponse, DMOutput, GameSession, Puzzle
+from app.models import ChatResponse, Clue, DMOutput, GameSession, Puzzle
 
 # Keep system prompt + last N user/assistant turns within token limits
 MAX_HISTORY = 20
@@ -29,16 +29,38 @@ _JSON_SCHEMA = """{
 _PROGRESS_JUDGMENTS = {"是", "部分正确"}
 
 
-def assemble_prompt(puzzle: Puzzle) -> str:
+def assemble_prompt(puzzle: Puzzle, unlocked_clue_ids: set[str] | None = None) -> str:
     """Build the single system prompt string following CLAUDE.md ordering:
 
     1. DM persona + rules
     2. 汤面 (surface)
     3. 汤底 (truth) — TOP SECRET
     4. key_facts — for matching accuracy
-    5. JSON output schema
+    5. unlocked clues (titles only, so DM can reference them)
+    6. locked clue hint (existence only, no content)
+    7. JSON output schema
     """
+    if unlocked_clue_ids is None:
+        unlocked_clue_ids = set()
+
     key_facts_block = "\n".join(f"- {fact}" for fact in puzzle.key_facts)
+
+    # Section 5: unlocked clues — titles + content so DM can reference them
+    unlocked_clues = [c for c in puzzle.clues if c.id in unlocked_clue_ids]
+    if unlocked_clues:
+        unlocked_block = "\n".join(
+            f"- 【{c.title}】{c.content}" for c in unlocked_clues
+        )
+        unlocked_section = f"\n\n## 玩家已发现的线索\n{unlocked_block}\n（你可以在引导时提及这些线索，如「正如你之前发现的线索所示…」）"
+    else:
+        unlocked_section = ""
+
+    # Section 6: remind DM that undiscovered clues exist but must not be revealed
+    locked_clues = [c for c in puzzle.clues if c.id not in unlocked_clue_ids]
+    if locked_clues:
+        locked_section = "\n\n## 尚未发现的线索\n还有未被玩家发现的线索，请勿透露其内容。玩家提问时如果触及正确方向，系统会自动解锁线索。"
+    else:
+        locked_section = ""
 
     return f"""你是「海龟汤」游戏的裁判（DM）。
 
@@ -60,7 +82,7 @@ def assemble_prompt(puzzle: Puzzle) -> str:
 {puzzle.truth}
 
 ## 关键事实（用于精确判断，不可泄露）
-{key_facts_block}
+{key_facts_block}{unlocked_section}{locked_section}
 
 ## 输出格式
 你必须严格输出如下JSON，不得包含任何其他内容：
@@ -132,6 +154,51 @@ def check_spoiler_leak(response: str, puzzle: Puzzle) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Clue unlock logic
+# ---------------------------------------------------------------------------
+
+
+def check_clue_unlock_active(
+    message: str, puzzle: Puzzle, unlocked_ids: set[str]
+) -> Clue | None:
+    """Phase 2: return a clue if any of its unlock_keywords appear in the player message.
+
+    Matching is a simple substring check (fuzzy, not exact).
+    Skips clues already in unlocked_ids.
+    """
+    for clue in puzzle.clues:
+        if clue.id in unlocked_ids:
+            continue
+        if any(kw in message for kw in clue.unlock_keywords):
+            unlocked_ids.add(clue.id)
+            return clue
+    return None
+
+
+def check_clue_unlock_passive(session: GameSession) -> Clue | None:
+    """Phase 1: when should_hint is true, wrap next hint as a pseudo-clue card.
+
+    id = f"hint_{hint_index}", title = "DM 提示", content = hint text.
+    Increments hint_index so the same hint is never returned twice.
+    Returns None when all hints are exhausted.
+    """
+    hints = session.puzzle.hints
+    if session.hint_index < len(hints):
+        index = session.hint_index
+        hint_text = hints[index]
+        session.hint_index += 1
+        pseudo_id = f"hint_{index}"
+        session.unlocked_clue_ids.add(pseudo_id)
+        return Clue(
+            id=pseudo_id,
+            title="DM 提示",
+            content=hint_text,
+            unlock_keywords=[],
+        )
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Hint escalation
 # ---------------------------------------------------------------------------
 
@@ -152,6 +219,60 @@ def get_next_hint(session: GameSession) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Proactive DM message (multiplayer silence intervention)
+# ---------------------------------------------------------------------------
+
+
+async def dm_proactive_message(session: GameSession, level: str) -> str:
+    """Generate a short Chinese string for a proactive DM nudge/hint.
+
+    Called only for level="nudge" or level="hint" silence interventions
+    (level="gentle" uses canned strings — no LLM call).
+
+    Uses the existing system prompt + conversation history so the DM has
+    full context, then appends a hidden system instruction asking for a
+    proactive remark rather than a JSON judgment.
+
+    Returns plain text (not JSON), already stripped of <think> tags.
+    """
+    if level == "hint":
+        instruction = (
+            "（系统指令：玩家长时间沉默，请主动发表一句引导性提示，"
+            "帮助玩家从新角度思考，不超过50字，绝对不能透露汤底答案。"
+            "只输出这一句话，不要任何前缀或JSON格式。）"
+        )
+    else:  # nudge
+        instruction = (
+            "（系统指令：玩家已沉默一段时间，请发表一句温和鼓励，"
+            "提醒玩家继续思考，不超过30字。"
+            "只输出这一句话，不要任何前缀或JSON格式。）"
+        )
+
+    system_prompt = assemble_prompt(session.puzzle, session.unlocked_clue_ids)
+    trimmed = session.history[-MAX_HISTORY:]
+    # Append the covert instruction as a user turn so the DM responds to it
+    messages = trimmed + [{"role": "user", "content": instruction}]
+
+    raw = await chat(system_prompt, messages)
+    text = strip_think(raw).strip()
+
+    # Guard: if DM accidentally returned JSON, extract the response field
+    try:
+        data = json.loads(_extract_json(text))
+        extracted = str(data.get("response", "")).strip()
+        if extracted:
+            return extracted[:100]
+    except Exception:
+        pass
+
+    # Safety: truncate and ensure no key_fact leak
+    text = text[:100]
+    if check_spoiler_leak(text, session.puzzle):
+        return "大家继续思考，相信你们能找到答案！"
+    return text if text else "大家继续加油！"
+
+
+# ---------------------------------------------------------------------------
 # Main DM turn
 # ---------------------------------------------------------------------------
 
@@ -162,22 +283,24 @@ async def dm_turn(session: GameSession, player_message: str) -> ChatResponse:
     Steps:
     1. Append player message to history.
     2. Build messages list (trimmed to MAX_HISTORY).
-    3. Call LLM, store raw response in history.
-    4. Parse DMOutput from stripped response.
-    5. Safety check — if key_fact leak detected, replace response.
-    6. Update consecutive_misses.
-    7. Decide whether to give a hint.
-    8. Return ChatResponse.
+    3. Build system prompt (includes already-unlocked clues).
+    4. Call LLM, store raw response in history.
+    5. Parse DMOutput from stripped response.
+    6. Safety check — if key_fact leak detected, replace response.
+    7. Update consecutive_misses.
+    8. Clue unlock: try active (keyword match) first, then passive (hint-based).
+    9. Decide whether to give a plain-text hint (legacy, when no clue unlocked).
+    10. Check for game completion.
+    11. Return ChatResponse.
     """
     # 1. Add player message to history
     session.history.append({"role": "user", "content": player_message})
 
-    # 2. Build trimmed message list (exclude the message we just appended; it's
-    #    already the last entry — we'll send all of history[-MAX_HISTORY:])
+    # 2. Build trimmed message list
     trimmed = session.history[-MAX_HISTORY:]
 
-    # 3. Build system prompt and call LLM
-    system_prompt = assemble_prompt(session.puzzle)
+    # 3. Build system prompt and call LLM (includes unlocked clue context)
+    system_prompt = assemble_prompt(session.puzzle, session.unlocked_clue_ids)
     raw_response = await chat(system_prompt, trimmed)
 
     # 4. Store raw (with <think> intact) in history for multi-turn quality
@@ -203,15 +326,24 @@ async def dm_turn(session: GameSession, player_message: str) -> ChatResponse:
     else:
         session.consecutive_misses += 1
 
-    # 8. Decide whether to give a hint
-    hint: str | None = None
+    # 8. Clue unlock: active first (smart question), then passive (stuck fallback)
+    unlocked_clue: Clue | None = check_clue_unlock_active(
+        player_message, session.puzzle, session.unlocked_clue_ids
+    )
     give_hint = dm_output.should_hint or check_hint_needed(session)
-    if give_hint:
+    if unlocked_clue is None and give_hint:
+        unlocked_clue = check_clue_unlock_passive(session)
+        if unlocked_clue:
+            session.consecutive_misses = 0  # reset after giving clue
+
+    # 9. Legacy plain-text hint (only when no clue was unlocked and stuck)
+    hint: str | None = None
+    if unlocked_clue is None and give_hint:
         hint = get_next_hint(session)
         if hint:
-            session.consecutive_misses = 0  # reset after giving hint
+            session.consecutive_misses = 0
 
-    # 9. Check for game completion
+    # 10. Check for game completion
     game_truth: str | None = None
     if dm_output.truth_progress >= 1.0:
         session.finished = True
@@ -221,7 +353,8 @@ async def dm_turn(session: GameSession, player_message: str) -> ChatResponse:
         judgment=dm_output.judgment,
         response=dm_output.response,
         truth_progress=min(dm_output.truth_progress, 1.0),
-        should_hint=give_hint and hint is not None,
+        should_hint=give_hint and (unlocked_clue is not None or hint is not None),
         hint=hint,
         truth=game_truth,
+        clue_unlocked=unlocked_clue,
     )
