@@ -21,7 +21,7 @@ from app.models import (
     StartRequest,
     StartResponse,
 )
-from app.puzzle_loader import load_all_puzzles, load_puzzle, random_puzzle
+from app.puzzle_loader import load_all_puzzles, load_puzzle, load_script, load_scripts, random_puzzle
 from app.room import room_manager
 from app.ws import websocket_endpoint
 
@@ -139,22 +139,46 @@ async def chat_endpoint(body: ChatRequest) -> ChatResponse:
 
 
 class CreateRoomRequest(BaseModel):
-    puzzle_id: str | None = None  # None → random puzzle
+    game_type: str = "turtle_soup"   # "turtle_soup" | "murder_mystery"
+    puzzle_id: str | None = None     # turtle_soup: None → random puzzle
+    script_id: str | None = None     # murder_mystery: required
 
 
 @app.post("/api/rooms")
 async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
     """Create a new multiplayer room.
 
-    Returns {room_id} — players then connect via WebSocket /ws/{room_id}.
+    For turtle_soup: pass puzzle_id (or omit for random).
+    For murder_mystery: pass game_type="murder_mystery" and script_id.
+    Returns {room_id, game_type} — players then connect via WebSocket /ws/{room_id}.
     """
+    if body.game_type == "murder_mystery":
+        if not body.script_id:
+            raise HTTPException(status_code=422, detail="script_id is required for murder_mystery")
+        try:
+            script = load_script(body.script_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        room_id = room_manager.create_room(script=script)
+        return {"room_id": room_id, "game_type": "murder_mystery", "script_id": script.id}
+
+    # turtle_soup (default)
     try:
         puzzle = load_puzzle(body.puzzle_id) if body.puzzle_id else random_puzzle()
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    room_id = room_manager.create_room(puzzle=puzzle)
+    return {"room_id": room_id, "game_type": "turtle_soup", "puzzle_id": puzzle.id}
 
-    room_id = room_manager.create_room(puzzle)
-    return {"room_id": room_id}
+
+@app.get("/api/scripts")
+async def list_scripts() -> list[dict]:
+    """List available murder mystery scripts — id and title only."""
+    return [
+        {"id": s.id, "title": s.title, "difficulty": s.metadata.difficulty,
+         "player_count": s.metadata.player_count}
+        for s in load_scripts()
+    ]
 
 
 @app.get("/api/rooms/{room_id}", response_model=RoomState)
@@ -168,6 +192,18 @@ async def get_room(room_id: str) -> RoomState:
         Player(id=pid, name=p["name"], connected=p["connected"])
         for pid, p in room.players.items()
     ]
+    if room.game_type == "murder_mystery":
+        assert room.script is not None
+        return RoomState(
+            room_id=room_id,
+            puzzle_id=room.script.id,
+            title=room.script.title,
+            surface=room.script.phases[0].dm_script or room.script.title,
+            players=players,
+            phase=room.phase,
+            game_type="murder_mystery",
+        )
+    assert room.puzzle is not None
     return RoomState(
         room_id=room_id,
         puzzle_id=room.puzzle.id,
@@ -175,6 +211,7 @@ async def get_room(room_id: str) -> RoomState:
         surface=room.puzzle.surface,
         players=players,
         phase=room.phase,
+        game_type="turtle_soup",
     )
 
 

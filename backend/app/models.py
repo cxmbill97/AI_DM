@@ -112,6 +112,7 @@ class RoomState(BaseModel):
     surface: str  # 汤面 — safe to expose
     players: list[Player]
     phase: str  # "waiting" | "playing" | "finished"
+    game_type: str = "turtle_soup"  # "turtle_soup" | "murder_mystery"
 
 
 # ---------------------------------------------------------------------------
@@ -190,3 +191,119 @@ class GameSession(BaseModel):
     finished: bool = False
     unlocked_clue_ids: set[str] = set()  # ids of clues the player has earned so far
     player_slot_map: dict[str, str] = {}  # player_id → "player_1" / "player_2" …
+
+
+# ---------------------------------------------------------------------------
+# Murder mystery models (Phase 4)
+# ---------------------------------------------------------------------------
+
+
+class Character(BaseModel):
+    """A player character in a murder mystery script.
+
+    secret_bio and is_culprit are NEVER sent to any LLM prompt or frontend
+    until the reveal phase.  The is_culprit field is stripped from character
+    data before it leaves the server; only the reveal phase handler reads it.
+    """
+
+    id: str
+    name: str
+    public_bio: str   # shown to all players in the lobby
+    secret_bio: str   # shown only to the assigned player (VisibilityRegistry)
+    is_culprit: bool = False
+
+
+class Phase(BaseModel):
+    """One phase in the murder mystery flow.
+
+    allowed_actions: set of action strings that the state machine permits.
+    duration_seconds: None means the phase is manually advanced (no timeout).
+    per_player_content: character_id → private script text shown only to that player.
+    available_clues: clue IDs that can be unlocked during this phase.
+    dm_script: canned DM narration text (used for opening/reveal phases).
+    """
+
+    id: str
+    type: str          # "narration" | "reading" | "investigation" | "discussion" | "voting" | "reveal"
+    next: str | None   # id of the next phase, or None if this is the last
+    duration_seconds: int | None = None
+    allowed_actions: set[str] = set()
+    dm_script: str | None = None
+    available_clues: list[str] | None = None
+    per_player_content: dict[str, str] | None = None  # char_id → text
+
+
+class ScriptClue(BaseModel):
+    """A discoverable clue in a murder mystery script.
+
+    Differs from the turtle-soup Clue in that it carries phase_available
+    and visibility metadata for the state machine to enforce.
+    """
+
+    id: str
+    title: str
+    content: str
+    phase_available: str          # phase id when this clue becomes discoverable
+    visibility: str = "public"    # "public" | "private"
+    unlock_keywords: list[str] = []
+
+
+class NPC(BaseModel):
+    """A non-player character managed by the NPC agent.
+
+    knowledge lists clue IDs this NPC is aware of.  The NPC agent's prompt
+    only includes the content of clues in this list — the NPC cannot answer
+    questions about clues it doesn't know (VisibilityRegistry enforces this).
+    """
+
+    id: str
+    name: str
+    persona: str         # description of personality and role
+    knowledge: list[str]  # clue ids this NPC knows about
+    speech_style: str    # e.g. "formal_elderly", "curt_official"
+
+
+class ScriptTruth(BaseModel):
+    """The ground truth for a murder mystery.
+
+    CRITICAL: culprit field NEVER enters any LLM prompt before reveal phase.
+    Judge Agent receives decomposed key_facts, not this object.
+    """
+
+    culprit: str    # character id of the killer
+    motive: str
+    method: str
+    timeline: str
+    key_facts: list[str] = []  # decomposed facts for Judge Agent (no culprit identity)
+
+
+class ScriptMetadata(BaseModel):
+    player_count: int
+    duration_minutes: int
+    difficulty: str    # "beginner" | "intermediate" | "advanced"
+    age_rating: str = "12+"
+
+
+class Script(BaseModel):
+    """A complete murder mystery script loaded from data/scripts/.
+
+    Phases are stored as a list (preserving order) and indexed by id for
+    the state machine.  The state machine takes script.phases directly.
+    """
+
+    id: str
+    title: str
+    metadata: ScriptMetadata
+    characters: list[Character]
+    phases: list[Phase]
+    clues: list[ScriptClue]
+    npcs: list[NPC]
+    truth: ScriptTruth
+
+
+class VoteRecord(BaseModel):
+    """One player's vote during the voting phase."""
+
+    player_id: str
+    target_character_id: str
+    timestamp: float

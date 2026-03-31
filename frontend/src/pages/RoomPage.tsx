@@ -5,12 +5,28 @@ import { PlayerList } from '../components/PlayerList';
 import { PuzzleCard } from '../components/PuzzleCard';
 import { HintBar } from '../components/HintBar';
 import { PrivateCluePanel } from '../components/PrivateCluePanel';
+import { PhaseBar } from '../components/PhaseBar';
+import { ScriptCard } from '../components/ScriptCard';
+import { VotePanel } from '../components/VotePanel';
 import { useRoom } from '../hooks/useRoom';
-import type { DmResponseMsg, InterventionMsg, PlayerMsg, PrivateMessage, RoomMessage, SystemMsg } from '../hooks/useRoom';
+import type {
+  CharAssignedMsg,
+  ClueFoundMsg,
+  DmResponseMsg,
+  InterventionMsg,
+  PhaseBlockedMsg,
+  PhaseChangeMsg,
+  PlayerMsg,
+  PrivateMessage,
+  RoomMessage,
+  SystemMsg,
+  VoteCastMsg,
+  VoteResultMsg,
+} from '../hooks/useRoom';
 import type { RoomPlayer } from '../api';
 
 // ---------------------------------------------------------------------------
-// Avatar color system — deterministic from player name
+// Avatar color system
 // ---------------------------------------------------------------------------
 
 const AVATAR_PALETTE = [
@@ -96,23 +112,38 @@ function InterventionBubble({ msg }: { msg: InterventionMsg }) {
 }
 
 function DmBubble({ msg }: { msg: DmResponseMsg }) {
+  // Murder mystery mode: no judgment, just text
+  const isMM = msg.text !== undefined && msg.judgment === undefined;
+
+  if (isMM) {
+    return (
+      <div className="room-msg room-msg--dm">
+        <div className="room-dm-header">
+          <span className="room-dm-label">DM</span>
+          {msg.player_name && <span className="room-dm-asker">对 {msg.player_name} 的回复</span>}
+          <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
+        </div>
+        <div className="room-bubble room-bubble--dm">{msg.text}</div>
+        {msg.clue && (
+          <div className="room-clue-notice">🔍 发现新线索：{msg.clue.title}</div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="room-msg room-msg--dm">
       <div className="room-dm-header">
         <span className="room-dm-label">DM</span>
         <span className="room-dm-asker">对 {msg.player_name} 的回复</span>
-        <span className="room-dm-judgment">{judgmentLabel(msg.judgment)}</span>
+        <span className="room-dm-judgment">{judgmentLabel(msg.judgment ?? '')}</span>
         <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
       </div>
       <div className="room-bubble room-bubble--dm">{msg.response}</div>
       {msg.clue_unlocked && (
-        <div className="room-clue-notice">
-          🔍 发现新线索：{msg.clue_unlocked.title}
-        </div>
+        <div className="room-clue-notice">🔍 发现新线索：{msg.clue_unlocked.title}</div>
       )}
-      {msg.hint && (
-        <div className="room-hint-notice">💡 {msg.hint}</div>
-      )}
+      {msg.hint && <div className="room-hint-notice">💡 {msg.hint}</div>}
     </div>
   );
 }
@@ -128,15 +159,77 @@ function DmTypingBubble() {
   );
 }
 
+function PhaseChangeBubble({ msg }: { msg: PhaseChangeMsg }) {
+  return (
+    <div className="room-msg room-msg--phase-change">
+      <span className="phase-change-icon">🔔</span>
+      <span className="phase-change-text">{msg.description}</span>
+      <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
+    </div>
+  );
+}
+
+function CharAssignedBubble({ msg }: { msg: CharAssignedMsg }) {
+  return (
+    <div className="room-msg room-msg--system">
+      <span>🎭 {msg.player_name} 扮演 <strong>{msg.char_name}</strong></span>
+      <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
+    </div>
+  );
+}
+
+function ClueFoundBubble({ msg }: { msg: ClueFoundMsg }) {
+  return (
+    <div className="room-msg room-msg--clue-found">
+      <span className="clue-found-icon">🔍</span>
+      <span>{msg.text}</span>
+      {msg.clue && <strong className="clue-found-title"> {msg.clue.title}</strong>}
+      <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
+    </div>
+  );
+}
+
+function VoteCastBubble({ msg }: { msg: VoteCastMsg }) {
+  return (
+    <div className="room-msg room-msg--system">
+      <span>🗳 {msg.text} ({msg.count}/{msg.total})</span>
+      <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
+    </div>
+  );
+}
+
+function VoteResultBubble({ msg }: { msg: VoteResultMsg }) {
+  return (
+    <div className="room-msg room-msg--dm">
+      <div className="room-bubble room-bubble--dm">{msg.text}</div>
+      <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
+    </div>
+  );
+}
+
+function PhaseBlockedBubble({ msg }: { msg: PhaseBlockedMsg }) {
+  return (
+    <div className="room-msg room-msg--phase-blocked">
+      <span>⛔ {msg.text}</span>
+      <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
+    </div>
+  );
+}
+
 function MessageList({ msgs, playerName, dmTyping }: { msgs: RoomMessage[]; playerName: string; dmTyping: boolean }) {
   return (
     <>
       {msgs.map((m, i) => {
         if (m.type === 'system') return <SystemBubble key={i} msg={m} />;
-        if (m.type === 'player_message')
-          return <PlayerBubble key={i} msg={m} isSelf={m.player_name === playerName} />;
+        if (m.type === 'player_message') return <PlayerBubble key={i} msg={m} isSelf={m.player_name === playerName} />;
         if (m.type === 'dm_response') return <DmBubble key={i} msg={m} />;
         if (m.type === 'dm_intervention') return <InterventionBubble key={i} msg={m} />;
+        if (m.type === 'phase_change') return <PhaseChangeBubble key={i} msg={m} />;
+        if (m.type === 'character_assigned') return <CharAssignedBubble key={i} msg={m} />;
+        if (m.type === 'clue_found') return <ClueFoundBubble key={i} msg={m} />;
+        if (m.type === 'vote_cast') return <VoteCastBubble key={i} msg={m} />;
+        if (m.type === 'vote_result') return <VoteResultBubble key={i} msg={m} />;
+        if (m.type === 'phase_blocked') return <PhaseBlockedBubble key={i} msg={m} />;
         return null;
       })}
       {dmTyping && <DmTypingBubble />}
@@ -145,7 +238,7 @@ function MessageList({ msgs, playerName, dmTyping }: { msgs: RoomMessage[]; play
 }
 
 // ---------------------------------------------------------------------------
-// Private chat area
+// Private chat area (turtle soup only)
 // ---------------------------------------------------------------------------
 
 function PrivateChatArea({ msgs, dmTyping }: { msgs: PrivateMessage[]; dmTyping: boolean }) {
@@ -183,7 +276,7 @@ function PrivateChatArea({ msgs, dmTyping }: { msgs: PrivateMessage[]; dmTyping:
 }
 
 // ---------------------------------------------------------------------------
-// Game intro modal (information asymmetry explainer)
+// Intro modal
 // ---------------------------------------------------------------------------
 
 function IntroModal({ onClose }: { onClose: () => void }) {
@@ -207,7 +300,7 @@ function IntroModal({ onClose }: { onClose: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
-// Share bar (room code + copy + mobile share)
+// Share bar
 // ---------------------------------------------------------------------------
 
 function ShareBar({ roomId }: { roomId: string }) {
@@ -253,7 +346,7 @@ function WaitingBanner({ connectedCount }: { connectedCount: number }) {
 }
 
 // ---------------------------------------------------------------------------
-// Multiplayer review screen (game over)
+// Multiplayer review screen (turtle soup game over)
 // ---------------------------------------------------------------------------
 
 function MultiplayerReview({
@@ -269,13 +362,12 @@ function MultiplayerReview({
   cluesByPlayer: Record<string, number>;
   onLeave: () => void;
 }) {
-  // MVP = player with most clue unlocks (>0); ties broken by questions count
   let mvpName: string | null = null;
   let maxClues = 0;
   for (const p of players) {
     const c = cluesByPlayer[p.name] ?? 0;
     if (c > maxClues) { maxClues = c; mvpName = p.name; }
-    else if (c === maxClues && maxClues > 0) { mvpName = null; } // tie → no MVP
+    else if (c === maxClues && maxClues > 0) { mvpName = null; }
   }
 
   return (
@@ -340,13 +432,15 @@ export function RoomPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Player name passed from LobbyPage via router state
   const playerName: string = (location.state as { playerName?: string })?.playerName ?? '';
 
   const {
     messages, players, clues, connected, progress, truth, puzzle, error,
     questionsByPlayer, cluesByPlayer, dmTyping, sendMessage,
     privateClues, privateMessages, leakWarning, sendPrivateMessage,
+    // Murder mystery
+    gameType, mmPhase, mmTimeRemaining, characters, myChar,
+    voteCandidates, voteCount, voteResult, hasVoted, sendVote,
   } = useRoom(roomId, playerName);
 
   const [input, setInput] = useState('');
@@ -354,7 +448,7 @@ export function RoomPage() {
   const cluePanelRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Phase 3 state
+  // Turtle soup private chat state
   const [chatMode, setChatMode] = useState<'public' | 'private'>('public');
   const [privateInput, setPrivateInput] = useState('');
   const [showPrivatePanel, setShowPrivatePanel] = useState(false);
@@ -363,7 +457,6 @@ export function RoomPage() {
   const privateEndRef = useRef<HTMLDivElement>(null);
   const privatePanelRef = useRef<HTMLDivElement>(null);
 
-  // Show intro modal once when private clues first arrive
   useEffect(() => {
     if (privateClues.length > 0 && !hasShownIntroRef.current) {
       hasShownIntroRef.current = true;
@@ -371,9 +464,7 @@ export function RoomPage() {
     }
   }, [privateClues.length]);
 
-  const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
 
   function handleSend() {
     const text = input.trim();
@@ -400,7 +491,8 @@ export function RoomPage() {
     );
   }
 
-  if (truth) {
+  // Turtle soup game over
+  if (gameType === 'turtle_soup' && truth) {
     return (
       <MultiplayerReview
         truth={truth}
@@ -415,14 +507,141 @@ export function RoomPage() {
   const clueCount = clues.length;
   const connectedCount = players.filter((p) => p.connected).length;
 
+  // -------------------------------------------------------------------------
+  // Murder mystery layout
+  // -------------------------------------------------------------------------
+
+  if (gameType === 'murder_mystery') {
+    const activePhase = mmPhase ?? 'opening';
+    const isVoting = activePhase === 'voting';
+    const isReveal = activePhase === 'reveal';
+
+    // Build vote candidate list from characters
+    const voteList = voteCandidates ?? characters;
+    // Map winner char_id to name for VotePanel
+    const voteResultForPanel = voteResult
+      ? {
+          winner: voteResult.winner,
+          winner_name: voteResult.winner !== null
+            ? (characters.find((c) => c.id === voteResult.winner)?.name ?? voteResult.winner)
+            : null,
+          is_correct: voteResult.is_correct,
+          vote_counts: voteResult.tally,
+          runoff: voteResult.status === 'runoff' || voteResult.status === 'runoff_tie',
+        }
+      : null;
+
+    return (
+      <div className="mm-screen">
+        {showIntroModal && <IntroModal onClose={() => setShowIntroModal(false)} />}
+
+        {/* Top: phase bar */}
+        <div className="mm-phase-strip">
+          <div className="mm-phase-strip-inner">
+            <button className="btn btn-ghost mm-back-btn" onClick={() => navigate('/')} style={{ padding: '4px 10px' }}>
+              ← 返回
+            </button>
+            <PhaseBar phase={activePhase} timeRemaining={mmTimeRemaining} />
+            <div className="mm-conn-area">
+              <span className="room-share-code" style={{ fontSize: 12 }}>#{roomId}</span>
+              <span className={`conn-dot${connected ? ' conn-dot--on' : ''}`} />
+            </div>
+          </div>
+        </div>
+
+        {error && <div className="error-text mm-error">{error}</div>}
+
+        {/* Body: three-column */}
+        <div className="mm-body">
+          {/* Left: script card */}
+          <aside className="mm-left">
+            {myChar ? (
+              <ScriptCard
+                charName={myChar.char_name}
+                publicBio={
+                  characters.find((c) => c.id === myChar.char_id)?.public_bio ?? ''
+                }
+                secretBio={myChar.secret_bio}
+                personalScript={myChar.personal_script ?? undefined}
+                phase={activePhase}
+              />
+            ) : (
+              <div className="mm-no-char">
+                <div className="mm-no-char-icon">🎭</div>
+                <div>等待分配角色</div>
+              </div>
+            )}
+            <PlayerList players={players} currentName={playerName} />
+          </aside>
+
+          {/* Center: chat */}
+          <div className="mm-center">
+            <WaitingBanner connectedCount={connectedCount} />
+            <div className="room-chat mm-chat">
+              <MessageList msgs={messages} playerName={playerName} dmTyping={dmTyping} />
+              <div ref={chatEndRef} />
+            </div>
+            <div className="chat-input-row">
+              <input
+                className="chat-input"
+                type="text"
+                placeholder={
+                  !connected ? '连接中…'
+                  : isReveal ? '游戏已结束'
+                  : isVoting ? '投票阶段，请在右侧投票'
+                  : '输入消息，按回车发送…'
+                }
+                value={input}
+                disabled={!connected || isReveal || isVoting}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                }}
+              />
+              <button
+                className="btn btn-primary"
+                onClick={handleSend}
+                disabled={!input.trim() || !connected || isReveal || isVoting}
+              >
+                发送
+              </button>
+            </div>
+          </div>
+
+          {/* Right: clues + vote */}
+          <aside className="mm-right">
+            <CluePanel clues={clues} panelRef={cluePanelRef} />
+            <VotePanel
+              phase={activePhase}
+              candidates={voteList}
+              hasVoted={hasVoted}
+              voteResult={voteResultForPanel}
+              onVote={sendVote}
+              voteCount={voteCount?.count ?? 0}
+              totalPlayers={players.length}
+            />
+            {isReveal && (
+              <div style={{ textAlign: 'center', marginTop: 16 }}>
+                <button className="btn btn-primary" onClick={() => navigate('/')}>
+                  返回大厅
+                </button>
+              </div>
+            )}
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Turtle soup layout (unchanged)
+  // -------------------------------------------------------------------------
+
   return (
     <div className="game-screen">
-      {/* Intro modal — shown once when private clues arrive */}
       {showIntroModal && <IntroModal onClose={() => setShowIntroModal(false)} />}
 
-      {/* Main column */}
       <div className="game-main">
-        {/* Header */}
         <header className="game-header">
           <button className="btn btn-ghost" onClick={() => navigate('/')} style={{ padding: '4px 10px' }}>
             ← 返回
@@ -432,13 +651,11 @@ export function RoomPage() {
             <span className="room-id-badge"> #{roomId}</span>
           </span>
           <div className="game-header-right">
-            <span className={`conn-dot${connected ? ' conn-dot--on' : ''}`} title={connected ? '已连接' : '连接中…'} />
-            {/* Private clue toggle button */}
+            <span className={`conn-dot${connected ? ' conn-dot--on' : ''}`} />
             {privateClues.length > 0 && (
               <button
                 className={`btn btn-ghost clue-toggle-btn${showPrivatePanel ? ' clue-toggle-btn--active' : ''}`}
                 onClick={() => setShowPrivatePanel((v) => !v)}
-                aria-label="我的秘密线索"
                 style={{ color: showPrivatePanel ? '#6b4fa8' : undefined }}
               >
                 🔐{showPrivatePanel && <span className="clue-toggle-count" style={{ background: '#6b4fa8' }}>{privateClues.length}</span>}
@@ -450,37 +667,26 @@ export function RoomPage() {
                 setShowCluePanel((v) => !v);
                 if (!showCluePanel) setTimeout(() => cluePanelRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
               }}
-              aria-label="线索板"
             >
               🔍{clueCount > 0 && <span className="clue-toggle-count">{clueCount}</span>}
             </button>
           </div>
         </header>
 
-        {/* Share bar */}
         <ShareBar roomId={roomId} />
-
         {error && <div className="error-text" style={{ padding: '8px 16px' }}>{error}</div>}
-
-        {/* Puzzle surface */}
         {puzzle && <PuzzleCard title={puzzle.title} surface={puzzle.surface} />}
-
-        {/* Waiting banner */}
         <WaitingBanner connectedCount={connectedCount} />
 
-        {/* Mobile private clue panel */}
         {privateClues.length > 0 && (
           <div className={`clue-panel-mobile${showPrivatePanel ? ' clue-panel-mobile--open' : ''}`}>
             <PrivateCluePanel clues={privateClues} panelRef={privatePanelRef} />
           </div>
         )}
-
-        {/* Mobile shared clue panel */}
         <div className={`clue-panel-mobile${showCluePanel ? ' clue-panel-mobile--open' : ''}`}>
           <CluePanel clues={clues} panelRef={cluePanelRef} />
         </div>
 
-        {/* Chat mode tabs — only shown when this player has private clues */}
         {privateClues.length > 0 && (
           <div className="chat-mode-tabs">
             <button
@@ -499,7 +705,6 @@ export function RoomPage() {
           </div>
         )}
 
-        {/* Chat messages */}
         <div className="room-chat">
           {chatMode === 'public' ? (
             <>
@@ -514,14 +719,8 @@ export function RoomPage() {
           )}
         </div>
 
-        {/* Leak warning */}
-        {leakWarning && (
-          <div className="leak-warning">
-            ⚠️ {leakWarning}
-          </div>
-        )}
+        {leakWarning && <div className="leak-warning">⚠️ {leakWarning}</div>}
 
-        {/* Input */}
         <div className="chat-input-row">
           {chatMode === 'public' ? (
             <>
@@ -565,13 +764,11 @@ export function RoomPage() {
           )}
         </div>
 
-        {/* Progress bar */}
         <div className="game-bottom">
           <HintBar hints={[]} progress={progress} />
         </div>
       </div>
 
-      {/* Right sidebar */}
       <aside className="game-sidebar room-sidebar">
         {privateClues.length > 0 && <PrivateCluePanel clues={privateClues} />}
         <PlayerList players={players} currentName={playerName} />

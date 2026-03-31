@@ -14,6 +14,13 @@ export interface PuzzleSummary {
   tags: string[];
 }
 
+export interface ScriptSummary {
+  id: string;
+  title: string;
+  difficulty: string;
+  player_count: number;
+}
+
 export interface StartResponse {
   session_id: string;
   puzzle_id: string;
@@ -65,6 +72,10 @@ export function listPuzzles(): Promise<PuzzleSummary[]> {
   return apiFetch('/api/puzzles');
 }
 
+export function listScripts(): Promise<ScriptSummary[]> {
+  return apiFetch('/api/scripts');
+}
+
 export function startGame(puzzleId?: string): Promise<StartResponse> {
   return apiFetch('/api/start', {
     method: 'POST',
@@ -92,6 +103,7 @@ export interface RoomPlayer {
   id: string;
   name: string;
   connected: boolean;
+  character?: string; // char_id assigned (murder mystery only)
 }
 
 export interface RoomState {
@@ -101,13 +113,32 @@ export interface RoomState {
   surface: string;
   players: RoomPlayer[];
   phase: string;
+  game_type: string;
 }
 
-export function createRoom(puzzleId?: string): Promise<{ room_id: string }> {
+export interface CreateRoomOptions {
+  game_type?: 'turtle_soup' | 'murder_mystery';
+  puzzle_id?: string;
+  script_id?: string;
+}
+
+/**
+ * Create a new multiplayer room.
+ * Accepts either a puzzle_id string (backward compat) or a CreateRoomOptions object.
+ */
+export function createRoom(
+  options?: string | CreateRoomOptions,
+): Promise<{ room_id: string; game_type: string }> {
+  let body: Record<string, unknown>;
+  if (typeof options === 'string' || options === undefined) {
+    body = { game_type: 'turtle_soup', puzzle_id: options ?? null };
+  } else {
+    body = { game_type: options.game_type ?? 'turtle_soup', ...options };
+  }
   return apiFetch('/api/rooms', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ puzzle_id: puzzleId ?? null }),
+    body: JSON.stringify(body),
   });
 }
 
