@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Clue } from '../api';
+import { useT } from '../i18n';
 
 interface CluePanelProps {
   clues: Clue[];
@@ -8,6 +9,7 @@ interface CluePanelProps {
 }
 
 export function CluePanel({ clues, panelRef }: CluePanelProps) {
+  const { t } = useT();
   // Track which clue id was most recently added so we can animate it
   const [newClueId, setNewClueId] = useState<string | null>(null);
   const prevLenRef = useRef(0);
@@ -27,15 +29,15 @@ export function CluePanel({ clues, panelRef }: CluePanelProps) {
     <div className="clue-panel" ref={panelRef}>
       <div className="clue-panel-header">
         <span className="clue-panel-icon">🔍</span>
-        <span className="clue-panel-title">线索板</span>
+        <span className="clue-panel-title">{t('clue.board_title')}</span>
         {clues.length > 0 && (
-          <span className="clue-count-badge">已发现 {clues.length} 条</span>
+          <span className="clue-count-badge">{t('clue.found_count', { n: clues.length })}</span>
         )}
       </div>
 
       {clues.length === 0 ? (
-        <p className="clue-panel-empty">
-          提问时触及关键方向，<br />线索会自动解锁…
+        <p className="clue-panel-empty" style={{ whiteSpace: 'pre-line' }}>
+          {t('clue.empty')}
         </p>
       ) : (
         <div className="clue-list">

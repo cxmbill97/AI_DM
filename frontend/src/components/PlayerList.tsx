@@ -1,4 +1,5 @@
 import type { RoomPlayer } from '../api';
+import { useT } from '../i18n';
 
 interface PlayerListProps {
   players: RoomPlayer[];
@@ -26,12 +27,13 @@ function avatarStyle(name: string): React.CSSProperties {
 }
 
 export function PlayerList({ players, currentName }: PlayerListProps) {
+  const { t } = useT();
   const connected = players.filter((p) => p.connected).length;
 
   return (
     <div className="player-list">
       <div className="player-list-header">
-        <span className="player-list-title">玩家</span>
+        <span className="player-list-title">{t('player.title')}</span>
         <span className="player-list-count">{connected}/{players.length}</span>
       </div>
       <ul className="player-list-items">
@@ -42,7 +44,7 @@ export function PlayerList({ players, currentName }: PlayerListProps) {
             </span>
             <span className="player-name">
               {p.name}
-              {p.name === currentName && <span className="player-you"> (你)</span>}
+              {p.name === currentName && <span className="player-you"> {t('player.you')}</span>}
             </span>
             <span className={`player-dot${p.connected ? ' player-dot--online' : ''}`} style={{ marginLeft: 'auto' }} />
           </li>

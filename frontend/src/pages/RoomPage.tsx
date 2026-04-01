@@ -8,7 +8,9 @@ import { PrivateCluePanel } from '../components/PrivateCluePanel';
 import { PhaseBar } from '../components/PhaseBar';
 import { ScriptCard } from '../components/ScriptCard';
 import { VotePanel } from '../components/VotePanel';
+import { LanguageToggle } from '../components/LanguageToggle';
 import { useRoom } from '../hooks/useRoom';
+import { useT } from '../i18n';
 import type {
   CharAssignedMsg,
   ClueFoundMsg,
@@ -53,13 +55,16 @@ function avatarStyle(name: string): React.CSSProperties {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function judgmentLabel(j: string): string {
-  if (j === '是') return '✅ 是';
-  if (j === '不是') return '❌ 不是';
-  if (j === '部分正确') return '〽️ 部分正确';
-  if (j === '无关') return '➖ 无关';
-  return j;
-}
+const JUDGMENT_KEY: Record<string, string> = {
+  '是': 'judgment.yes',
+  '不是': 'judgment.no',
+  '部分正确': 'judgment.partial',
+  '无关': 'judgment.irrelevant',
+  'Yes': 'judgment.yes',
+  'No': 'judgment.no',
+  'Partially correct': 'judgment.partial',
+  'Irrelevant': 'judgment.irrelevant',
+};
 
 function formatTime(ts: number): string {
   const d = new Date(ts * 1000);
@@ -97,10 +102,11 @@ function PlayerBubble({ msg, isSelf }: { msg: PlayerMsg; isSelf: boolean }) {
 }
 
 function InterventionBubble({ msg }: { msg: InterventionMsg }) {
+  const { t } = useT();
   let label: string;
-  if (msg.reason === 'hint') label = 'DM 💡 主动提示';
-  else if (msg.reason === 'encouragement') label = 'DM 🎲 鼓励';
-  else label = 'DM 💬 发话了';
+  if (msg.reason === 'hint') label = t('dm.hint_label');
+  else if (msg.reason === 'encouragement') label = t('dm.encourage_label');
+  else label = t('dm.note_label');
 
   return (
     <div className="room-msg room-msg--intervention">
@@ -112,6 +118,7 @@ function InterventionBubble({ msg }: { msg: InterventionMsg }) {
 }
 
 function DmBubble({ msg }: { msg: DmResponseMsg }) {
+  const { t } = useT();
   // Murder mystery mode: no judgment, just text
   const isMM = msg.text !== undefined && msg.judgment === undefined;
 
@@ -120,12 +127,12 @@ function DmBubble({ msg }: { msg: DmResponseMsg }) {
       <div className="room-msg room-msg--dm">
         <div className="room-dm-header">
           <span className="room-dm-label">DM</span>
-          {msg.player_name && <span className="room-dm-asker">对 {msg.player_name} 的回复</span>}
+          {msg.player_name && <span className="room-dm-asker">{t('dm.reply_to', { name: msg.player_name })}</span>}
           <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
         </div>
         <div className="room-bubble room-bubble--dm">{msg.text}</div>
         {msg.clue && (
-          <div className="room-clue-notice">🔍 发现新线索：{msg.clue.title}</div>
+          <div className="room-clue-notice">{t('dm.new_clue')}{msg.clue.title}</div>
         )}
       </div>
     );
@@ -135,13 +142,13 @@ function DmBubble({ msg }: { msg: DmResponseMsg }) {
     <div className="room-msg room-msg--dm">
       <div className="room-dm-header">
         <span className="room-dm-label">DM</span>
-        <span className="room-dm-asker">对 {msg.player_name} 的回复</span>
-        <span className="room-dm-judgment">{judgmentLabel(msg.judgment ?? '')}</span>
+        <span className="room-dm-asker">{t('dm.reply_to', { name: msg.player_name })}</span>
+        <span className="room-dm-judgment">{JUDGMENT_KEY[msg.judgment ?? ''] ? t(JUDGMENT_KEY[msg.judgment ?? '']) : (msg.judgment ?? '')}</span>
         <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
       </div>
       <div className="room-bubble room-bubble--dm">{msg.response}</div>
       {msg.clue_unlocked && (
-        <div className="room-clue-notice">🔍 发现新线索：{msg.clue_unlocked.title}</div>
+        <div className="room-clue-notice">{t('dm.new_clue')}{msg.clue_unlocked.title}</div>
       )}
       {msg.hint && <div className="room-hint-notice">💡 {msg.hint}</div>}
     </div>
@@ -170,9 +177,10 @@ function PhaseChangeBubble({ msg }: { msg: PhaseChangeMsg }) {
 }
 
 function CharAssignedBubble({ msg }: { msg: CharAssignedMsg }) {
+  const { t } = useT();
   return (
     <div className="room-msg room-msg--system">
-      <span>🎭 {msg.player_name} 扮演 <strong>{msg.char_name}</strong></span>
+      <span>{t('mm.char_plays', { player: msg.player_name, char: msg.char_name })}</span>
       <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
     </div>
   );
@@ -242,11 +250,12 @@ function MessageList({ msgs, playerName, dmTyping }: { msgs: RoomMessage[]; play
 // ---------------------------------------------------------------------------
 
 function PrivateChatArea({ msgs, dmTyping }: { msgs: PrivateMessage[]; dmTyping: boolean }) {
+  const { t } = useT();
   return (
     <>
       {msgs.length === 0 && (
         <div className="room-private-empty">
-          向DM私密提问，其他玩家不会看到你们的对话
+          {t('room.private_empty')}
         </div>
       )}
       {msgs.map((m, i) => {
@@ -254,7 +263,7 @@ function PrivateChatArea({ msgs, dmTyping }: { msgs: PrivateMessage[]; dmTyping:
           return (
             <div key={i} className="room-msg room-msg--private-q">
               <div className="room-bubble room-bubble--private">{m.text}</div>
-              <span className="private-badge">私密提问</span>
+              <span className="private-badge">{t('room.private_question_badge')}</span>
               <span className="room-msg-time">{formatTime(m.timestamp)}</span>
             </div>
           );
@@ -263,7 +272,7 @@ function PrivateChatArea({ msgs, dmTyping }: { msgs: PrivateMessage[]; dmTyping:
           <div key={i} className="room-msg room-msg--dm room-msg--private-dm">
             <div className="room-dm-header">
               <span className="room-dm-label">DM</span>
-              <span className="private-badge">🔒 仅你可见</span>
+              <span className="private-badge">{t('room.private_dm_badge')}</span>
               <span className="room-msg-time" style={{ marginLeft: 'auto' }}>{formatTime(m.timestamp)}</span>
             </div>
             <div className="room-bubble room-bubble--dm">{m.response}</div>
@@ -280,19 +289,17 @@ function PrivateChatArea({ msgs, dmTyping }: { msgs: PrivateMessage[]; dmTyping:
 // ---------------------------------------------------------------------------
 
 function IntroModal({ onClose }: { onClose: () => void }) {
+  const { t } = useT();
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-icon">🔐</div>
-        <h3 className="modal-title">信息不对等游戏</h3>
-        <p className="modal-body">
-          每位玩家持有不同的秘密线索。<br />
-          你可以用自己的话描述你知道的内容，<br />
-          但不能直接展示原始线索文字。<br />
-          合作拼出完整真相即可获胜！
+        <h3 className="modal-title">{t('room.intro_title')}</h3>
+        <p className="modal-body" style={{ whiteSpace: 'pre-line' }}>
+          {t('room.intro_body')}
         </p>
         <button className="btn btn-primary" onClick={onClose} style={{ width: '100%' }}>
-          知道了，开始游戏
+          {t('room.intro_ok')}
         </button>
       </div>
     </div>
@@ -304,10 +311,15 @@ function IntroModal({ onClose }: { onClose: () => void }) {
 // ---------------------------------------------------------------------------
 
 function ShareBar({ roomId }: { roomId: string }) {
+  const { t } = useT();
   const [copied, setCopied] = useState(false);
 
+  // Build the full invite URL using the current host — works on both localhost
+  // and LAN IPs (e.g. http://192.168.1.42:5173/room/ABC123).
+  const inviteUrl = `${window.location.protocol}//${window.location.host}/room/${roomId}`;
+
   function handleCopy() {
-    navigator.clipboard.writeText(roomId).then(() => {
+    navigator.clipboard.writeText(inviteUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -315,7 +327,7 @@ function ShareBar({ roomId }: { roomId: string }) {
 
   function handleShare() {
     if (navigator.share) {
-      navigator.share({ title: '加入我的海龟汤游戏', text: `房间码：${roomId}` }).catch(() => {});
+      navigator.share({ title: '加入我的游戏', url: inviteUrl }).catch(() => {});
     } else {
       handleCopy();
     }
@@ -323,10 +335,11 @@ function ShareBar({ roomId }: { roomId: string }) {
 
   return (
     <div className="room-share-bar">
-      <span className="room-share-label">房间码</span>
+      <span className="room-share-label">{t('room.code_label')}</span>
       <span className="room-share-code">{roomId}</span>
+      <span className="room-share-url">{inviteUrl}</span>
       <button className="btn btn-ghost room-share-btn" onClick={handleShare} style={{ fontSize: 12, padding: '3px 10px' }}>
-        {copied ? '✓ 已复制' : '复制邀请码'}
+        {copied ? t('room.copied') : t('room.copy_invite')}
       </button>
     </div>
   );
@@ -337,10 +350,11 @@ function ShareBar({ roomId }: { roomId: string }) {
 // ---------------------------------------------------------------------------
 
 function WaitingBanner({ connectedCount }: { connectedCount: number }) {
+  const { t } = useT();
   if (connectedCount >= 2) return null;
   return (
     <div className="room-waiting-banner">
-      ⏳ 等待玩家加入…（当前 {connectedCount} 人，至少需要 2 人开始）
+      {t('room.waiting_banner', { n: connectedCount })}
     </div>
   );
 }
@@ -370,21 +384,23 @@ function MultiplayerReview({
     else if (c === maxClues && maxClues > 0) { mvpName = null; }
   }
 
+  const { t } = useT();
+
   return (
     <div className="mp-review-screen">
       <div className="end-celebration">
         <div className="end-emoji">🎉</div>
-        <h2 className="end-title">真相大白！</h2>
+        <h2 className="end-title">{t('room.review_title')}</h2>
       </div>
 
       <div className="end-section">
-        <p className="end-section-label">🍜 汤底（真相）</p>
+        <p className="end-section-label">{t('room.review_truth')}</p>
         <p className="end-truth-text">{truth}</p>
       </div>
 
       {players.length > 0 && (
         <div className="end-section">
-          <p className="end-section-label">👥 本局战报</p>
+          <p className="end-section-label">{t('room.review_scoreboard')}</p>
           <div className="mp-player-stats">
             {players.map((p) => {
               const questions = questionsByPlayer[p.name] ?? 0;
@@ -396,15 +412,15 @@ function MultiplayerReview({
                     {p.name[0]}
                   </div>
                   <span className="mp-stat-name">{p.name}</span>
-                  {isMvp && <span className="mp-mvp-badge">🏆 MVP 推理王</span>}
+                  {isMvp && <span className="mp-mvp-badge">{t('room.mvp')}</span>}
                   <div className="mp-stat-nums">
                     <div className="mp-stat-num">
                       <div className="mp-stat-value">{questions}</div>
-                      <div className="mp-stat-unit">提问</div>
+                      <div className="mp-stat-unit">{t('room.stat_questions')}</div>
                     </div>
                     <div className="mp-stat-num">
                       <div className="mp-stat-value">{clues}</div>
-                      <div className="mp-stat-unit">线索</div>
+                      <div className="mp-stat-unit">{t('room.stat_clues')}</div>
                     </div>
                   </div>
                 </div>
@@ -416,7 +432,7 @@ function MultiplayerReview({
 
       <div style={{ textAlign: 'center' }}>
         <button className="btn btn-primary" onClick={onLeave} style={{ minWidth: 140 }}>
-          返回大厅
+          {t('room.back_lobby')}
         </button>
       </div>
     </div>
@@ -443,6 +459,7 @@ export function RoomPage() {
     voteCandidates, voteCount, voteResult, hasVoted, sendVote,
   } = useRoom(roomId, playerName);
 
+  const { t } = useT();
   const [input, setInput] = useState('');
   const [showCluePanel, setShowCluePanel] = useState(false);
   const cluePanelRef = useRef<HTMLDivElement>(null);
@@ -485,8 +502,8 @@ export function RoomPage() {
   if (!playerName) {
     return (
       <div className="lobby-screen" style={{ textAlign: 'center', paddingTop: 80 }}>
-        <p className="error-text">缺少玩家名，请从大厅进入</p>
-        <button className="btn btn-primary" onClick={() => navigate('/')}>返回大厅</button>
+        <p className="error-text">{t('room.no_player_name')}</p>
+        <button className="btn btn-primary" onClick={() => navigate('/')}>{t('room.back_lobby')}</button>
       </div>
     );
   }
@@ -539,10 +556,11 @@ export function RoomPage() {
         <div className="mm-phase-strip">
           <div className="mm-phase-strip-inner">
             <button className="btn btn-ghost mm-back-btn" onClick={() => navigate('/')} style={{ padding: '4px 10px' }}>
-              ← 返回
+              {t('game.back')}
             </button>
             <PhaseBar phase={activePhase} timeRemaining={mmTimeRemaining} />
             <div className="mm-conn-area">
+              <LanguageToggle />
               <span className="room-share-code" style={{ fontSize: 12 }}>#{roomId}</span>
               <span className={`conn-dot${connected ? ' conn-dot--on' : ''}`} />
             </div>
@@ -568,7 +586,7 @@ export function RoomPage() {
             ) : (
               <div className="mm-no-char">
                 <div className="mm-no-char-icon">🎭</div>
-                <div>等待分配角色</div>
+                <div>{t('mm.no_char')}</div>
               </div>
             )}
             <PlayerList players={players} currentName={playerName} />
@@ -586,10 +604,10 @@ export function RoomPage() {
                 className="chat-input"
                 type="text"
                 placeholder={
-                  !connected ? '连接中…'
-                  : isReveal ? '游戏已结束'
-                  : isVoting ? '投票阶段，请在右侧投票'
-                  : '输入消息，按回车发送…'
+                  !connected ? t('room.input_connecting')
+                  : isReveal ? t('mm.end_placeholder')
+                  : isVoting ? t('mm.voting_placeholder')
+                  : t('mm.chat_placeholder')
                 }
                 value={input}
                 disabled={!connected || isReveal || isVoting}
@@ -603,7 +621,7 @@ export function RoomPage() {
                 onClick={handleSend}
                 disabled={!input.trim() || !connected || isReveal || isVoting}
               >
-                发送
+                {t('game.send')}
               </button>
             </div>
           </div>
@@ -623,7 +641,7 @@ export function RoomPage() {
             {isReveal && (
               <div style={{ textAlign: 'center', marginTop: 16 }}>
                 <button className="btn btn-primary" onClick={() => navigate('/')}>
-                  返回大厅
+                  {t('mm.back_lobby')}
                 </button>
               </div>
             )}
@@ -644,13 +662,14 @@ export function RoomPage() {
       <div className="game-main">
         <header className="game-header">
           <button className="btn btn-ghost" onClick={() => navigate('/')} style={{ padding: '4px 10px' }}>
-            ← 返回
+            {t('game.back')}
           </button>
           <span className="game-header-title">
-            {puzzle?.title ?? '加载中…'}
+            {puzzle?.title ?? t('game.loading')}
             <span className="room-id-badge"> #{roomId}</span>
           </span>
           <div className="game-header-right">
+            <LanguageToggle />
             <span className={`conn-dot${connected ? ' conn-dot--on' : ''}`} />
             {privateClues.length > 0 && (
               <button
@@ -693,14 +712,14 @@ export function RoomPage() {
               className={`chat-mode-tab${chatMode === 'public' ? ' chat-mode-tab--active' : ''}`}
               onClick={() => setChatMode('public')}
             >
-              公聊
+              {t('room.public_chat_tab')}
             </button>
             <button
               className={`chat-mode-tab${chatMode === 'private' ? ' chat-mode-tab--active chat-mode-tab--private' : ''}`}
               onClick={() => setChatMode('private')}
               disabled={!privateClues.length}
             >
-              🔒 私聊DM
+              {t('room.private_chat_tab')}
             </button>
           </div>
         )}
@@ -727,7 +746,7 @@ export function RoomPage() {
               <input
                 className="chat-input"
                 type="text"
-                placeholder={connected ? '输入问题，按回车发送…' : '连接中…'}
+                placeholder={connected ? t('room.input_placeholder') : t('room.input_connecting')}
                 value={input}
                 disabled={!connected || !!truth}
                 onChange={(e) => setInput(e.target.value)}
@@ -736,7 +755,7 @@ export function RoomPage() {
                 }}
               />
               <button className="btn btn-primary" onClick={handleSend} disabled={!input.trim() || !connected || !!truth}>
-                发送
+                {t('game.send')}
               </button>
             </>
           ) : (
@@ -744,7 +763,7 @@ export function RoomPage() {
               <input
                 className="chat-input chat-input--private"
                 type="text"
-                placeholder="向DM私密提问，其他玩家看不到…"
+                placeholder={t('room.private_placeholder')}
                 value={privateInput}
                 disabled={!connected || !!truth}
                 onChange={(e) => setPrivateInput(e.target.value)}
@@ -758,7 +777,7 @@ export function RoomPage() {
                 disabled={!privateInput.trim() || !connected || !!truth}
                 style={{ background: '#6b4fa8', borderColor: '#6b4fa8' }}
               >
-                私聊
+                {t('game.private_send')}
               </button>
             </>
           )}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useT } from '../i18n';
 
 interface PuzzleCardProps {
   title: string;
@@ -8,6 +9,7 @@ interface PuzzleCardProps {
 const COLLAPSE_THRESHOLD = 80; // characters — collapse if longer
 
 export function PuzzleCard({ title, surface }: PuzzleCardProps) {
+  const { t } = useT();
   const needsCollapse = surface.length > COLLAPSE_THRESHOLD;
   const [expanded, setExpanded] = useState(!needsCollapse);
 
@@ -19,11 +21,11 @@ export function PuzzleCard({ title, surface }: PuzzleCardProps) {
         role={needsCollapse ? 'button' : undefined}
         aria-expanded={needsCollapse ? expanded : undefined}
       >
-        <span className="puzzle-card-label">🍲 汤面</span>
+        <span className="puzzle-card-label">{t('puzzle.surface_label')}</span>
         <span className="puzzle-card-title">{title}</span>
         {needsCollapse && (
           <span className="puzzle-card-toggle-text">
-            {expanded ? '收起 ▲' : '展开 ▼'}
+            {expanded ? t('puzzle.collapse') : t('puzzle.expand')}
           </span>
         )}
       </div>

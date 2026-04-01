@@ -1,0 +1,42 @@
+{
+  "id": "en_death_in_field",
+  "title": "Death in the Field",
+  "surface": "A man is found dead in the middle of an open field. Beside him is an unopened package. There are no footprints or tracks leading to or from his body. How did he die?",
+  "truth": "The man was a skydiver. He jumped from an aeroplane but his parachute failed to open. The unopened package is his parachute. He fell to his death in the open field. Because he fell from the sky, there are no footprints or tracks on the ground.",
+  "key_facts": [
+    "The man was a skydiver who jumped from an aircraft",
+    "His parachute failed to open",
+    "The unopened package beside him is his parachute",
+    "He fell from a great height and died on impact",
+    "There are no footprints because he fell from the sky, not walked to the spot",
+    "The field was the landing site of his fall"
+  ],
+  "clues": [
+    {
+      "id": "en_field_c1",
+      "title": "No Tracks",
+      "content": "Police examine the ground carefully. There are absolutely no footprints, tyre tracks, or drag marks anywhere near the body. The man appeared there without approaching from any direction.",
+      "unlock_keywords": ["footprints", "tracks", "marks", "ground", "approach", "walked", "came from", "direction", "arrived"]
+    },
+    {
+      "id": "en_field_c2",
+      "title": "The Package",
+      "content": "The package is about the size and weight of a large backpack. It is made of nylon and has several buckles and straps. The seals are completely intact — it has never been opened.",
+      "unlock_keywords": ["package", "bag", "backpack", "nylon", "straps", "buckles", "sealed", "unopened", "contents"]
+    },
+    {
+      "id": "en_field_c3",
+      "title": "Severe Injuries",
+      "content": "The coroner's report notes that the man suffered catastrophic injuries consistent with a fall from extreme height. No weapon was involved. He died on impact.",
+      "unlock_keywords": ["fall", "height", "injuries", "impact", "fell", "dropped", "sky", "high", "above"]
+    }
+  ],
+  "hints": [
+    "If he didn't walk there, how did he arrive in the middle of the field?",
+    "What kind of package could someone carry that would be useless to them if unopened?",
+    "Think about how someone might end up in a field without approaching it from the ground.",
+    "The package was meant to save his life. Why didn't he open it?"
+  ],
+  "difficulty": "beginner",
+  "tags": ["classic", "lateral-thinking", "skydiving", "mystery"]
+}

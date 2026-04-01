@@ -1,0 +1,43 @@
+{
+  "id": "en_albatross_soup",
+  "title": "Albatross Soup",
+  "surface": "A man walks into a seaside restaurant and orders albatross soup. He takes one sip, then goes home and hangs himself. Why?",
+  "truth": "Years ago, the man was shipwrecked with his young son on a deserted island. When a rescuer finally found them, only the man was alive. The rescuer made a soup from seabirds and told him it was albatross soup — this kept the man's spirit alive during the rescue. Today, tasting real albatross soup for the first time, he noticed the flavour was completely different from what he had eaten on that island. He suddenly understood the truth: to keep him alive, his son had died and been used to make the soup they had eaten together. Unable to live with this revelation, he went home and killed himself.",
+  "key_facts": [
+    "The man was shipwrecked on a deserted island with his son",
+    "Only the man survived the shipwreck",
+    "During the ordeal, he and his son ate soup called albatross soup",
+    "The real albatross soup tasted completely different from what he ate on the island",
+    "The soup on the island was made from his son's flesh",
+    "He had not known the truth until today",
+    "He could not live with the knowledge of what he had eaten"
+  ],
+  "clues": [
+    {
+      "id": "en_alb_c1",
+      "title": "Shipwreck Survivor",
+      "content": "The man was the sole survivor of a shipwreck many years ago. He had been stranded on a remote island for weeks before being rescued.",
+      "unlock_keywords": ["shipwreck", "ship", "island", "stranded", "lost at sea", "survivor", "rescue", "ocean"]
+    },
+    {
+      "id": "en_alb_c2",
+      "title": "His Son",
+      "content": "The man had a son who was with him at the time of the shipwreck. His son's body was never recovered.",
+      "unlock_keywords": ["son", "child", "family", "boy", "kid", "daughter", "relative"]
+    },
+    {
+      "id": "en_alb_c3",
+      "title": "A Different Taste",
+      "content": "The albatross soup in the restaurant tasted nothing like the soup he remembered from the island. This difference shattered something inside him.",
+      "unlock_keywords": ["taste", "flavour", "flavor", "different", "same", "compare", "soup", "ate", "remember"]
+    }
+  ],
+  "hints": [
+    "Think about why the taste of the soup matters so much to him.",
+    "Has he eaten albatross soup before? Under what circumstances?",
+    "Was the soup he ate on the island really made from albatross?",
+    "Who else was with him during his ordeal — and what happened to them?"
+  ],
+  "difficulty": "medium",
+  "tags": ["classic", "shipwreck", "psychological", "food"]
+}

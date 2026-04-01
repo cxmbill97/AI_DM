@@ -1,0 +1,42 @@
+{
+  "id": "en_elevator_man",
+  "title": "The Man in the Elevator",
+  "surface": "A man lives on the 15th floor of an apartment building. Every morning he takes the elevator down to the ground floor and goes to work. When he returns in the evening, he takes the elevator to the 8th floor and walks the remaining seven flights of stairs to his apartment — unless it is raining, or unless someone else is in the elevator with him. Why?",
+  "truth": "The man is a dwarf. He cannot reach the button for the 15th floor by himself. In the morning, going down is easy — he just presses the Ground button, which is at the bottom of the panel. In the evening, the highest button he can reach is the 8th floor. If it is raining he has his umbrella and can use it to press a higher button; if another passenger is present he can ask them to press 15 for him.",
+  "key_facts": [
+    "The man is a dwarf and cannot reach high buttons in the elevator",
+    "The ground floor button is within his reach",
+    "The 8th floor button is the highest he can reach unaided",
+    "With an umbrella he can press higher buttons",
+    "Another passenger can press the 15th floor button for him",
+    "He chooses to walk the remaining stairs rather than ask for help on dry days"
+  ],
+  "clues": [
+    {
+      "id": "en_elev_c1",
+      "title": "Short Stature",
+      "content": "The man is significantly shorter than an average adult. His height affects what he can reach in everyday situations.",
+      "unlock_keywords": ["short", "height", "dwarf", "small", "reach", "tall", "size", "stature"]
+    },
+    {
+      "id": "en_elev_c2",
+      "title": "The Button Panel",
+      "content": "Elevator button panels are arranged vertically. Lower-numbered floors have their buttons near the bottom; higher floors near the top.",
+      "unlock_keywords": ["button", "panel", "press", "floor", "elevator", "lift", "reach button"]
+    },
+    {
+      "id": "en_elev_c3",
+      "title": "The Umbrella",
+      "content": "On rainy days the man always carries an umbrella. It is longer than his arm and extends his reach considerably.",
+      "unlock_keywords": ["rain", "umbrella", "wet", "weather", "rainy", "raining", "storm"]
+    }
+  ],
+  "hints": [
+    "Why would other people in the elevator change what floor he gets off at?",
+    "Why does rain make a difference to his behaviour?",
+    "Think about what the man and an umbrella have in common.",
+    "Is there something physical about the man that limits what he can do alone?"
+  ],
+  "difficulty": "beginner",
+  "tags": ["classic", "logic", "everyday", "observation"]
+}

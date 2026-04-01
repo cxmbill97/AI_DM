@@ -59,6 +59,7 @@ class Puzzle(BaseModel):
 
 class StartRequest(BaseModel):
     puzzle_id: str | None = None  # None → random puzzle
+    language: str = "zh"          # "zh" | "en"
 
 
 class StartResponse(BaseModel):
@@ -191,6 +192,7 @@ class GameSession(BaseModel):
     finished: bool = False
     unlocked_clue_ids: set[str] = set()  # ids of clues the player has earned so far
     player_slot_map: dict[str, str] = {}  # player_id → "player_1" / "player_2" …
+    language: str = "zh"  # "zh" | "en" — DM prompt language
 
 
 # ---------------------------------------------------------------------------

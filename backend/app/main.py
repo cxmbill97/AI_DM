@@ -37,11 +37,11 @@ async def openai_api_error_handler(_: Request, exc: APIError) -> JSONResponse:
     )
 
 # ---------------------------------------------------------------------------
-# CORS — allow the Vite dev server and any localhost origin during development
+# CORS — allow all origins for LAN dev access (not for production)
 # ---------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -75,8 +75,11 @@ async def health() -> dict:
 
 
 @app.get("/api/puzzles", response_model=list[PuzzleSummary])
-async def list_puzzles() -> list[PuzzleSummary]:
-    """List available puzzles — id, title, difficulty, tags only (no truth)."""
+async def list_puzzles(lang: str = "zh") -> list[PuzzleSummary]:
+    """List available puzzles — id, title, difficulty, tags only (no truth).
+
+    Query param: lang=zh (default) | lang=en
+    """
     return [
         PuzzleSummary(
             id=p.id,
@@ -84,7 +87,7 @@ async def list_puzzles() -> list[PuzzleSummary]:
             difficulty=p.difficulty,
             tags=p.tags,
         )
-        for p in load_all_puzzles()
+        for p in load_all_puzzles(lang)
     ]
 
 
@@ -95,8 +98,9 @@ async def start_game(body: StartRequest = StartRequest()) -> StartResponse:
     Pass `puzzle_id` to choose a specific puzzle, or omit for a random one.
     Returns `session_id` + the 汤面 (surface story). The truth is never returned.
     """
+    lang = body.language if body.language in ("zh", "en") else "zh"
     try:
-        puzzle = load_puzzle(body.puzzle_id) if body.puzzle_id else random_puzzle()
+        puzzle = load_puzzle(body.puzzle_id, lang) if body.puzzle_id else random_puzzle(lang)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -105,6 +109,7 @@ async def start_game(body: StartRequest = StartRequest()) -> StartResponse:
         session_id=session_id,
         puzzle=puzzle,
         history=[],
+        language=lang,
     )
     _sessions[session_id] = session
 
@@ -142,6 +147,7 @@ class CreateRoomRequest(BaseModel):
     game_type: str = "turtle_soup"   # "turtle_soup" | "murder_mystery"
     puzzle_id: str | None = None     # turtle_soup: None → random puzzle
     script_id: str | None = None     # murder_mystery: required
+    language: str = "zh"             # "zh" | "en"
 
 
 @app.post("/api/rooms")
@@ -150,34 +156,40 @@ async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
 
     For turtle_soup: pass puzzle_id (or omit for random).
     For murder_mystery: pass game_type="murder_mystery" and script_id.
+    Pass language="en" for an English-language room.
     Returns {room_id, game_type} — players then connect via WebSocket /ws/{room_id}.
     """
+    lang = body.language if body.language in ("zh", "en") else "zh"
+
     if body.game_type == "murder_mystery":
         if not body.script_id:
             raise HTTPException(status_code=422, detail="script_id is required for murder_mystery")
         try:
-            script = load_script(body.script_id)
+            script = load_script(body.script_id, lang)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        room_id = room_manager.create_room(script=script)
+        room_id = room_manager.create_room(script=script, language=lang)
         return {"room_id": room_id, "game_type": "murder_mystery", "script_id": script.id}
 
     # turtle_soup (default)
     try:
-        puzzle = load_puzzle(body.puzzle_id) if body.puzzle_id else random_puzzle()
+        puzzle = load_puzzle(body.puzzle_id, lang) if body.puzzle_id else random_puzzle(lang)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    room_id = room_manager.create_room(puzzle=puzzle)
+    room_id = room_manager.create_room(puzzle=puzzle, language=lang)
     return {"room_id": room_id, "game_type": "turtle_soup", "puzzle_id": puzzle.id}
 
 
 @app.get("/api/scripts")
-async def list_scripts() -> list[dict]:
-    """List available murder mystery scripts — id and title only."""
+async def list_scripts(lang: str = "zh") -> list[dict]:
+    """List available murder mystery scripts — id and title only.
+
+    Query param: lang=zh (default) | lang=en
+    """
     return [
         {"id": s.id, "title": s.title, "difficulty": s.metadata.difficulty,
          "player_count": s.metadata.player_count}
-        for s in load_scripts()
+        for s in load_scripts(lang)
     ]
 
 

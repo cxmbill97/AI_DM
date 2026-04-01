@@ -48,11 +48,13 @@ class Room:
         room_id: str,
         puzzle: Puzzle | None = None,
         script: Script | None = None,
+        language: str = "zh",
     ) -> None:
         if puzzle is None and script is None:
             raise ValueError("Room requires either a puzzle or a script")
 
         self.room_id = room_id
+        self.language: str = language
         self.game_type: str = "murder_mystery" if script is not None else "turtle_soup"
 
         # ---- Turtle soup state ----
@@ -89,6 +91,7 @@ class Room:
                 session_id=room_id,
                 puzzle=puzzle,
                 history=[],
+                language=language,
             )
 
         if script is not None:
@@ -100,6 +103,7 @@ class Room:
                 script=script,
                 state_machine=self.state_machine,
                 player_char_map={},
+                language=language,
             )
 
     # ------------------------------------------------------------------
@@ -264,6 +268,7 @@ class RoomManager:
         self,
         puzzle: Puzzle | None = None,
         script: Script | None = None,
+        language: str = "zh",
     ) -> str:
         """Create a new room, return its room_id.
 
@@ -272,7 +277,7 @@ class RoomManager:
         backward compatibility with turtle_soup callers.
         """
         room_id = self._new_room_id()
-        self.rooms[room_id] = Room(room_id, puzzle=puzzle, script=script)
+        self.rooms[room_id] = Room(room_id, puzzle=puzzle, script=script, language=language)
         return room_id
 
     def get_room(self, room_id: str) -> Room | None:

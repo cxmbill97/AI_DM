@@ -456,7 +456,7 @@ async def _mm_tick(room: Room) -> None:
     if trigger.canned_text:
         text = trigger.canned_text
     else:
-        text = room.intervention.random_gentle_message(phase=phase)
+        text = room.intervention.random_gentle_message(phase=phase, lang=room.language)
 
     intervention_msg: dict[str, Any] = {
         "type": "dm_intervention",
@@ -481,7 +481,7 @@ async def _ts_tick(room: Room) -> None:
     ts = time.time()
 
     if trigger.level == "gentle":
-        text = room.intervention.random_gentle_message()
+        text = room.intervention.random_gentle_message(lang=room.language)
         msg: dict[str, Any] = {
             "type": "dm_intervention",
             "text": text,

@@ -10,6 +10,8 @@ import { ChatPanel } from '../components/ChatPanel';
 import { CluePanel } from '../components/CluePanel';
 import { HintBar } from '../components/HintBar';
 import { PuzzleCard } from '../components/PuzzleCard';
+import { LanguageToggle } from '../components/LanguageToggle';
+import { useT } from '../i18n';
 
 interface GameState {
   session: StartResponse;
@@ -35,22 +37,23 @@ interface EndScreenProps {
 }
 
 function EndScreen({ truth, title, questionCount, hintCount, unlockedClues, onRestart }: EndScreenProps) {
+  const { t } = useT();
   return (
     <div className="end-screen">
       <div className="end-celebration">
         <div className="end-emoji">🎉</div>
-        <h2 className="end-title">真相大白！</h2>
-        <p className="end-subtitle">你揭开了《{title}》的谜底</p>
+        <h2 className="end-title">{t('game.truth_revealed')}</h2>
+        <p className="end-subtitle">{t('game.solved_subtitle', { title })}</p>
       </div>
 
       <div className="end-section">
-        <p className="end-section-label">🍜 汤底（真相）</p>
+        <p className="end-section-label">{t('game.truth_label')}</p>
         <p className="end-truth-text">{truth}</p>
       </div>
 
       {unlockedClues.length > 0 && (
         <div className="end-section">
-          <p className="end-section-label">🔍 本局发现的线索（{unlockedClues.length} 条）</p>
+          <p className="end-section-label">{t('game.clues_found_section', { n: unlockedClues.length })}</p>
           <div className="end-clues">
             {unlockedClues.map((clue) => (
               <div key={clue.id} className="end-clue-card">
@@ -63,26 +66,26 @@ function EndScreen({ truth, title, questionCount, hintCount, unlockedClues, onRe
       )}
 
       <div className="end-section">
-        <p className="end-section-label">📊 本局统计</p>
+        <p className="end-section-label">{t('game.stats_label')}</p>
         <div className="end-stats">
           <div className="stat-item">
             <div className="stat-value">{questionCount}</div>
-            <div className="stat-label">共提问次数</div>
+            <div className="stat-label">{t('game.stats_questions')}</div>
           </div>
           <div className="stat-item">
             <div className="stat-value">{hintCount}</div>
-            <div className="stat-label">使用提示数</div>
+            <div className="stat-label">{t('game.stats_hints')}</div>
           </div>
           <div className="stat-item">
             <div className="stat-value">{unlockedClues.length}</div>
-            <div className="stat-label">发现线索数</div>
+            <div className="stat-label">{t('game.stats_clues')}</div>
           </div>
         </div>
       </div>
 
       <div className="end-actions">
         <button className="btn btn-primary" onClick={onRestart} style={{ minWidth: 160 }}>
-          再玩一局
+          {t('game.play_again')}
         </button>
       </div>
     </div>
@@ -94,6 +97,7 @@ function EndScreen({ truth, title, questionCount, hintCount, unlockedClues, onRe
 // ---------------------------------------------------------------------------
 
 export function SinglePlayerPage() {
+  const { t, lang } = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const puzzleId: string | undefined = (location.state as { puzzleId?: string })?.puzzleId;
@@ -105,7 +109,7 @@ export function SinglePlayerPage() {
   const cluePanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    startGame(puzzleId)
+    startGame(puzzleId, lang)
       .then((session) => {
         setGame({
           session,
@@ -139,14 +143,14 @@ export function SinglePlayerPage() {
   }
 
   if (screen === 'loading') {
-    return <div className="loading-text" style={{ textAlign: 'center', paddingTop: 80 }}>加载中…</div>;
+    return <div className="loading-text" style={{ textAlign: 'center', paddingTop: 80 }}>{t('game.loading')}</div>;
   }
 
   if (startError) {
     return (
       <div className="lobby-screen" style={{ textAlign: 'center', paddingTop: 80 }}>
-        <p className="error-text">启动失败：{startError}</p>
-        <button className="btn btn-primary" onClick={() => navigate('/')}>返回大厅</button>
+        <p className="error-text">{t('game.start_failed', { msg: startError })}</p>
+        <button className="btn btn-primary" onClick={() => navigate('/')}>{t('game.back_lobby')}</button>
       </div>
     );
   }
@@ -173,16 +177,17 @@ export function SinglePlayerPage() {
       <div className="game-main">
         <header className="game-header">
           <button className="btn btn-ghost" onClick={() => navigate('/')} style={{ padding: '4px 10px' }}>
-            ← 返回
+            {t('game.back')}
           </button>
           <span className="game-header-title">{game.session.title}</span>
+          <LanguageToggle />
           <button
             className={`btn btn-ghost clue-toggle-btn${clueCount > 0 ? ' clue-toggle-btn--active' : ''}`}
             onClick={() => {
               setShowCluePanel((v) => !v);
               if (!showCluePanel) setTimeout(() => cluePanelRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
             }}
-            aria-label="线索板"
+            aria-label={t('clue.board_title')}
           >
             🔍{clueCount > 0 && <span className="clue-toggle-count">{clueCount}</span>}
           </button>

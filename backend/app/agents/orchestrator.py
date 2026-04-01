@@ -37,7 +37,17 @@ from typing import Any
 import re
 
 from app.agents.judge import JudgeAgent, Judgment, _FALLBACK_JUDGMENT
-from app.agents.narrator import NarratorAgent, _FALLBACK_RESPONSE, _REGENERATION_FALLBACK
+from app.agents.narrator import (
+    NarratorAgent,
+    _FALLBACK_RESPONSE_ZH,
+    _FALLBACK_RESPONSE_EN,
+    _REGENERATION_FALLBACK_ZH,
+    _REGENERATION_FALLBACK_EN,
+)
+
+# Keep old names as aliases for code that imports them directly
+_FALLBACK_RESPONSE = _FALLBACK_RESPONSE_ZH
+_REGENERATION_FALLBACK = _REGENERATION_FALLBACK_ZH
 from app.agents.npc import NPCAgent
 from app.agents.router import RouterAgent
 from app.agents.safety import SafetyAgent
@@ -87,7 +97,7 @@ _INTENT_TO_ACTION: dict[str, str] = {
 # Canned meta responses
 # ---------------------------------------------------------------------------
 
-_META_RESPONSES: dict[str, str] = {
+_META_RESPONSES_ZH: dict[str, str] = {
     "规则": (
         "游戏规则：各阶段请按提示行事。调查阶段可向DM提问、搜查线索、询问NPC；"
         "讨论阶段可与其他玩家交流；投票阶段请选出你认为的凶手。"
@@ -96,6 +106,20 @@ _META_RESPONSES: dict[str, str] = {
         "当前阶段请继续推理。如有疑问，可以提问、搜查，或询问NPC。祝大家好运！"
     ),
 }
+
+_META_RESPONSES_EN: dict[str, str] = {
+    "rules": (
+        "Game rules: follow the prompts for each phase. During investigation you may question the DM, "
+        "search for clues, or interrogate NPCs. During discussion share your deductions. "
+        "During voting, name the suspect you believe is the culprit."
+    ),
+    "default": (
+        "Keep reasoning through the case. You may ask questions, search for clues, or interrogate NPCs. Good luck!"
+    ),
+}
+
+# Keep old name for backward compatibility
+_META_RESPONSES = _META_RESPONSES_ZH
 
 _MAX_SAFETY_RETRIES = 2
 
@@ -127,10 +151,12 @@ class AgentOrchestrator:
         script: Script,
         state_machine: GameStateMachine,
         player_char_map: dict[str, str] | None = None,
+        language: str = "zh",
     ) -> None:
         self._script = script
         self._sm = state_machine
         self._player_char_map: dict[str, str] = player_char_map or {}
+        self._language: str = language
 
         # Index clues by id for O(1) lookup
         self._clues_by_id: dict[str, ScriptClue] = {c.id: c for c in script.clues}
@@ -184,24 +210,26 @@ class AgentOrchestrator:
 
         # b) Meta — always allowed, no state machine check
         if intent == "meta":
-            return self._handle_meta(message)
+            return self._handle_meta(message, language=self._language)
 
         # b) State machine guard
         required_action = _INTENT_TO_ACTION.get(intent)
         if required_action and not self._sm.can_act(required_action):
-            return OrchestratorResponse(
-                type=RESP_PHASE_BLOCKED,
-                text=f"当前阶段（{phase}）不能执行此操作。",
-            )
+            if self._language == "en":
+                blocked_text = f"This action is not available in the current phase ({phase})."
+            else:
+                blocked_text = f"当前阶段（{phase}）不能执行此操作。"
+            return OrchestratorResponse(type=RESP_PHASE_BLOCKED, text=blocked_text)
 
         # c-h) Route by intent
         if intent == "vote":
             # Vote messages are intercepted by ws.py before reaching here.
             # If we arrive here anyway, tell the player to use the vote UI.
-            return OrchestratorResponse(
-                type=RESP_PHASE_BLOCKED,
-                text="请使用投票功能投票（发送 {\"type\": \"vote\", \"target\": \"<char_id>\"} ）。",
-            )
+            if self._language == "en":
+                vote_text = 'Please use the voting panel to cast your vote (send {"type": "vote", "target": "<char_id>"}).'
+            else:
+                vote_text = '请使用投票功能投票（发送 {"type": "vote", "target": "<char_id>"} ）。'
+            return OrchestratorResponse(type=RESP_PHASE_BLOCKED, text=vote_text)
 
         if intent == "npc":
             return await self._handle_npc(player_id, message)
@@ -263,7 +291,7 @@ class AgentOrchestrator:
             viewer_char_id = self._player_char_map.get(player_id)
             # Fabricate a judgment for "finding a clue" (always positive)
             judgment: Judgment = {
-                "result": "是",
+                "result": "Yes" if self._language == "en" else "是",
                 "confidence": 1.0,
                 "relevant_fact_ids": [],
             }
@@ -289,7 +317,7 @@ class AgentOrchestrator:
 
         # Nothing found — nudge the player
         fallback_judgment: Judgment = {
-            "result": "无关",
+            "result": "Irrelevant" if self._language == "en" else "无关",
             "confidence": 0.5,
             "relevant_fact_ids": [],
         }
@@ -329,12 +357,13 @@ class AgentOrchestrator:
         return None
 
     @staticmethod
-    def _handle_meta(message: str) -> OrchestratorResponse:
+    def _handle_meta(message: str, language: str = "zh") -> OrchestratorResponse:
         """Return a canned help/rules response — no LLM call."""
-        for keyword, response in _META_RESPONSES.items():
-            if keyword in message:
+        meta = _META_RESPONSES_EN if language == "en" else _META_RESPONSES_ZH
+        for keyword, response in meta.items():
+            if keyword != "default" and keyword in message:
                 return OrchestratorResponse(type=RESP_META, text=response)
-        return OrchestratorResponse(type=RESP_META, text=_META_RESPONSES["default"])
+        return OrchestratorResponse(type=RESP_META, text=meta["default"])
 
     # ------------------------------------------------------------------
     # Narrator + Safety with retry
@@ -356,6 +385,7 @@ class AgentOrchestrator:
         if phase == "reveal":
             truth_for_reveal = self._build_truth_reveal_text()
 
+        regen_fallback = _REGENERATION_FALLBACK_EN if self._language == "en" else _REGENERATION_FALLBACK_ZH
         for attempt in range(_MAX_SAFETY_RETRIES + 1):
             text = await self.narrator.narrate(
                 judgment=judgment,
@@ -363,6 +393,7 @@ class AgentOrchestrator:
                 visible_context=visible,
                 phase=phase,
                 truth_for_reveal=truth_for_reveal,
+                language=self._language,
             )
             result = await self.safety.check(
                 text=text,
@@ -382,7 +413,7 @@ class AgentOrchestrator:
             "Orchestrator: all %d safety retries failed for player %s — using fallback",
             _MAX_SAFETY_RETRIES + 1, player_id,
         )
-        return _REGENERATION_FALLBACK
+        return regen_fallback
 
     # ------------------------------------------------------------------
     # Context builders
@@ -422,6 +453,13 @@ class AgentOrchestrator:
             (c for c in self._script.characters if c.id == truth.culprit), None
         )
         culprit_name = culprit_char.name if culprit_char else truth.culprit
+        if self._language == "en":
+            return (
+                f"Culprit: {culprit_name}\n"
+                f"Motive: {truth.motive}\n"
+                f"Method: {truth.method}\n"
+                f"Timeline: {truth.timeline}"
+            )
         return (
             f"凶手：{culprit_name}\n"
             f"动机：{truth.motive}\n"

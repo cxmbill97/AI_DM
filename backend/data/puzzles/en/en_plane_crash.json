@@ -1,0 +1,42 @@
+{
+  "id": "en_plane_crash",
+  "title": "The Cabin in the Field",
+  "surface": "A man is walking through a remote field when he discovers a small cabin. Inside the cabin are two skeletons. The cabin is not made of wood. What happened?",
+  "truth": "The 'cabin' is the cockpit of a small aeroplane that crashed in the field. The two skeletons are those of the pilot and co-pilot. The plane went down in this remote area and was never found until now. The cockpit — made of metal — became the 'cabin' the man stumbled upon.",
+  "key_facts": [
+    "The cabin is the cockpit of a crashed aircraft",
+    "The two skeletons are the pilot and co-pilot",
+    "The aircraft crashed in the remote field and was never discovered",
+    "The cabin is made of metal, not wood",
+    "No one survived the crash",
+    "The wreckage remained in the field for a long time"
+  ],
+  "clues": [
+    {
+      "id": "en_plane_c1",
+      "title": "Made of Metal",
+      "content": "The cabin walls are made of metal, riveted together in sections. The interior is cramped with instrument panels — now rusted and broken — and two seats bolted to the floor.",
+      "unlock_keywords": ["metal", "material", "walls", "instrument", "panel", "seat", "cockpit", "aircraft", "plane", "aeroplane"]
+    },
+    {
+      "id": "en_plane_c2",
+      "title": "Wreckage",
+      "content": "Scattered around the cabin are fragments of a larger structure — twisted metal, broken glass, and what appears to be a wing partially buried in the earth.",
+      "unlock_keywords": ["wing", "crash", "wreck", "wreckage", "debris", "broken", "destroyed", "scattered"]
+    },
+    {
+      "id": "en_plane_c3",
+      "title": "Two Seats",
+      "content": "The interior has exactly two seats, side by side, with harnesses still buckled. Each seat contains a skeleton. There is no room for passengers — this structure was only designed for two.",
+      "unlock_keywords": ["seats", "pilot", "co-pilot", "harness", "cockpit", "crew", "two people", "side by side"]
+    }
+  ],
+  "hints": [
+    "What kind of cabin is not made of wood?",
+    "How might two people end up inside a metal cabin in the middle of a field?",
+    "Think about structures that travel — and sometimes do not arrive.",
+    "The cabin came to the field. It did not grow there."
+  ],
+  "difficulty": "beginner",
+  "tags": ["classic", "lateral-thinking", "aviation", "discovery"]
+}

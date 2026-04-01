@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useT } from '../i18n';
 
 interface PhaseBarProps {
   phase: string;
@@ -14,15 +15,6 @@ const PHASE_ORDER = [
   'reveal',
 ];
 
-const PHASE_LABELS: Record<string, string> = {
-  opening:         '开场',
-  reading:         '阅读',
-  investigation_1: '调查',
-  discussion:      '讨论',
-  voting:          '投票',
-  reveal:          '揭晓',
-};
-
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -30,6 +22,7 @@ function formatTime(seconds: number): string {
 }
 
 export function PhaseBar({ phase, timeRemaining }: PhaseBarProps) {
+  const { t } = useT();
   const [localTime, setLocalTime] = useState<number | null>(timeRemaining);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -72,7 +65,7 @@ export function PhaseBar({ phase, timeRemaining }: PhaseBarProps) {
               <div className="phase-step-dot">
                 {status === 'done' ? '✓' : idx + 1}
               </div>
-              <div className="phase-step-label">{PHASE_LABELS[p] ?? p}</div>
+              <div className="phase-step-label">{t(`phase.${p}`)}</div>
             </div>
           );
         })}

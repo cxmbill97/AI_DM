@@ -1,0 +1,183 @@
+{
+  "id": "en_thornfield_001",
+  "title": "The Thornfield Affair",
+  "metadata": {
+    "player_count": 4,
+    "duration_minutes": 40,
+    "difficulty": "beginner",
+    "age_rating": "12+"
+  },
+  "characters": [
+    {
+      "id": "char_victoria",
+      "name": "Lady Victoria Thornfield",
+      "public_bio": "The widow of Lord Henry Thornfield. A composed, aristocratic woman in her fifties who has managed the Thornfield estate since her husband's health began to decline two years ago.",
+      "secret_bio": "You discovered last week that your husband had secretly changed his will, cutting you out almost entirely and leaving the bulk of the estate to a distant nephew you have barely met. You confronted him privately the night he died — he refused to reverse the decision. You did not harm him, but your argument was heated, and the butler may have overheard raised voices. You have told no one about the will.",
+      "is_culprit": false
+    },
+    {
+      "id": "char_harrow",
+      "name": "Dr. James Harrow",
+      "public_bio": "The Thornfield family physician for over fifteen years. A well-dressed, quietly confident man who managed Lord Thornfield's heart condition and was a frequent dinner guest at the estate.",
+      "secret_bio": "You are the killer. For three years you have been embezzling funds from the Thornfield Charitable Trust, of which you were a trustee. Last month, Lord Thornfield discovered the discrepancy in the accounts and confronted you privately — he gave you one week to confess before going to the police. Faced with ruin and prosecution, you substituted a lethal dose of digoxin for his regular heart medication during your routine visit the afternoon before he died. The overdose was designed to look like natural cardiac failure. You appear calm, but you are acutely watching whether the toxicology report will expose you.",
+      "is_culprit": true
+    },
+    {
+      "id": "char_eleanor",
+      "name": "Eleanor Pemberton",
+      "public_bio": "A longtime friend of Lady Thornfield, visiting the estate for a fortnight. A sharp-witted woman in her fifties with a background in financial law.",
+      "secret_bio": "You are a retired solicitor who specialises in estate fraud. You were not invited here by chance — Victoria wrote to you confidentially, asking you to look into the charitable trust accounts, which she felt were irregular. The evening Lord Thornfield died, you had already identified the discrepancy pointing to Dr. Harrow. You were composing a letter to send to a colleague at the financial authority when the housekeeper came to tell everyone Lord Thornfield had collapsed. You have the draft letter in your room, but you have not yet shown it to anyone.",
+      "is_culprit": false
+    },
+    {
+      "id": "char_finch",
+      "name": "Robert Finch",
+      "public_bio": "The estate's butler and general manager, who has served the Thornfield family for twenty years. Reliable, discreet, and intimately familiar with every routine of the household.",
+      "secret_bio": "You overheard two things that evening: first, an argument between Lord and Lady Thornfield around 9 PM — you could not make out words, but the tone was unmistakably furious. Second, at around 10:15 PM you saw Dr. Harrow leaving Lord Thornfield's private study, which was unusual — the doctor's visit had officially ended at 4 PM and you did not know he had returned. You mentioned neither of these things when the police first arrived, as you assumed it was not your place to speculate. You are beginning to wonder whether you should speak up.",
+      "is_culprit": false
+    }
+  ],
+  "phases": [
+    {
+      "id": "opening",
+      "type": "narration",
+      "next": "reading",
+      "duration_seconds": null,
+      "allowed_actions": [],
+      "dm_script": "Thornfield Manor, a grey October evening. Lord Henry Thornfield — 68, respected peer, long-suffering heart patient — has been found dead in his private study by his butler, Robert Finch, who went to bring him his nightly cocoa at 10:30 PM. The local doctor confirmed death occurred between 9:30 and 11 PM. The estate is sealed; four guests and household staff remain on the premises. The police have asked everyone to remain available for questioning. Your task: determine who killed Lord Thornfield, how, and why.",
+      "available_clues": null,
+      "per_player_content": null
+    },
+    {
+      "id": "reading",
+      "type": "reading",
+      "next": "investigation_1",
+      "duration_seconds": 180,
+      "allowed_actions": [],
+      "dm_script": null,
+      "available_clues": null,
+      "per_player_content": {
+        "char_victoria": "Lady Victoria Thornfield — Character Script\n\nYou are the widow of Lord Henry Thornfield. You have managed this estate with quiet authority for two years, covering for your husband's declining health with grace and determination.\n\nLast week you learned the devastating truth: Henry had changed his will without telling you, all but cutting you out in favour of a distant relative named Gerald Trent, whom neither of you has seen in years. You confronted him the night he died — around 9 PM, in the drawing room. He was immovable. You left furious, and retired to your room.\n\nYou did not harm him. But you said things in anger that you regret, and the argument may have been heard. You have not disclosed the will to anyone.\n\nYour goals: protect your position, discover who actually killed Henry, and — when the moment is right — reveal the truth about the will.",
+
+        "char_harrow": "Dr. James Harrow — Character Script\n\nYou are the family physician. You have been stealing from the Thornfield Charitable Trust for three years — small amounts at first, then larger sums to cover personal debts. Lord Thornfield discovered the discrepancy last month. He gave you one week.\n\nThe week expired. On the afternoon before he died, you visited on the pretext of adjusting his medication. You replaced his 0.125mg digoxin tablets with 0.5mg tablets from your bag. A heart patient at his stage would not survive the overdose — and it would look exactly like natural cardiac failure.\n\nYou returned to the study at 10:15 PM under the pretence of fetching a medical bag you claimed to have left there. The butler saw you leave. That is a problem.\n\nYour goals: appear calm and helpful, deflect suspicion, and ensure the toxicology report — if there is one — does not expose you.",
+
+        "char_eleanor": "Eleanor Pemberton — Character Script\n\nYou are a retired financial solicitor and Victoria's oldest friend. She wrote to you a fortnight ago asking you to look quietly into the charitable trust accounts — something felt wrong to her, though she could not say what.\n\nYou have been here ten days. You have found it: funds diverted through a subsidiary account, all traceable to Dr. James Harrow. You were drafting a letter to the financial authority when Finch announced Lord Thornfield had been found. You have the draft in your writing case.\n\nYou suspect Dr. Harrow may have acted to prevent exposure. But you need evidence of the method — financial fraud does not prove murder.\n\nYour goals: share your findings with the right people, help identify the murder method, and ensure Dr. Harrow is brought to justice.",
+
+        "char_finch": "Robert Finch — Character Script\n\nYou are the estate butler. Twenty years of service have taught you discretion — perhaps too much discretion.\n\nYou heard two things last evening that the police do not yet know:\n\n1. At approximately 9 PM, raised voices from the drawing room — Lord and Lady Thornfield arguing. Words unclear, tone unmistakable.\n\n2. At approximately 10:15 PM, you saw Dr. Harrow exiting Lord Thornfield's private study. The doctor's official visit had ended at 4 PM. You do not know why he returned, or whether Lord Thornfield was still alive at that point.\n\nYou said nothing to the police because you did not want to cast suspicion unfairly. But you are a loyal servant — and your loyalty is ultimately to the truth.\n\nYour goals: decide when to reveal what you saw, help the investigation reach the correct conclusion, and honour Lord Thornfield's memory."
+      }
+    },
+    {
+      "id": "investigation_1",
+      "type": "investigation",
+      "next": "discussion",
+      "duration_seconds": 900,
+      "allowed_actions": ["ask_dm", "search", "public_chat"],
+      "dm_script": null,
+      "available_clues": ["en_th_c001", "en_th_c002", "en_th_c003", "en_th_c004", "en_th_c005"],
+      "per_player_content": null
+    },
+    {
+      "id": "discussion",
+      "type": "discussion",
+      "next": "voting",
+      "duration_seconds": 480,
+      "allowed_actions": ["public_chat", "ask_dm"],
+      "dm_script": null,
+      "available_clues": null,
+      "per_player_content": null
+    },
+    {
+      "id": "voting",
+      "type": "voting",
+      "next": "reveal",
+      "duration_seconds": 120,
+      "allowed_actions": ["cast_vote", "public_chat"],
+      "dm_script": null,
+      "available_clues": null,
+      "per_player_content": null
+    },
+    {
+      "id": "reveal",
+      "type": "reveal",
+      "next": null,
+      "duration_seconds": null,
+      "allowed_actions": [],
+      "dm_script": null,
+      "available_clues": null,
+      "per_player_content": null
+    }
+  ],
+  "clues": [
+    {
+      "id": "en_th_c001",
+      "title": "Toxicology Preliminary",
+      "content": "The preliminary toxicology report notes unusually high levels of cardiac glycoside (digoxin) in the deceased's bloodstream — far exceeding the therapeutic range. The cause of death is being reclassified from natural cardiac failure to suspected poisoning.",
+      "phase_available": "investigation_1",
+      "visibility": "public",
+      "unlock_keywords": ["poison", "toxicology", "drug", "medication", "digoxin", "cause of death", "medical", "autopsy", "overdose"]
+    },
+    {
+      "id": "en_th_c002",
+      "title": "The Prescription Bottle",
+      "content": "A pill bottle labelled 'Digoxin 0.125mg — prescribed by Dr. J. Harrow' was found on the deceased's bedside table. When the remaining tablets are tested, they are found to be 0.5mg tablets — four times the prescribed dose.",
+      "phase_available": "investigation_1",
+      "visibility": "public",
+      "unlock_keywords": ["pills", "tablets", "bottle", "prescription", "medicine", "bedside", "digoxin", "dose", "medication bottle"]
+    },
+    {
+      "id": "en_th_c003",
+      "title": "The Butler Speaks",
+      "content": "Pressed by investigators, Finch confirms he saw Dr. Harrow exiting Lord Thornfield's private study at approximately 10:15 PM — more than six hours after the doctor's official afternoon visit had concluded. Dr. Harrow had not mentioned this return visit to the police.",
+      "phase_available": "investigation_1",
+      "visibility": "public",
+      "unlock_keywords": ["butler", "Finch", "doctor", "Harrow", "study", "evening", "return", "10", "saw", "witness", "visited"]
+    },
+    {
+      "id": "en_th_c004",
+      "title": "Trust Account Records",
+      "content": "Eleanor Pemberton presents her analysis of the Thornfield Charitable Trust accounts. Over three years, approximately £180,000 has been diverted through a subsidiary account in the name of a shell company. All instructions were authorised with Dr. Harrow's trustee signature.",
+      "phase_available": "investigation_1",
+      "visibility": "public",
+      "unlock_keywords": ["trust", "accounts", "money", "funds", "embezzle", "steal", "financial", "Eleanor", "Pemberton", "records", "solicitor"]
+    },
+    {
+      "id": "en_th_c005",
+      "title": "Lord Thornfield's Private Letter",
+      "content": "A sealed letter found in Lord Thornfield's desk, dated two days before his death, is addressed to his solicitor. It instructs the solicitor to contact police regarding financial irregularities in the charitable trust and names Dr. James Harrow as the suspected responsible party.",
+      "phase_available": "investigation_1",
+      "visibility": "public",
+      "unlock_keywords": ["letter", "desk", "solicitor", "wrote", "note", "document", "instruction", "Thornfield", "wrote to", "evidence"]
+    }
+  ],
+  "npcs": [
+    {
+      "id": "npc_housekeeper",
+      "name": "Mrs. Daly",
+      "persona": "The estate housekeeper, 60s, who has worked at Thornfield Manor for thirty years. She is devoted to the family, somewhat flustered by the events, and speaks in a worried, slightly breathless manner. She knows the household routine inside out and noticed anything that deviated from it. She is not withholding anything deliberately, but may need prompting to realise what is significant.",
+      "knowledge": ["en_th_c001", "en_th_c003"],
+      "speech_style": "worried_housekeeper"
+    },
+    {
+      "id": "npc_inspector",
+      "name": "Inspector Graves",
+      "persona": "A sharp, methodical detective inspector from the county constabulary. Late 40s, speaks in clipped, precise sentences. He has the preliminary forensic and police findings and will share confirmed facts when asked directly. He does not speculate and will say 'that is still under investigation' when something is not yet confirmed. He takes the case seriously and respects evidence-based reasoning from the players.",
+      "knowledge": ["en_th_c001", "en_th_c002", "en_th_c003", "en_th_c004", "en_th_c005"],
+      "speech_style": "curt_official"
+    }
+  ],
+  "truth": {
+    "culprit": "char_harrow",
+    "motive": "Dr. James Harrow had been embezzling funds from the Thornfield Charitable Trust for three years. Lord Thornfield discovered the fraud and gave Harrow one week to confess before reporting him to the police. Facing financial ruin and criminal prosecution, Harrow chose murder over exposure.",
+    "method": "During his routine afternoon medical visit, Dr. Harrow substituted Lord Thornfield's prescribed 0.125mg digoxin tablets with 0.5mg tablets from his medical bag. He returned to the study at approximately 10:15 PM — observed by the butler — ostensibly to retrieve a forgotten bag, but in reality to confirm that the medication had been taken. Lord Thornfield suffered a fatal cardiac event due to digoxin toxicity between 9:30 and 11 PM.",
+    "timeline": "4:00 PM — Dr. Harrow conducts his routine medical visit, substitutes the tablets. 9:00 PM — Lord and Lady Thornfield argue in the drawing room (overheard by Finch); Lord Thornfield has already taken his evening dose of the lethal medication. 9:30–10:00 PM — Lord Thornfield loses consciousness in his private study. 10:15 PM — Dr. Harrow returns to the study; Finch sees him leaving. 10:30 PM — Finch arrives with cocoa and discovers the body. 10:35 PM — Inspector Graves is summoned.",
+    "key_facts": [
+      "The digoxin tablets in Lord Thornfield's prescription bottle were four times the prescribed dose",
+      "Dr. Harrow prescribed and provided the medication and was alone with the deceased during the afternoon visit",
+      "Digoxin overdose can cause cardiac death that initially appears natural",
+      "Dr. Harrow returned to the study at 10:15 PM without informing anyone",
+      "Harrow had been embezzling from the charitable trust for three years",
+      "Lord Thornfield had written a letter to his solicitor naming Harrow before he died",
+      "Eleanor Pemberton independently identified financial irregularities traceable to Harrow"
+    ]
+  }
+}

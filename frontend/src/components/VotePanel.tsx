@@ -1,3 +1,5 @@
+import { useT } from '../i18n';
+
 interface VoteCandidate {
   id: string;
   name: string;
@@ -21,11 +23,6 @@ interface VotePanelProps {
   totalPlayers: number;
 }
 
-const RESULT_LABELS: Record<string, string> = {
-  true:  '🎉 你们找到了凶手！',
-  false: '😱 凶手逍遥法外……',
-};
-
 export function VotePanel({
   phase,
   candidates,
@@ -35,6 +32,7 @@ export function VotePanel({
   voteCount,
   totalPlayers,
 }: VotePanelProps) {
+  const { t } = useT();
   if (phase !== 'voting' && !voteResult) return null;
 
   // Results view
@@ -42,15 +40,15 @@ export function VotePanel({
     return (
       <div className="vote-panel vote-panel--result">
         <div className="vote-result-headline">
-          {RESULT_LABELS[String(voteResult.is_correct)] ?? '投票结束'}
+          {voteResult.is_correct ? t('voting.result_correct') : t('voting.result_wrong')}
         </div>
         {voteResult.winner_name && (
           <div className="vote-result-winner">
-            凶手：<strong>{voteResult.winner_name}</strong>
+            {t('voting.winner_label')}<strong>{voteResult.winner_name}</strong>
           </div>
         )}
         {!voteResult.winner_name && voteResult.runoff && (
-          <div className="vote-result-tie">平局，进入加时投票…</div>
+          <div className="vote-result-tie">{t('voting.runoff_tie')}</div>
         )}
         <div className="vote-result-tally">
           {candidates.map((c) => (
@@ -67,7 +65,7 @@ export function VotePanel({
                 />
               </div>
               <span className="vote-tally-count">
-                {voteResult.vote_counts[c.id] ?? 0}票
+                {t('voting.tally_votes', { n: voteResult.vote_counts[c.id] ?? 0 })}
               </span>
             </div>
           ))}
@@ -80,13 +78,13 @@ export function VotePanel({
   return (
     <div className="vote-panel vote-panel--open">
       <div className="vote-panel-title">
-        选出你认为的凶手
-        <span className="vote-progress">({voteCount}/{totalPlayers} 已投票)</span>
+        {t('voting.select_suspect')}
+        <span className="vote-progress">({t('voting.votes_count', { count: voteCount, total: totalPlayers })})</span>
       </div>
 
       {hasVoted ? (
         <div className="vote-waiting">
-          <span>✅ 已投票，等待其他玩家…</span>
+          <span>{t('voting.voted')}</span>
         </div>
       ) : (
         <div className="vote-candidates">

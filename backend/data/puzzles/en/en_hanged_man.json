@@ -1,0 +1,42 @@
+{
+  "id": "en_hanged_man",
+  "title": "The Hanged Man",
+  "surface": "Police enter a locked room and find a man hanging from a beam twelve feet off the ground. The only furniture in the room is an overturned chair in the corner, which is too far away and too short to have been used. Beneath the man's feet is a large puddle of water. There is no ladder. The windows are locked from the inside. How did the man reach the beam to hang himself?",
+  "truth": "The man stood on a large block of ice. He tied the noose to the beam while standing on the ice, placed it around his neck, then waited. The ice gradually melted into the puddle of water found beneath him. The chair was knocked over when he was setting up, and played no part in his death.",
+  "key_facts": [
+    "The man stood on a large block of ice to reach the beam",
+    "He tied the rope and placed the noose himself",
+    "The ice melted and left the puddle of water",
+    "The room was locked from the inside — it was suicide",
+    "The overturned chair was a red herring",
+    "No other person was involved"
+  ],
+  "clues": [
+    {
+      "id": "en_hang_c1",
+      "title": "The Puddle",
+      "content": "The puddle directly beneath the hanging man is pure water — no dirt, no footprints. It is evenly distributed, as though something large melted in place.",
+      "unlock_keywords": ["water", "puddle", "wet", "floor", "liquid", "melt", "ice", "drip"]
+    },
+    {
+      "id": "en_hang_c2",
+      "title": "The Temperature",
+      "content": "The room is warm — the heating was on. A forensics officer notes that the room was significantly warmer than the hallway outside.",
+      "unlock_keywords": ["temperature", "warm", "heat", "cold", "ice", "freeze", "melt", "hot"]
+    },
+    {
+      "id": "en_hang_c3",
+      "title": "Delivery Records",
+      "content": "Neighbours recall seeing an ice delivery truck outside the building the previous afternoon. The delivery was signed for by the man himself.",
+      "unlock_keywords": ["ice", "delivery", "block", "order", "supply", "truck", "freezer"]
+    }
+  ],
+  "hints": [
+    "What could have been in the room at the time of death but is now gone?",
+    "The puddle is the most important clue. What substance becomes a puddle?",
+    "He needed something to stand on — something that would later disappear.",
+    "Think about things that change state over time."
+  ],
+  "difficulty": "beginner",
+  "tags": ["classic", "locked-room", "logic", "ice"]
+}

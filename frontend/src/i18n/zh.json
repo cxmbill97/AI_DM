@@ -1,0 +1,171 @@
+{
+  "lobby": {
+    "title": "AI 推理游戏",
+    "subtitle": "海龟汤 & 剧本杀",
+    "player_name": "你的名字",
+    "player_name_placeholder": "起个名字…",
+    "join_room": "加入房间",
+    "room_code_placeholder": "6位房间码",
+    "join_btn": "加入",
+    "or_mode": "或选择游戏模式",
+    "turtle_soup": "🍜 海龟汤",
+    "murder_mystery": "🔍 剧本杀",
+    "loading_puzzles": "加载谜题中…",
+    "loading_scripts": "加载剧本中…",
+    "load_error": "加载失败：{msg}",
+    "no_scripts": "暂无可用剧本",
+    "solo": "单人",
+    "create": "建房",
+    "preparing": "准备中…",
+    "random_solo": "🎲 随机单人",
+    "random_room": "🎮 随机建房",
+    "players_count": "👥 {n}人",
+    "language": "语言",
+    "name_required": "请输入你的名字",
+    "room_code_required": "请输入房间号"
+  },
+  "game": {
+    "back": "← 返回",
+    "loading": "加载中…",
+    "start_failed": "启动失败：{msg}",
+    "back_lobby": "返回大厅",
+    "send": "发送",
+    "private_send": "私聊",
+    "ask_placeholder": "提出是非问题，例如：男人是故意的吗？",
+    "game_over_placeholder": "游戏已结束",
+    "chat_empty": "向AI裁判提问吧！提出是非问题来推断故事的真相。",
+    "judge_thinking": "裁判思考中…",
+    "new_clue_notice": "🔍 你发现了新线索：",
+    "network_error": "网络错误，请重试",
+    "truth_revealed": "真相大白！",
+    "solved_subtitle": "你揭开了《{title}》的谜底",
+    "truth_label": "🍜 汤底（真相）",
+    "clues_found_section": "🔍 本局发现的线索（{n} 条）",
+    "stats_label": "📊 本局统计",
+    "stats_questions": "共提问次数",
+    "stats_hints": "使用提示数",
+    "stats_clues": "发现线索数",
+    "play_again": "再玩一局",
+    "progress_label": "🔍 {pct}% 接近真相",
+    "game_over": "游戏结束！",
+    "reveal_truth": "查看真相",
+    "only_you_see": "仅你可见",
+    "waiting": "等待玩家加入...",
+    "players": "玩家",
+    "copy_invite": "复制邀请链接",
+    "hint_label": "DM 提示",
+    "dm_intervention": "DM 主动提示"
+  },
+  "clue": {
+    "board_title": "线索板",
+    "found_count": "已发现 {n} 条",
+    "empty": "提问时触及关键方向，\n线索会自动解锁…"
+  },
+  "private_clue": {
+    "title": "我的秘密线索",
+    "only_you": "仅你可见",
+    "hint": "这些线索只有你能看到，请用自己的话与其他玩家分享"
+  },
+  "puzzle": {
+    "surface_label": "🍲 汤面",
+    "collapse": "收起 ▲",
+    "expand": "展开 ▼"
+  },
+  "player": {
+    "title": "玩家",
+    "you": "(你)"
+  },
+  "room": {
+    "code_label": "房间码",
+    "copied": "✓ 已复制",
+    "copy_invite": "复制邀请链接",
+    "waiting_banner": "⏳ 等待玩家加入…（当前 {n} 人，至少需要 2 人开始）",
+    "no_player_name": "缺少玩家名，请从大厅进入",
+    "private_empty": "向DM私密提问，其他玩家不会看到你们的对话",
+    "private_question_badge": "私密提问",
+    "private_dm_badge": "🔒 仅你可见",
+    "intro_title": "信息不对等游戏",
+    "intro_body": "每位玩家持有不同的秘密线索。\n你可以用自己的话描述你知道的内容，\n但不能直接展示原始线索文字。\n合作拼出完整真相即可获胜！",
+    "intro_ok": "知道了，开始游戏",
+    "review_title": "真相大白！",
+    "review_truth": "🍜 汤底（真相）",
+    "review_scoreboard": "👥 本局战报",
+    "mvp": "🏆 MVP 推理王",
+    "stat_questions": "提问",
+    "stat_clues": "线索",
+    "back_lobby": "返回大厅",
+    "public_chat_tab": "公聊",
+    "private_chat_tab": "🔒 私聊DM",
+    "input_placeholder": "输入问题，按回车发送…",
+    "input_connecting": "连接中…",
+    "private_placeholder": "向DM私密提问，其他玩家看不到…"
+  },
+  "mm": {
+    "no_char": "等待分配角色",
+    "voting_placeholder": "投票阶段，请在右侧投票",
+    "end_placeholder": "游戏已结束",
+    "chat_placeholder": "输入消息，按回车发送…",
+    "back_lobby": "返回大厅",
+    "char_plays": "🎭 {player} 扮演 {char}"
+  },
+  "dm": {
+    "reply_to": "对 {name} 的回复",
+    "hint_label": "DM 💡 主动提示",
+    "encourage_label": "DM 🎲 鼓励",
+    "note_label": "DM 💬 发话了",
+    "new_clue": "🔍 发现新线索："
+  },
+  "script": {
+    "hide_secret": "🔐 隐藏我的秘密",
+    "show_secret": "🔐 查看我的秘密",
+    "hide_script": "📜 收起剧本",
+    "show_script": "📜 查看角色剧本",
+    "only_you": "仅你可见"
+  },
+  "phase": {
+    "opening": "开场",
+    "reading": "阅读",
+    "investigation": "调查",
+    "investigation_1": "调查",
+    "discussion": "讨论",
+    "voting": "投票",
+    "reveal": "揭晓",
+    "time_remaining": "{time} 剩余",
+    "phase_change": "进入{phase}阶段"
+  },
+  "phase_label": {
+    "opening": "开场叙事",
+    "reading": "角色阅读",
+    "investigation_1": "调查阶段",
+    "discussion": "讨论阶段",
+    "voting": "投票阶段",
+    "reveal": "真相揭晓"
+  },
+  "phase_desc": {
+    "opening": "聆听案件背景",
+    "reading": "阅读你的角色剧本",
+    "investigation_1": "搜查线索，询问NPC，向DM提问",
+    "discussion": "与其他玩家分享推理",
+    "voting": "选出你认为的凶手",
+    "reveal": "案件真相大白"
+  },
+  "voting": {
+    "title": "投票指认",
+    "select_suspect": "选出你认为的凶手",
+    "confirm_vote": "确认投票",
+    "voted": "✅ 已投票，等待其他玩家…",
+    "votes_count": "{count}/{total} 已投票",
+    "result_correct": "🎉 你们找到了凶手！",
+    "result_wrong": "😱 凶手逍遥法外……",
+    "winner_label": "凶手：",
+    "runoff_tie": "平局，进入加时投票…",
+    "vote_distribution": "投票结果",
+    "tally_votes": "{n}票"
+  },
+  "judgment": {
+    "yes": "✅ 是",
+    "no": "❌ 不是",
+    "irrelevant": "➖ 无关",
+    "partial": "〽️ 部分正确"
+  }
+}

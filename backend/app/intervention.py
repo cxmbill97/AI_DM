@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 # Canned gentle messages (no LLM call — zero cost)
 # ---------------------------------------------------------------------------
 
-_GENTLE_MESSAGES = [
+_GENTLE_MESSAGES_ZH = [
     "大家有什么想法吗？",
     "这个问题可以从另一个角度想想~",
     "别忘了已经发现的线索哦",
@@ -38,17 +38,41 @@ _GENTLE_MESSAGES = [
     "思路卡住了？换个方向试试",
 ]
 
-_INVESTIGATION_MESSAGES = [
+_GENTLE_MESSAGES_EN = [
+    "Any thoughts, everyone?",
+    "Try approaching this from a different angle.",
+    "Don't forget the clues you've already found.",
+    "Could there be any details you're overlooking?",
+    "Take your time — there's no rush.",
+    "Feeling stuck? Try a different direction.",
+]
+
+_INVESTIGATION_MESSAGES_ZH = [
     "还有线索没有发现哦，试试搜查关键地点或物品。",
     "可以向NPC提问，他们也许知道一些重要信息。",
     "不同的玩家可以分工搜查不同区域。",
     "别忘了观察现场细节，每一个线索都可能是关键。",
 ]
 
-_VOTE_REMINDER = "投票时间快到了，请大家尽快做出判断，发送投票消息！"
+_INVESTIGATION_MESSAGES_EN = [
+    "There are still clues to find — try searching key locations or objects.",
+    "You can question the NPCs; they may know something important.",
+    "Different players could search different areas to cover more ground.",
+    "Pay attention to scene details — every clue could be the key.",
+]
+
+_VOTE_REMINDER_ZH = "投票时间快到了，请大家尽快做出判断，发送投票消息！"
+_VOTE_REMINDER_EN = "Voting time is running out — please cast your vote soon!"
+
+# Keep old names as aliases
+_GENTLE_MESSAGES = _GENTLE_MESSAGES_ZH
+_INVESTIGATION_MESSAGES = _INVESTIGATION_MESSAGES_ZH
+_VOTE_REMINDER = _VOTE_REMINDER_ZH
 
 # Keywords that indicate a player is explicitly addressing the DM
-_EXPLICIT_KEYWORDS = ("提示", "帮我", "给我", "告诉我")
+_EXPLICIT_KEYWORDS_ZH = ("提示", "帮我", "给我", "告诉我")
+_EXPLICIT_KEYWORDS_EN = ("hint", "help me", "tell me", "give me a")
+_EXPLICIT_KEYWORDS = _EXPLICIT_KEYWORDS_ZH
 
 # Phases where no intervention should occur
 _SILENT_PHASES = frozenset({"opening", "reading", "reveal"})
@@ -135,11 +159,15 @@ class InterventionEngine:
         if self.silence_nudge_count < 4:
             self.silence_nudge_count += 1
 
-    def random_gentle_message(self, phase: str | None = None) -> str:
+    def random_gentle_message(self, phase: str | None = None, lang: str = "zh") -> str:
         """Return a canned gentle message, phase-aware for murder mystery."""
+        if lang == "en":
+            if phase == "investigation":
+                return random.choice(_INVESTIGATION_MESSAGES_EN)
+            return random.choice(_GENTLE_MESSAGES_EN)
         if phase == "investigation":
-            return random.choice(_INVESTIGATION_MESSAGES)
-        return random.choice(_GENTLE_MESSAGES)
+            return random.choice(_INVESTIGATION_MESSAGES_ZH)
+        return random.choice(_GENTLE_MESSAGES_ZH)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -164,19 +192,23 @@ class InterventionEngine:
         """Return a vote reminder trigger if cooldown allows."""
         if not self.cooldown_ok():
             return None
+        lang = getattr(self.room, "language", "zh")
+        canned = _VOTE_REMINDER_EN if lang == "en" else _VOTE_REMINDER_ZH
         return InterventionTrigger(
             type="vote_reminder",
             level="gentle",
-            canned_text=_VOTE_REMINDER,
+            canned_text=canned,
         )
 
     def _evaluate_explicit(
         self, player_id: str, text: str
     ) -> InterventionTrigger | None:
         """Tier-1 fast rules — no LLM call."""
+        lang = getattr(self.room, "language", "zh")
+        keywords = _EXPLICIT_KEYWORDS_EN if lang == "en" else _EXPLICIT_KEYWORDS_ZH
         text_lower = text.lower()
         if "@dm" in text_lower:
             return InterventionTrigger(type="explicit", level="nudge", player_id=player_id)
-        if any(kw in text for kw in _EXPLICIT_KEYWORDS):
+        if any(kw in text_lower for kw in keywords):
             return InterventionTrigger(type="explicit", level="nudge", player_id=player_id)
         return None

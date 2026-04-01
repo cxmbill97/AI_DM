@@ -885,6 +885,7 @@ button {
    ============================================================ */
 
 .lobby-screen {
+  position: relative;
   max-width: 540px;
   margin: 0 auto;
   padding: 0 0 48px;
@@ -1302,9 +1303,42 @@ button {
   font-size: .92rem;
 }
 
+.room-share-url {
+  font-size: 11px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
 .room-share-btn {
   margin-left: auto;
   flex-shrink: 0;
+}
+
+/* Language toggle */
+.lang-toggle {
+  background: var(--surface-2, #f3f4f6);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  color: var(--text-2, #6b7280);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  transition: background 0.15s, color 0.15s;
+}
+.lang-toggle:hover {
+  background: var(--surface-3, #e9eaec);
+  color: var(--text-1, #111827);
+}
+
+/* Lobby lang toggle position */
+.lobby-lang-toggle {
+  position: absolute;
+  top: 12px;
+  right: 16px;
 }
 
 /* ============================================================

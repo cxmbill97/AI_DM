@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { sendMessage } from '../api';
 import type { ChatResponse, Clue } from '../api';
+import { useT } from '../i18n';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,17 +30,21 @@ type Message = PlayerMessage | DMMessage | ClueNoticeMessage;
 // Judgment badge config
 // ---------------------------------------------------------------------------
 
-const BADGE: Record<string, { label: string; cls: string }> = {
-  '是':    { label: '是 ✓',    cls: 'badge--yes' },
-  '不是':  { label: '不是 ✗',  cls: 'badge--no' },
-  '无关':  { label: '无关 —',  cls: 'badge--na' },
-  '部分正确': { label: '部分正确 △', cls: 'badge--partial' },
+const BADGE_CLS: Record<string, string> = {
+  '是': 'badge--yes', '不是': 'badge--no', '无关': 'badge--na', '部分正确': 'badge--partial',
+  'Yes': 'badge--yes', 'No': 'badge--no', 'Irrelevant': 'badge--na', 'Partially correct': 'badge--partial',
+};
+const BADGE_KEY: Record<string, string> = {
+  '是': 'judgment.yes', '不是': 'judgment.no', '无关': 'judgment.irrelevant', '部分正确': 'judgment.partial',
+  'Yes': 'judgment.yes', 'No': 'judgment.no', 'Irrelevant': 'judgment.irrelevant', 'Partially correct': 'judgment.partial',
 };
 
 function JudgmentBadge({ judgment }: { judgment: string }) {
-  const cfg = BADGE[judgment] ?? { label: judgment, cls: 'badge--na' };
+  const { t } = useT();
+  const cls = BADGE_CLS[judgment] ?? 'badge--na';
+  const label = BADGE_KEY[judgment] ? t(BADGE_KEY[judgment]) : judgment;
   return (
-    <span className={`judgment-badge ${cfg.cls}`}>{cfg.label}</span>
+    <span className={`judgment-badge ${cls}`}>{label}</span>
   );
 }
 
@@ -68,6 +73,7 @@ export function ChatPanel({
   onClueUnlocked,
   cluePanelRef,
 }: ChatPanelProps) {
+  const { t } = useT();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -108,7 +114,7 @@ export function ChatPanel({
       if (res.hint) onHint(res.hint);
       if (res.truth) onFinish(res.truth);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '网络错误，请重试';
+      const msg = err instanceof Error ? err.message : t('game.network_error');
       setError(msg);
       // Remove the optimistically added player message on error
       setMessages((prev) => prev.slice(0, -1));
@@ -130,7 +136,7 @@ export function ChatPanel({
       <div className="message-list">
         {messages.length === 0 && (
           <p className="chat-empty">
-            向AI裁判提问吧！提出是非问题来推断故事的真相。
+            {t('game.chat_empty')}
           </p>
         )}
 
@@ -144,7 +150,7 @@ export function ChatPanel({
                     cluePanelRef?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                   }
                 >
-                  🔍 你发现了新线索：<strong>{m.clueTitle}</strong>
+                  {t('game.new_clue_notice')}<strong>{m.clueTitle}</strong>
                 </button>
               </div>
             );
@@ -159,7 +165,7 @@ export function ChatPanel({
 
         {loading && (
           <div className="message message--dm">
-            <div className="dm-thinking">裁判思考中…</div>
+            <div className="dm-thinking">{t('game.judge_thinking')}</div>
           </div>
         )}
 
@@ -177,7 +183,7 @@ export function ChatPanel({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={disabled ? '游戏已结束' : '提出是非问题，例如：男人是故意的吗？'}
+          placeholder={disabled ? t('game.game_over_placeholder') : t('game.ask_placeholder')}
           disabled={loading || disabled}
           maxLength={200}
           autoComplete="off"
@@ -187,7 +193,7 @@ export function ChatPanel({
           onClick={handleSend}
           disabled={loading || disabled || !input.trim()}
         >
-          发送
+          {t('game.send')}
         </button>
       </div>
     </div>

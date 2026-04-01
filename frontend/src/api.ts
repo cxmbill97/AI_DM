@@ -1,6 +1,6 @@
 /**
  * Typed fetch() wrappers for the AI DM backend.
- * All /api/* requests are proxied to localhost:8000 by Vite.
+ * All /api/* requests are proxied to the backend by Vite (localhost:8000).
  */
 
 // ---------------------------------------------------------------------------
@@ -68,19 +68,19 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 // API calls
 // ---------------------------------------------------------------------------
 
-export function listPuzzles(): Promise<PuzzleSummary[]> {
-  return apiFetch('/api/puzzles');
+export function listPuzzles(lang = 'zh'): Promise<PuzzleSummary[]> {
+  return apiFetch(`/api/puzzles?lang=${lang}`);
 }
 
-export function listScripts(): Promise<ScriptSummary[]> {
-  return apiFetch('/api/scripts');
+export function listScripts(lang = 'zh'): Promise<ScriptSummary[]> {
+  return apiFetch(`/api/scripts?lang=${lang}`);
 }
 
-export function startGame(puzzleId?: string): Promise<StartResponse> {
+export function startGame(puzzleId?: string, language = 'zh'): Promise<StartResponse> {
   return apiFetch('/api/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ puzzle_id: puzzleId ?? null }),
+    body: JSON.stringify({ puzzle_id: puzzleId ?? null, language }),
   });
 }
 
@@ -120,6 +120,7 @@ export interface CreateRoomOptions {
   game_type?: 'turtle_soup' | 'murder_mystery';
   puzzle_id?: string;
   script_id?: string;
+  language?: string;
 }
 
 /**

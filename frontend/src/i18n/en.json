@@ -1,0 +1,171 @@
+{
+  "lobby": {
+    "title": "AI Deduction Game",
+    "subtitle": "Turtle Soup & Murder Mystery",
+    "player_name": "Your Name",
+    "player_name_placeholder": "Enter a name…",
+    "join_room": "Join Room",
+    "room_code_placeholder": "6-char room code",
+    "join_btn": "Join",
+    "or_mode": "or choose a game mode",
+    "turtle_soup": "🍜 Turtle Soup",
+    "murder_mystery": "🔍 Murder Mystery",
+    "loading_puzzles": "Loading puzzles…",
+    "loading_scripts": "Loading scripts…",
+    "load_error": "Failed to load: {msg}",
+    "no_scripts": "No scripts available",
+    "solo": "Solo",
+    "create": "Create",
+    "preparing": "Preparing…",
+    "random_solo": "🎲 Random Solo",
+    "random_room": "🎮 Random Room",
+    "players_count": "👥 {n} players",
+    "language": "Language",
+    "name_required": "Please enter your name",
+    "room_code_required": "Please enter a room code"
+  },
+  "game": {
+    "back": "← Back",
+    "loading": "Loading…",
+    "start_failed": "Failed to start: {msg}",
+    "back_lobby": "Back to Lobby",
+    "send": "Send",
+    "private_send": "Send",
+    "ask_placeholder": "Ask a yes/no question, e.g. Was it intentional?",
+    "game_over_placeholder": "Game over",
+    "chat_empty": "Ask the AI judge yes/no questions to deduce the hidden truth.",
+    "judge_thinking": "Thinking…",
+    "new_clue_notice": "🔍 New clue found: ",
+    "network_error": "Network error, please retry",
+    "truth_revealed": "Truth Revealed!",
+    "solved_subtitle": "You solved '{title}'",
+    "truth_label": "🍜 The Truth",
+    "clues_found_section": "🔍 Clues Found ({n})",
+    "stats_label": "📊 Stats",
+    "stats_questions": "Questions asked",
+    "stats_hints": "Hints used",
+    "stats_clues": "Clues found",
+    "play_again": "Play Again",
+    "progress_label": "🔍 {pct}% to truth",
+    "game_over": "Game Over!",
+    "reveal_truth": "Reveal Truth",
+    "only_you_see": "Only you can see this",
+    "waiting": "Waiting for players...",
+    "players": "Players",
+    "copy_invite": "Copy Invite Link",
+    "hint_label": "DM Hint",
+    "dm_intervention": "DM Note"
+  },
+  "clue": {
+    "board_title": "Clue Board",
+    "found_count": "{n} found",
+    "empty": "Clues unlock as you ask the right questions…"
+  },
+  "private_clue": {
+    "title": "My Secret Clues",
+    "only_you": "Only you",
+    "hint": "Only you can see these clues. Describe them in your own words — don't quote them directly."
+  },
+  "puzzle": {
+    "surface_label": "🍲 The Story",
+    "collapse": "Collapse ▲",
+    "expand": "Expand ▼"
+  },
+  "player": {
+    "title": "Players",
+    "you": "(You)"
+  },
+  "room": {
+    "code_label": "Room",
+    "copied": "✓ Copied",
+    "copy_invite": "Copy Invite Link",
+    "waiting_banner": "⏳ Waiting for players… ({n} connected, need at least 2)",
+    "no_player_name": "Missing player name — please enter from the lobby",
+    "private_empty": "Ask the DM privately. Other players won't see this conversation.",
+    "private_question_badge": "Private",
+    "private_dm_badge": "🔒 Only you",
+    "intro_title": "Asymmetric Information",
+    "intro_body": "Each player holds different secret clues.\nYou may describe what you know in your own words,\nbut you cannot show the raw clue text.\nWork together to piece together the full truth!",
+    "intro_ok": "Got it, start game",
+    "review_title": "Truth Revealed!",
+    "review_truth": "🍜 The Truth",
+    "review_scoreboard": "👥 Scoreboard",
+    "mvp": "🏆 MVP Detective",
+    "stat_questions": "Questions",
+    "stat_clues": "Clues",
+    "back_lobby": "Back to Lobby",
+    "public_chat_tab": "Public",
+    "private_chat_tab": "🔒 Private DM",
+    "input_placeholder": "Ask a question, press Enter to send…",
+    "input_connecting": "Connecting…",
+    "private_placeholder": "Ask the DM privately…"
+  },
+  "mm": {
+    "no_char": "Waiting for character assignment",
+    "voting_placeholder": "Voting phase — cast your vote on the right",
+    "end_placeholder": "Game over",
+    "chat_placeholder": "Type a message, press Enter to send…",
+    "back_lobby": "Back to Lobby",
+    "char_plays": "🎭 {player} plays {char}"
+  },
+  "dm": {
+    "reply_to": "Reply to {name}",
+    "hint_label": "DM 💡 Hint",
+    "encourage_label": "DM 🎲 Encouragement",
+    "note_label": "DM 💬 Spoke",
+    "new_clue": "🔍 New clue: "
+  },
+  "script": {
+    "hide_secret": "🔐 Hide Secret",
+    "show_secret": "🔐 View Secret",
+    "hide_script": "📜 Collapse Script",
+    "show_script": "📜 View Character Script",
+    "only_you": "Only you can see this"
+  },
+  "phase": {
+    "opening": "Opening",
+    "reading": "Reading",
+    "investigation": "Investigation",
+    "investigation_1": "Investigation",
+    "discussion": "Discussion",
+    "voting": "Voting",
+    "reveal": "Reveal",
+    "time_remaining": "{time} left",
+    "phase_change": "Entering {phase} phase"
+  },
+  "phase_label": {
+    "opening": "Opening",
+    "reading": "Reading",
+    "investigation_1": "Investigation",
+    "discussion": "Discussion",
+    "voting": "Voting",
+    "reveal": "Reveal"
+  },
+  "phase_desc": {
+    "opening": "Listen to the case background",
+    "reading": "Read your character script",
+    "investigation_1": "Search for clues, ask NPCs, question the DM",
+    "discussion": "Share your deductions with other players",
+    "voting": "Vote for who you think is the culprit",
+    "reveal": "The truth of the case is revealed"
+  },
+  "voting": {
+    "title": "Cast Your Vote",
+    "select_suspect": "Who do you think is the culprit?",
+    "confirm_vote": "Confirm Vote",
+    "voted": "✅ Vote cast. Waiting for others…",
+    "votes_count": "{count}/{total} voted",
+    "result_correct": "🎉 You found the culprit!",
+    "result_wrong": "😱 The culprit got away…",
+    "winner_label": "Culprit: ",
+    "runoff_tie": "Tie — entering runoff vote…",
+    "vote_distribution": "Vote Results",
+    "tally_votes": "{n} votes"
+  },
+  "judgment": {
+    "yes": "✅ Yes",
+    "no": "❌ No",
+    "irrelevant": "➖ Irrelevant",
+    "partial": "〽️ Partially correct"
+  }
+}
