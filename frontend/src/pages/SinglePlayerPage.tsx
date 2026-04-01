@@ -11,6 +11,7 @@ import { CluePanel } from '../components/CluePanel';
 import { HintBar } from '../components/HintBar';
 import { PuzzleCard } from '../components/PuzzleCard';
 import { LanguageToggle } from '../components/LanguageToggle';
+import { useTraceSetting } from '../hooks/useTraceSetting';
 import { useT } from '../i18n';
 
 interface GameState {
@@ -98,6 +99,7 @@ function EndScreen({ truth, title, questionCount, hintCount, unlockedClues, onRe
 
 export function SinglePlayerPage() {
   const { t, lang } = useT();
+  const { showTraces, toggleTraces } = useTraceSetting();
   const navigate = useNavigate();
   const location = useLocation();
   const puzzleId: string | undefined = (location.state as { puzzleId?: string })?.puzzleId;
@@ -182,6 +184,13 @@ export function SinglePlayerPage() {
           <span className="game-header-title">{game.session.title}</span>
           <LanguageToggle />
           <button
+            className={`btn btn-ghost trace-setting-btn${showTraces ? ' trace-setting-btn--on' : ''}`}
+            onClick={toggleTraces}
+            title={showTraces ? 'Hide agent traces' : 'Show agent traces'}
+          >
+            ⚡
+          </button>
+          <button
             className={`btn btn-ghost clue-toggle-btn${clueCount > 0 ? ' clue-toggle-btn--active' : ''}`}
             onClick={() => {
               setShowCluePanel((v) => !v);
@@ -212,6 +221,7 @@ export function SinglePlayerPage() {
           }
           onClueUnlocked={handleClueUnlocked}
           cluePanelRef={cluePanelRef}
+          showTraces={showTraces}
         />
 
         <div className="game-bottom">

@@ -98,10 +98,12 @@
     "private_chat_tab": "🔒 Private DM",
     "input_placeholder": "Ask a question, press Enter to send…",
     "input_connecting": "Connecting…",
-    "private_placeholder": "Ask the DM privately…"
+    "private_placeholder": "Ask the DM privately…",
+    "disconnect_error": "Connection lost — please refresh the page"
   },
   "mm": {
     "no_char": "Waiting for character assignment",
+    "listen_placeholder": "Listen — chat opens in the next phase",
     "voting_placeholder": "Voting phase — cast your vote on the right",
     "end_placeholder": "Game over",
     "chat_placeholder": "Type a message, press Enter to send…",
@@ -131,7 +133,10 @@
     "voting": "Voting",
     "reveal": "Reveal",
     "time_remaining": "{time} left",
-    "phase_change": "Entering {phase} phase"
+    "phase_change": "Entering {phase} phase",
+    "skip": "Skip ▶",
+    "skip_voted": "Voted to Skip",
+    "skip_hint": "Vote to skip this phase (majority needed)"
   },
   "phase_label": {
     "opening": "Opening",
@@ -160,7 +165,8 @@
     "winner_label": "Culprit: ",
     "runoff_tie": "Tie — entering runoff vote…",
     "vote_distribution": "Vote Results",
-    "tally_votes": "{n} votes"
+    "tally_votes": "{n} votes",
+    "phase_started": "Voting phase has started!"
   },
   "judgment": {
     "yes": "✅ Yes",

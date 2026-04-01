@@ -146,6 +146,9 @@ async def _advance_mm_phase(room: Room) -> None:
     if new_phase_id is None:
         return  # already terminal
 
+    # Reset skip votes for the new phase
+    room._skip_votes.clear()
+
     phase_obj = room.state_machine.current()
     duration = phase_obj.duration_seconds
     description = _PHASE_DESCRIPTIONS.get(new_phase_id, new_phase_id)
@@ -372,9 +375,10 @@ async def _handle_mm_chat(
     await room.broadcast(player_msg)
 
     # Run orchestrator pipeline
+    t_pipeline_start = time.time()
     try:
         async with room._lock:
-            orch_response = await room.orchestrator.handle_message(player_id, text)
+            orch_response, orch_trace = await room.orchestrator.handle_message(player_id, text)
     except NotImplementedError as exc:
         logger.warning("Orchestrator stub hit: %s", exc)
         await room.send_to(
@@ -390,24 +394,36 @@ async def _handle_mm_chat(
         )
         return
 
+    pipeline_ms = (time.time() - t_pipeline_start) * 1000
+    logger.info(
+        "Orchestrator done: player=%s intent=%s total=%.0fms steps=%d",
+        player_name,
+        orch_trace.steps[0].metadata.get("intent", "?") if orch_trace.steps else "?",
+        pipeline_ms,
+        len(orch_trace.steps),
+    )
+
     if orch_response is None:
         # "chat" intent — player-to-player, no DM reply; already echoed above
         return
 
     dm_msg: dict[str, Any] = {
         "type": orch_response.type,
+        "player_name": player_name,  # so all players know who triggered the DM reply
         "text": orch_response.text,
         "clue": orch_response.clue,
+        "trace": orch_trace.to_dict(),
         "timestamp": time.time(),
     }
     room.message_history.append(dm_msg)
 
-    if orch_response.type == "clue_found":
-        # Clue found messages are broadcast to all (public clues)
-        await room.broadcast(dm_msg)
-    else:
-        # DM response, phase_blocked, error → send only to asking player
+    if orch_response.type in ("phase_blocked", "error"):
+        # Private: only the asking player sees these
         await room.send_to(player_id, dm_msg)
+    else:
+        # dm_response, clue_found, meta_response → broadcast so all players
+        # can follow the investigation (standard 剧本杀 rule: DM answers are public)
+        await room.broadcast(dm_msg)
 
     room.intervention.record_dm_spoke()
 
@@ -601,11 +617,25 @@ async def websocket_endpoint(
         await room.broadcast(join_notice)
 
     # ----------------------------------------------------------------
-    # Send room snapshot
+    # Send room snapshot to joining player; broadcast updated player
+    # list to everyone else so their "Waiting for players" banner updates.
     # ----------------------------------------------------------------
     if room.game_type == "murder_mystery":
         snapshot = _mm_snapshot(room, player_id)
+        await room.send_to(player_id, snapshot)
+        # Broadcast updated player list to all other players
+        players_update = {
+            "type": "players_update",
+            "players": snapshot["players"],
+        }
+        for pid in room.players:
+            if pid != player_id:
+                await room.send_to(pid, players_update)
     else:
+        players_list = [
+            {"id": pid, "name": p["name"], "connected": p["connected"]}
+            for pid, p in room.players.items()
+        ]
         snapshot = {
             "type": "room_snapshot",
             "game_type": "turtle_soup",
@@ -613,13 +643,18 @@ async def websocket_endpoint(
             "puzzle_id": room.puzzle.id,
             "title": room.puzzle.title,
             "surface": room.puzzle.surface,
-            "players": [
-                {"id": pid, "name": p["name"], "connected": p["connected"]}
-                for pid, p in room.players.items()
-            ],
+            "players": players_list,
             "phase": room.phase,
         }
-    await room.send_to(player_id, snapshot)
+        await room.send_to(player_id, snapshot)
+        # Broadcast updated player list to all other players
+        players_update = {
+            "type": "players_update",
+            "players": players_list,
+        }
+        for pid in room.players:
+            if pid != player_id:
+                await room.send_to(pid, players_update)
 
     # ----------------------------------------------------------------
     # Deliver join-specific private info (new joins only)
@@ -645,6 +680,29 @@ async def websocket_endpoint(
                         ],
                     },
                 )
+
+    # ----------------------------------------------------------------
+    # Murder mystery: send opening narration once a second player joins
+    # ----------------------------------------------------------------
+    if (
+        room.game_type == "murder_mystery"
+        and not room._opening_narrated
+        and room.state_machine is not None
+        and room.state_machine.current_phase == "opening"
+        and sum(1 for p in room.players.values() if p["connected"]) >= 2
+    ):
+        room._opening_narrated = True
+        assert room.script is not None
+        opening_phase = room.state_machine.phases.get("opening")
+        if opening_phase and opening_phase.dm_script:
+            dm_open: dict[str, Any] = {
+                "type": "dm_response",
+                "text": opening_phase.dm_script,
+                "phase": "opening",
+                "timestamp": time.time(),
+            }
+            room.message_history.append(dm_open)
+            await room.broadcast(dm_open)
 
     # ----------------------------------------------------------------
     # Ensure silence-tick background task is running
@@ -673,6 +731,34 @@ async def websocket_endpoint(
                 # Vote message
                 if msg_type == "vote":
                     await _handle_mm_vote(room, player_id, player_name, data)
+                    continue
+
+                # Skip-phase vote
+                if msg_type == "skip_phase":
+                    assert room.state_machine is not None
+                    current = room.state_machine.current_phase
+                    if current == "reveal":
+                        # Can't skip the final phase
+                        continue
+                    room._skip_votes.add(player_id)
+                    connected_ids = [
+                        pid for pid, p in room.players.items() if p["connected"]
+                    ]
+                    needed = max(1, (len(connected_ids) + 1) // 2)  # majority
+                    voted = len(room._skip_votes & set(connected_ids))
+                    if voted >= needed:
+                        # Majority reached — advance immediately
+                        room._skip_votes.clear()
+                        await _advance_mm_phase(room)
+                    else:
+                        # Broadcast vote progress so all players see it
+                        await room.broadcast({
+                            "type": "skip_vote_update",
+                            "phase": current,
+                            "voted": voted,
+                            "needed": needed,
+                            "timestamp": time.time(),
+                        })
                     continue
 
                 # Chat / question / search → orchestrator
@@ -813,4 +899,13 @@ async def websocket_endpoint(
         }
         room.message_history.append(leave_notice)
         await room.broadcast(leave_notice)
+        # Broadcast updated player list so other players' banners update
+        players_update = {
+            "type": "players_update",
+            "players": [
+                {"id": pid, "name": p["name"], "connected": p["connected"]}
+                for pid, p in room.players.items()
+            ],
+        }
+        await room.broadcast(players_update)
         _maybe_cancel_tick(room)

@@ -7,9 +7,11 @@ import { HintBar } from '../components/HintBar';
 import { PrivateCluePanel } from '../components/PrivateCluePanel';
 import { PhaseBar } from '../components/PhaseBar';
 import { ScriptCard } from '../components/ScriptCard';
+import { TracePanel } from '../components/TracePanel';
 import { VotePanel } from '../components/VotePanel';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { useRoom } from '../hooks/useRoom';
+import { useTraceSetting } from '../hooks/useTraceSetting';
 import { useT } from '../i18n';
 import type {
   CharAssignedMsg,
@@ -117,7 +119,7 @@ function InterventionBubble({ msg }: { msg: InterventionMsg }) {
   );
 }
 
-function DmBubble({ msg }: { msg: DmResponseMsg }) {
+function DmBubble({ msg, showTraces }: { msg: DmResponseMsg; showTraces: boolean }) {
   const { t } = useT();
   // Murder mystery mode: no judgment, just text
   const isMM = msg.text !== undefined && msg.judgment === undefined;
@@ -134,6 +136,7 @@ function DmBubble({ msg }: { msg: DmResponseMsg }) {
         {msg.clue && (
           <div className="room-clue-notice">{t('dm.new_clue')}{msg.clue.title}</div>
         )}
+        {showTraces && msg.trace && <TracePanel trace={msg.trace} />}
       </div>
     );
   }
@@ -151,6 +154,7 @@ function DmBubble({ msg }: { msg: DmResponseMsg }) {
         <div className="room-clue-notice">{t('dm.new_clue')}{msg.clue_unlocked.title}</div>
       )}
       {msg.hint && <div className="room-hint-notice">💡 {msg.hint}</div>}
+      {showTraces && msg.trace && <TracePanel trace={msg.trace} />}
     </div>
   );
 }
@@ -224,13 +228,18 @@ function PhaseBlockedBubble({ msg }: { msg: PhaseBlockedMsg }) {
   );
 }
 
-function MessageList({ msgs, playerName, dmTyping }: { msgs: RoomMessage[]; playerName: string; dmTyping: boolean }) {
+function MessageList({ msgs, playerName, dmTyping, showTraces }: {
+  msgs: RoomMessage[];
+  playerName: string;
+  dmTyping: boolean;
+  showTraces: boolean;
+}) {
   return (
     <>
       {msgs.map((m, i) => {
         if (m.type === 'system') return <SystemBubble key={i} msg={m} />;
         if (m.type === 'player_message') return <PlayerBubble key={i} msg={m} isSelf={m.player_name === playerName} />;
-        if (m.type === 'dm_response') return <DmBubble key={i} msg={m} />;
+        if (m.type === 'dm_response') return <DmBubble key={i} msg={m} showTraces={showTraces} />;
         if (m.type === 'dm_intervention') return <InterventionBubble key={i} msg={m} />;
         if (m.type === 'phase_change') return <PhaseChangeBubble key={i} msg={m} />;
         if (m.type === 'character_assigned') return <CharAssignedBubble key={i} msg={m} />;
@@ -448,7 +457,11 @@ export function RoomPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const playerName: string = (location.state as { playerName?: string })?.playerName ?? '';
+  const sessionKey = `playerName:${roomId}`;
+  const statePlayerName = (location.state as { playerName?: string })?.playerName ?? '';
+  // Persist to sessionStorage so refresh doesn't lose the player name
+  if (statePlayerName) sessionStorage.setItem(sessionKey, statePlayerName);
+  const playerName: string = statePlayerName || sessionStorage.getItem(sessionKey) || '';
 
   const {
     messages, players, clues, connected, progress, truth, puzzle, error,
@@ -457,9 +470,11 @@ export function RoomPage() {
     // Murder mystery
     gameType, mmPhase, mmTimeRemaining, characters, myChar,
     voteCandidates, voteCount, voteResult, hasVoted, sendVote,
+    skipVotes, hasSkipVoted, sendSkipVote,
   } = useRoom(roomId, playerName);
 
   const { t } = useT();
+  const { showTraces, toggleTraces } = useTraceSetting();
   const [input, setInput] = useState('');
   const [showCluePanel, setShowCluePanel] = useState(false);
   const cluePanelRef = useRef<HTMLDivElement>(null);
@@ -532,6 +547,7 @@ export function RoomPage() {
     const activePhase = mmPhase ?? 'opening';
     const isVoting = activePhase === 'voting';
     const isReveal = activePhase === 'reveal';
+    const isListenOnly = activePhase === 'opening' || activePhase === 'reading';
 
     // Build vote candidate list from characters
     const voteList = voteCandidates ?? characters;
@@ -558,9 +574,22 @@ export function RoomPage() {
             <button className="btn btn-ghost mm-back-btn" onClick={() => navigate('/')} style={{ padding: '4px 10px' }}>
               {t('game.back')}
             </button>
-            <PhaseBar phase={activePhase} timeRemaining={mmTimeRemaining} />
+            <PhaseBar
+              phase={activePhase}
+              timeRemaining={mmTimeRemaining}
+              skipVotes={skipVotes}
+              hasSkipVoted={hasSkipVoted}
+              onSkip={sendSkipVote}
+            />
             <div className="mm-conn-area">
               <LanguageToggle />
+              <button
+                className={`btn btn-ghost trace-setting-btn${showTraces ? ' trace-setting-btn--on' : ''}`}
+                onClick={toggleTraces}
+                title={showTraces ? 'Hide agent traces' : 'Show agent traces'}
+              >
+                ⚡
+              </button>
               <span className="room-share-code" style={{ fontSize: 12 }}>#{roomId}</span>
               <span className={`conn-dot${connected ? ' conn-dot--on' : ''}`} />
             </div>
@@ -596,7 +625,7 @@ export function RoomPage() {
           <div className="mm-center">
             <WaitingBanner connectedCount={connectedCount} />
             <div className="room-chat mm-chat">
-              <MessageList msgs={messages} playerName={playerName} dmTyping={dmTyping} />
+              <MessageList msgs={messages} playerName={playerName} dmTyping={dmTyping} showTraces={showTraces} />
               <div ref={chatEndRef} />
             </div>
             <div className="chat-input-row">
@@ -607,10 +636,11 @@ export function RoomPage() {
                   !connected ? t('room.input_connecting')
                   : isReveal ? t('mm.end_placeholder')
                   : isVoting ? t('mm.voting_placeholder')
+                  : isListenOnly ? t('mm.listen_placeholder')
                   : t('mm.chat_placeholder')
                 }
                 value={input}
-                disabled={!connected || isReveal || isVoting}
+                disabled={!connected || isReveal || isVoting || isListenOnly}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -619,7 +649,7 @@ export function RoomPage() {
               <button
                 className="btn btn-primary"
                 onClick={handleSend}
-                disabled={!input.trim() || !connected || isReveal || isVoting}
+                disabled={!input.trim() || !connected || isReveal || isVoting || isListenOnly}
               >
                 {t('game.send')}
               </button>
@@ -670,6 +700,13 @@ export function RoomPage() {
           </span>
           <div className="game-header-right">
             <LanguageToggle />
+            <button
+              className={`btn btn-ghost trace-setting-btn${showTraces ? ' trace-setting-btn--on' : ''}`}
+              onClick={toggleTraces}
+              title={showTraces ? 'Hide agent traces' : 'Show agent traces'}
+            >
+              ⚡
+            </button>
             <span className={`conn-dot${connected ? ' conn-dot--on' : ''}`} />
             {privateClues.length > 0 && (
               <button
@@ -727,7 +764,7 @@ export function RoomPage() {
         <div className="room-chat">
           {chatMode === 'public' ? (
             <>
-              <MessageList msgs={messages} playerName={playerName} dmTyping={dmTyping} />
+              <MessageList msgs={messages} playerName={playerName} dmTyping={dmTyping} showTraces={showTraces} />
               <div ref={chatEndRef} />
             </>
           ) : (

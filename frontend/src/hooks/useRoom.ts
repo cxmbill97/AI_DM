@@ -6,7 +6,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Clue, PrivateClue, RoomPlayer } from '../api';
+import type { AgentTrace, Clue, PrivateClue, RoomPlayer } from '../api';
+import { useT } from '../i18n';
 
 // ---------------------------------------------------------------------------
 // Turtle soup message shapes
@@ -39,6 +40,7 @@ export interface DmResponseMsg {
   text?: string;
   phase?: string;
   clue?: { id: string; title: string; content: string } | null;
+  trace?: AgentTrace | null;
   timestamp: number;
 }
 
@@ -174,6 +176,8 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
 export function useRoom(roomId: string, playerName: string) {
+  const { t } = useT();
+
   // Shared state
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [players, setPlayers] = useState<RoomPlayer[]>([]);
@@ -202,6 +206,8 @@ export function useRoom(roomId: string, playerName: string) {
   const [voteCount, setVoteCount] = useState<{ count: number; total: number } | null>(null);
   const [voteResult, setVoteResult] = useState<VoteResultInfo | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
+  const [skipVotes, setSkipVotes] = useState<{ voted: number; needed: number } | null>(null);
+  const [hasSkipVoted, setHasSkipVoted] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const retriesRef = useRef(0);
@@ -230,9 +236,12 @@ export function useRoom(roomId: string, playerName: string) {
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
 
-    const params = new URLSearchParams({ player_name: playerName });
-    const url = `/ws/${roomId}?${params.toString()}`;
-    const ws = new WebSocket(url);
+    // Explicit protocol detection so wss:// is used when the page is served over
+    // HTTPS (ngrok / cloudflare tunnel). Relative WebSocket URLs are non-standard
+    // and silently break in some browsers when the page protocol is https:.
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}?player_name=${encodeURIComponent(playerName)}`;
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -254,6 +263,11 @@ export function useRoom(roomId: string, playerName: string) {
 
       if (type === 'error') {
         setError(data.text as string);
+        return;
+      }
+
+      if (type === 'players_update') {
+        setPlayers(data.players as RoomPlayer[]);
         return;
       }
 
@@ -330,6 +344,7 @@ export function useRoom(roomId: string, playerName: string) {
           text: data.text as string | undefined,
           phase: data.phase as string | undefined,
           clue: (data.clue as { id: string; title: string; content: string } | null | undefined) ?? null,
+          trace: (data.trace as AgentTrace | null | undefined) ?? null,
           timestamp: (data.timestamp as number) ?? Date.now() / 1000,
         };
         appendMessage(msg);
@@ -361,17 +376,28 @@ export function useRoom(roomId: string, playerName: string) {
         const newPhase = data.new_phase as string;
         setMmPhase(newPhase);
         setMmTimeRemaining((data.duration as number | null) ?? null);
-        // Reset vote state on phase change
+        // Reset vote/skip state on phase change
         if (newPhase !== 'voting') {
           setVoteCount(null);
           setHasVoted(false);
         }
+        setSkipVotes(null);
+        setHasSkipVoted(false);
         appendMessage({
           type: 'phase_change',
           new_phase: newPhase,
           duration: (data.duration as number | null) ?? null,
           description: (data.description as string) ?? newPhase,
           timestamp: (data.timestamp as number) ?? Date.now() / 1000,
+        });
+        return;
+      }
+
+      // ---- Murder mystery: skip vote update ----
+      if (type === 'skip_vote_update') {
+        setSkipVotes({
+          voted: data.voted as number,
+          needed: data.needed as number,
         });
         return;
       }
@@ -410,7 +436,7 @@ export function useRoom(roomId: string, playerName: string) {
         setVoteCandidates((data.candidates as MmCharInfo[]) ?? []);
         appendMessage({
           type: 'system',
-          text: (data.text as string) ?? '投票阶段开始！',
+          text: (data.text as string) ?? t('voting.phase_started'),
           timestamp: (data.timestamp as number) ?? Date.now() / 1000,
         });
         return;
@@ -500,7 +526,7 @@ export function useRoom(roomId: string, playerName: string) {
         retriesRef.current += 1;
         setTimeout(connect, RETRY_DELAY_MS);
       } else {
-        setError('连接断开，请刷新页面重试');
+        setError(t('room.disconnect_error'));
       }
     };
   }, [roomId, playerName, appendMessage, addClue]);
@@ -539,6 +565,13 @@ export function useRoom(roomId: string, playerName: string) {
     setHasVoted(true);
   }, []);
 
+  const sendSkipVote = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'skip_phase' }));
+    setHasSkipVoted(true);
+  }, []);
+
   return {
     // Shared
     messages,
@@ -569,5 +602,8 @@ export function useRoom(roomId: string, playerName: string) {
     voteResult,
     hasVoted,
     sendVote,
+    skipVotes,
+    hasSkipVoted,
+    sendSkipVote,
   };
 }

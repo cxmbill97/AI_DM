@@ -113,12 +113,15 @@ def _drain_join(ws: Any) -> dict:
 
 
 def _drain_others_join_notice(ws: Any) -> dict:
-    """When another player joins, existing players get ONE system notice.
+    """When another player joins, existing players get a system notice
+    followed by a players_update message.
 
-    Reads and returns that message.
+    Reads both and returns the system notice.
     """
     msg = ws.receive_json()
     assert msg["type"] == "system"
+    update = ws.receive_json()
+    assert update["type"] == "players_update"
     return msg
 
 

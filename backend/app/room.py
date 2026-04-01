@@ -68,6 +68,10 @@ class Room:
         self.voting: VotingModule | None = None
         # player_id → character_id (assigned in join order)
         self._char_assignments: dict[str, str] = {}
+        # True once the opening narration has been broadcast
+        self._opening_narrated: bool = False
+        # player_ids who voted to skip the current phase; reset on phase change
+        self._skip_votes: set[str] = set()
 
         # ---- Shared state ----
         # player_id → PlayerSlot dict

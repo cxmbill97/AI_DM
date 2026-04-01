@@ -1888,6 +1888,13 @@ button {
   flex: 1;
 }
 
+.phase-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .phase-steps {
   display: flex;
   align-items: center;
@@ -1988,6 +1995,45 @@ button {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   min-width: 36px;
+}
+
+.phase-skip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+}
+
+.btn-skip {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.btn-skip:hover:not(:disabled) {
+  background: #e8f0fe;
+  color: #1a6ae0;
+  border-color: #1a6ae0;
+}
+
+.btn-skip--voted {
+  background: #e8f5e9;
+  color: #388e3c;
+  border-color: #81c784;
+  cursor: default;
+}
+
+.skip-vote-count {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* ── VotePanel ──────────────────────────────────────────────────────────── */
@@ -2283,6 +2329,159 @@ button {
   border-radius: 8px;
   font-size: 12px;
   color: #b91c1c;
+}
+
+/* ── Trace toggle button (header) ────────────────────────────────────────── */
+
+.trace-setting-btn {
+  font-size: 14px;
+  padding: 3px 7px;
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+
+.trace-setting-btn:hover {
+  opacity: 0.75;
+}
+
+.trace-setting-btn--on {
+  opacity: 1;
+  color: #c17f3b;
+}
+
+/* ── TracePanel ──────────────────────────────────────────────────────────── */
+
+.trace-panel {
+  margin-top: 6px;
+  font-family: 'Menlo', 'Consolas', 'SF Mono', 'Courier New', monospace;
+  font-size: 11px;
+}
+
+/* Toggle row (always visible) */
+.trace-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  transition: color 0.12s;
+}
+
+.trace-toggle:hover {
+  color: var(--text-2);
+}
+
+.trace-toggle-chevron {
+  font-size: 9px;
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.trace-toggle-label {
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.trace-toggle-summary {
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+/* Expanded body */
+.trace-body {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Individual step card */
+.trace-step {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #fafafa;
+  line-height: 1.45;
+}
+
+.trace-step--fast  { border-color: #c6e4ce; background: #f4fbf6; }
+.trace-step--slow  { border-color: #f0d68a; background: #fffbea; }
+.trace-step--ok    { border-color: #a7d7c5; background: #edf9f4; }
+.trace-step--error { border-color: #f5b8b8; background: #fff0f0; }
+
+.trace-step-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.trace-step-agent {
+  font-weight: 700;
+  font-size: 11px;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.trace-step-latency {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.trace-step-output {
+  color: #555;
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.trace-step-tokens {
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+/* Safety pass/fail tag */
+.trace-safety-tag {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.trace-safety-tag--pass { background: #d4edda; color: #2d7a45; }
+.trace-safety-tag--fail { background: #fde8e8; color: #b02020; }
+
+/* Arrow connector between steps */
+.trace-arrow {
+  text-align: center;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.6;
+  user-select: none;
+}
+
+/* Summary row at bottom */
+.trace-total {
+  margin-top: 6px;
+  padding: 4px 6px;
+  background: #f0eeec;
+  border-radius: 5px;
+  font-size: 10px;
+  color: var(--text-2);
+  text-align: center;
 }
 
 /* ── Lobby mode tabs ────────────────────────────────────────────────────── */

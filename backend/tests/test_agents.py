@@ -508,35 +508,38 @@ class TestOrchestratorPipeline:
         monkeypatch.setattr("app.agents.safety.chat", fake_chat)
 
     async def test_question_intent_returns_dm_response(self) -> None:
-        response = await self.orchestrator.handle_message("p1", "威士忌杯有毒吗")
+        response, trace = await self.orchestrator.handle_message("p1", "威士忌杯有毒吗")
         assert response is not None
         assert response.type == RESP_DM
         assert response.text is not None
+        assert any(s.agent == "judge" for s in trace.steps)
 
     async def test_accuse_intent_returns_dm_response(self) -> None:
-        response = await self.orchestrator.handle_message("p1", "凶手是沈清")
+        response, trace = await self.orchestrator.handle_message("p1", "凶手是沈清")
         assert response is not None
         assert response.type == RESP_DM
+        assert trace.steps[0].agent == "router"
 
     async def test_chat_intent_returns_none(self) -> None:
         self.sm.current_phase = "discussion"
-        response = await self.orchestrator.handle_message("p1", "好的大家继续")
+        response, trace = await self.orchestrator.handle_message("p1", "好的大家继续")
         assert response is None
+        assert trace.steps[0].agent == "router"
 
     async def test_meta_intent_returns_meta_response(self) -> None:
-        response = await self.orchestrator.handle_message("p1", "规则")
+        response, trace = await self.orchestrator.handle_message("p1", "规则")
         assert response is not None
         assert response.type == RESP_META
 
     async def test_search_with_keyword_returns_clue_found(self) -> None:
-        response = await self.orchestrator.handle_message("p1", "我要搜查威士忌杯")
+        response, trace = await self.orchestrator.handle_message("p1", "我要搜查威士忌杯")
         assert response is not None
         assert response.type == RESP_CLUE_FOUND
         assert response.clue is not None
         assert response.clue["id"] == "clue_001"
 
     async def test_search_without_keyword_returns_dm_response(self) -> None:
-        response = await self.orchestrator.handle_message("p1", "我搜查窗帘")
+        response, trace = await self.orchestrator.handle_message("p1", "我搜查窗帘")
         assert response is not None
         assert response.type == RESP_DM
 
@@ -544,26 +547,26 @@ class TestOrchestratorPipeline:
         # First search finds it
         await self.orchestrator.handle_message("p1", "搜查威士忌")
         # Second search for the same clue returns DM response (already unlocked)
-        response = await self.orchestrator.handle_message("p1", "再查一下威士忌")
+        response, trace = await self.orchestrator.handle_message("p1", "再查一下威士忌")
         assert response is not None
         assert response.type == RESP_DM  # clue already unlocked
 
     async def test_phase_blocked_when_action_not_allowed(self) -> None:
         # In investigation_1, cast_vote is not allowed → vote intent is blocked
-        response = await self.orchestrator.handle_message("p1", "我投沈清")
+        response, trace = await self.orchestrator.handle_message("p1", "我投沈清")
         assert response is not None
         assert response.type == RESP_PHASE_BLOCKED
 
     async def test_phase_guard_ask_dm_blocked_in_discussion(self) -> None:
         # ask_dm is not in discussion allowed actions
         self.sm.current_phase = "discussion"
-        response = await self.orchestrator.handle_message("p1", "威士忌杯有毒吗")
+        response, trace = await self.orchestrator.handle_message("p1", "威士忌杯有毒吗")
         assert response is not None
         assert response.type == RESP_PHASE_BLOCKED
 
     async def test_meta_always_allowed_regardless_of_phase(self) -> None:
         self.sm.current_phase = "reveal"
-        response = await self.orchestrator.handle_message("p1", "规则")
+        response, trace = await self.orchestrator.handle_message("p1", "规则")
         assert response is not None
         assert response.type == RESP_META
 
@@ -578,10 +581,13 @@ class TestOrchestratorPipeline:
 
         monkeypatch.setattr(self.orchestrator.safety, "check", always_unsafe)
 
-        response = await self.orchestrator.handle_message("p1", "死者是怎么死的？")
+        response, trace = await self.orchestrator.handle_message("p1", "死者是怎么死的？")
         assert response is not None
         assert response.type == RESP_DM
         assert response.text == _REGENERATION_FALLBACK
+        # Safety steps should appear (one per retry attempt)
+        safety_steps = [s for s in trace.steps if s.agent == "safety"]
+        assert len(safety_steps) == 3  # _MAX_SAFETY_RETRIES + 1
 
 
 # ---------------------------------------------------------------------------

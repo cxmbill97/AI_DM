@@ -50,14 +50,19 @@ _RE_ACCUSE = re.compile(
     r"凶手是|我认为.*是凶手|我判断.*是凶手|一定是.*杀|肯定是.*杀|就是.*干的"
 )
 
-# Interrogative question markers
-_RE_QUESTION = re.compile(r"\?|？|吗|呢|什么|为什么|怎么|是不是|有没有|能不能|是否")
+# Interrogative question markers (Chinese + English)
+_RE_QUESTION = re.compile(
+    r"\?|？|吗|呢|什么|为什么|怎么|是不是|有没有|能不能|是否"
+    r"|\bwhat\b|\bwhy\b|\bhow\b|\bwhen\b|\bwhere\b|\bwho\b|\bwhich\b"
+    r"|\bcan i\b|\bshould i\b|\bdo i\b|\bdid\b|\bis it\b|\bwas\b|\bare\b",
+    re.IGNORECASE,
+)
 
 # Investigation / search actions
-_RE_SEARCH = re.compile(r"搜|查|看|检查|调查|找|翻|搜索|搜查")
+_RE_SEARCH = re.compile(r"搜|查|看|检查|调查|找|翻|搜索|搜查|\bsearch\b|\bcheck\b|\blook\b|\binspect\b|\bexamine\b", re.IGNORECASE)
 
 # Meta / help request
-_RE_META = re.compile(r"规则|怎么玩|帮助|help|怎么用|流程|说明|指引", re.IGNORECASE)
+_RE_META = re.compile(r"规则|怎么玩|帮助|help|怎么用|流程|说明|指引|what should i do|what now|what can i do|how to play", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------

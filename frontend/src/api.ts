@@ -41,6 +41,31 @@ export interface Clue {
   unlock_keywords: string[];
 }
 
+// ---------------------------------------------------------------------------
+// Agent trace types (Phase 7 — mirroring backend trace.py dataclasses)
+// ---------------------------------------------------------------------------
+
+export interface TraceStep {
+  agent: string; // "router" | "judge" | "narrator" | "safety" | "npc"
+  input_summary: string;
+  output_summary: string;
+  latency_ms: number;
+  tokens_in: number;
+  tokens_out: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface AgentTrace {
+  message_id: string;
+  player_id: string;
+  player_message: string;
+  timestamp: number;
+  total_latency_ms: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  steps: TraceStep[];
+}
+
 export interface ChatResponse {
   judgment: string; // 是 / 不是 / 无关 / 部分正确
   response: string;
@@ -49,6 +74,7 @@ export interface ChatResponse {
   hint?: string;
   truth?: string; // set when truth_progress >= 1.0 (game over)
   clue_unlocked?: Clue; // newly unlocked clue this turn, if any
+  trace?: AgentTrace | null; // agent pipeline trace (murder mystery only)
 }
 
 // ---------------------------------------------------------------------------

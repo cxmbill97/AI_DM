@@ -289,6 +289,5 @@ class NarratorAgent:
                 f"- 相关事实编号：{', '.join(judgment['relevant_fact_ids']) or '无'}"
             )
         return [
-            {"role": "system", "content": judgment_text},
-            {"role": "user", "content": player_message},
+            {"role": "user", "content": f"{judgment_text}\n\n{player_message}"},
         ]

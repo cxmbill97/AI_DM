@@ -98,10 +98,12 @@
     "private_chat_tab": "🔒 私聊DM",
     "input_placeholder": "输入问题，按回车发送…",
     "input_connecting": "连接中…",
-    "private_placeholder": "向DM私密提问，其他玩家看不到…"
+    "private_placeholder": "向DM私密提问，其他玩家看不到…",
+    "disconnect_error": "连接断开，请刷新页面重试"
   },
   "mm": {
     "no_char": "等待分配角色",
+    "listen_placeholder": "聆听阶段 — 下个阶段开放发言",
     "voting_placeholder": "投票阶段，请在右侧投票",
     "end_placeholder": "游戏已结束",
     "chat_placeholder": "输入消息，按回车发送…",
@@ -131,7 +133,10 @@
     "voting": "投票",
     "reveal": "揭晓",
     "time_remaining": "{time} 剩余",
-    "phase_change": "进入{phase}阶段"
+    "phase_change": "进入{phase}阶段",
+    "skip": "跳过 ▶",
+    "skip_voted": "已投票跳过",
+    "skip_hint": "投票跳过此阶段（需过半数同意）"
   },
   "phase_label": {
     "opening": "开场叙事",
@@ -160,7 +165,8 @@
     "winner_label": "凶手：",
     "runoff_tie": "平局，进入加时投票…",
     "vote_distribution": "投票结果",
-    "tally_votes": "{n}票"
+    "tally_votes": "{n}票",
+    "phase_started": "投票阶段开始！"
   },
   "judgment": {
     "yes": "✅ 是",

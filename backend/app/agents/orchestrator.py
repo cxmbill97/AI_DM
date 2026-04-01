@@ -31,6 +31,7 @@ Response and the WebSocket handler decides what to broadcast.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -51,6 +52,8 @@ _REGENERATION_FALLBACK = _REGENERATION_FALLBACK_ZH
 from app.agents.npc import NPCAgent
 from app.agents.router import RouterAgent
 from app.agents.safety import SafetyAgent
+from app.agents.trace import AgentTrace, TraceStep, new_trace
+from app.llm import drain_usage, reset_usage_accumulator
 from app.models import Script, ScriptClue
 from app.state_machine import GameStateMachine
 from app.visibility import VisibleContext
@@ -189,37 +192,55 @@ class AgentOrchestrator:
         player_id: str,
         message: str,
         room: Any = None,  # reserved — WebSocket room object (not yet wired)
-    ) -> OrchestratorResponse | None:
+    ) -> tuple[OrchestratorResponse | None, AgentTrace]:
         """Process a player message through the full pipeline.
 
         Returns
         -------
-        OrchestratorResponse or None
-            None means the intent is "chat" — broadcast the player message
-            directly with no DM response.
+        (OrchestratorResponse or None, AgentTrace)
+            OrchestratorResponse is None when intent is "chat" — caller should
+            broadcast the player message directly with no DM response.
+            AgentTrace is always returned for logging/display.
         """
+        trace = new_trace(player_id, message)
         phase = self._sm.current_phase
 
-        # a) Classify intent
+        # a) Classify intent (rules-only, no LLM)
+        t0 = time.time()
         classification = self.router.classify(message, phase)
+        router_latency = (time.time() - t0) * 1000
         intent = classification.intent
+
+        trace.steps.append(TraceStep(
+            agent="router",
+            input_summary=f"message={message[:80]!r}, phase={phase}",
+            output_summary=f"intent={intent}, rule={classification.matched_rule}",
+            latency_ms=router_latency,
+            tokens_in=0,
+            tokens_out=0,
+            metadata={"intent": intent, "matched_rule": classification.matched_rule},
+        ))
+
         logger.debug(
             "Orchestrator: player=%s phase=%s intent=%s rule=%s",
             player_id, phase, intent, classification.matched_rule,
         )
 
-        # b) Meta — always allowed, no state machine check
+        # b) Meta and chat are always allowed — skip state machine guard
         if intent == "meta":
-            return self._handle_meta(message, language=self._language)
+            return self._handle_meta(message, language=self._language), trace
 
-        # b) State machine guard
+        if intent == "chat":
+            return None, trace  # broadcast player message only, no DM response
+
+        # c) State machine guard (only for DM-interacting intents)
         required_action = _INTENT_TO_ACTION.get(intent)
         if required_action and not self._sm.can_act(required_action):
             if self._language == "en":
                 blocked_text = f"This action is not available in the current phase ({phase})."
             else:
                 blocked_text = f"当前阶段（{phase}）不能执行此操作。"
-            return OrchestratorResponse(type=RESP_PHASE_BLOCKED, text=blocked_text)
+            return OrchestratorResponse(type=RESP_PHASE_BLOCKED, text=blocked_text), trace
 
         # c-h) Route by intent
         if intent == "vote":
@@ -229,35 +250,53 @@ class AgentOrchestrator:
                 vote_text = 'Please use the voting panel to cast your vote (send {"type": "vote", "target": "<char_id>"}).'
             else:
                 vote_text = '请使用投票功能投票（发送 {"type": "vote", "target": "<char_id>"} ）。'
-            return OrchestratorResponse(type=RESP_PHASE_BLOCKED, text=vote_text)
+            return OrchestratorResponse(type=RESP_PHASE_BLOCKED, text=vote_text), trace
 
         if intent == "npc":
-            return await self._handle_npc(player_id, message)
+            return await self._handle_npc(player_id, message, trace), trace
 
         if intent in ("question", "accuse"):
-            return await self._handle_question(player_id, message)
+            return await self._handle_question(player_id, message, trace), trace
 
         if intent == "search":
-            return await self._handle_search(player_id, message)
-
-        if intent == "chat":
-            return None  # broadcast player message only, no DM response
+            return await self._handle_search(player_id, message, trace), trace
 
         # Unreachable — all intents handled above
-        return None
+        return None, trace
 
     # ------------------------------------------------------------------
     # Intent handlers
     # ------------------------------------------------------------------
 
-    async def _handle_question(self, player_id: str, message: str) -> OrchestratorResponse:
+    async def _handle_question(
+        self, player_id: str, message: str, trace: AgentTrace
+    ) -> OrchestratorResponse:
         """Judge → Narrator → Safety pipeline."""
         visible = self._build_visible_context(player_id)
         viewer_char_id = self._player_char_map.get(player_id)
+        player_visible_facts = [c["content"] for c in visible.public_clues]
 
         # Judge
-        player_visible_facts = [c["content"] for c in visible.public_clues]
+        reset_usage_accumulator()
+        t0 = time.time()
         judgment = await self.judge.judge(message, player_visible_facts)
+        judge_usages = drain_usage()
+        trace.steps.append(TraceStep(
+            agent="judge",
+            input_summary=(
+                f"key_facts: {len(self.judge._key_facts)} items; "
+                f"visible_facts: {len(player_visible_facts)} items"
+            ),
+            output_summary=(
+                f"result={judgment['result']}, "
+                f"confidence={judgment['confidence']:.0%}, "
+                f"relevant_facts: {len(judgment['relevant_fact_ids'])} items"
+            ),
+            latency_ms=(time.time() - t0) * 1000,
+            tokens_in=sum(u.prompt_tokens for u in judge_usages),
+            tokens_out=sum(u.completion_tokens for u in judge_usages),
+            metadata={"judgment": judgment["result"]},
+        ))
 
         # Narrator + Safety (with retry)
         text = await self._narrate_with_safety(
@@ -266,12 +305,14 @@ class AgentOrchestrator:
             visible=visible,
             player_id=player_id,
             viewer_char_id=viewer_char_id,
+            trace=trace,
         )
         return OrchestratorResponse(type=RESP_DM, text=text)
 
-    async def _handle_search(self, player_id: str, message: str) -> OrchestratorResponse:
+    async def _handle_search(
+        self, player_id: str, message: str, trace: AgentTrace
+    ) -> OrchestratorResponse:
         """Try to unlock a clue, then narrate the finding."""
-        phase = self._sm.current_phase
         phase_obj = self._sm.current()
         available = set(phase_obj.available_clues or [])
 
@@ -308,6 +349,7 @@ class AgentOrchestrator:
                 visible=visible,
                 player_id=player_id,
                 viewer_char_id=viewer_char_id,
+                trace=trace,
             )
             return OrchestratorResponse(
                 type=RESP_CLUE_FOUND,
@@ -329,17 +371,39 @@ class AgentOrchestrator:
             visible=visible,
             player_id=player_id,
             viewer_char_id=viewer_char_id,
+            trace=trace,
         )
         return OrchestratorResponse(type=RESP_DM, text=text)
 
-    async def _handle_npc(self, player_id: str, message: str) -> OrchestratorResponse:
+    async def _handle_npc(
+        self, player_id: str, message: str, trace: AgentTrace
+    ) -> OrchestratorResponse:
         """Dispatch to the appropriate NPC agent."""
         npc_id = self._detect_npc_id(message)
         if npc_id and npc_id in self._npc_agents:
-            text = await self._npc_agents[npc_id].respond(message)
+            npc_agent = self._npc_agents[npc_id]
+            npc_name = next(
+                (n.name for n in self._script.npcs if n.id == npc_id), npc_id
+            )
+            reset_usage_accumulator()
+            t0 = time.time()
+            text = await npc_agent.respond(message)
+            npc_usages = drain_usage()
+            trace.steps.append(TraceStep(
+                agent="npc",
+                input_summary=(
+                    f"npc={npc_name!r}, "
+                    f"knowledge: {len(npc_agent._knowledge_clues)} items"
+                ),
+                output_summary=f"response_len={len(text)} chars",
+                latency_ms=(time.time() - t0) * 1000,
+                tokens_in=sum(u.prompt_tokens for u in npc_usages),
+                tokens_out=sum(u.completion_tokens for u in npc_usages),
+                metadata={"npc_id": npc_id, "npc_name": npc_name},
+            ))
             return OrchestratorResponse(type=RESP_DM, text=text)
         # Could not identify which NPC — fall back to question handler
-        return await self._handle_question(player_id, message)
+        return await self._handle_question(player_id, message, trace)
 
     def _detect_npc_id(self, message: str) -> str | None:
         """Return the NPC id if the message addresses a known NPC, else None."""
@@ -376,6 +440,7 @@ class AgentOrchestrator:
         visible: VisibleContext,
         player_id: str,
         viewer_char_id: str | None,
+        trace: AgentTrace | None = None,
     ) -> str:
         """Run Narrator → Safety, retrying up to _MAX_SAFETY_RETRIES times."""
         phase = self._sm.current_phase
@@ -387,6 +452,9 @@ class AgentOrchestrator:
 
         regen_fallback = _REGENERATION_FALLBACK_EN if self._language == "en" else _REGENERATION_FALLBACK_ZH
         for attempt in range(_MAX_SAFETY_RETRIES + 1):
+            # Narrator
+            reset_usage_accumulator()
+            t0 = time.time()
             text = await self.narrator.narrate(
                 judgment=judgment,
                 player_message=player_message,
@@ -395,11 +463,49 @@ class AgentOrchestrator:
                 truth_for_reveal=truth_for_reveal,
                 language=self._language,
             )
+            narrator_usages = drain_usage()
+            if trace is not None:
+                trace.steps.append(TraceStep(
+                    agent="narrator",
+                    input_summary=(
+                        f"judgment={judgment['result']}, "
+                        f"public_clues: {len(visible.public_clues)} items, "
+                        f"phase={phase}"
+                    ),
+                    output_summary=f"response_len={len(text)} chars",
+                    latency_ms=(time.time() - t0) * 1000,
+                    tokens_in=sum(u.prompt_tokens for u in narrator_usages),
+                    tokens_out=sum(u.completion_tokens for u in narrator_usages),
+                    metadata={"attempt": attempt + 1, "phase": phase},
+                ))
+
+            # Safety
+            reset_usage_accumulator()
+            t0 = time.time()
             result = await self.safety.check(
                 text=text,
                 audience_player_id=player_id,
                 viewer_char_id=viewer_char_id,
             )
+            safety_usages = drain_usage()
+            if trace is not None:
+                leaked = result.get("leaked_content") or ""
+                trace.steps.append(TraceStep(
+                    agent="safety",
+                    input_summary=(
+                        f"text_len={len(text)} chars, "
+                        f"key_facts: {len(self.safety._key_facts)} items"
+                    ),
+                    output_summary=(
+                        f"safe={result['safe']}"
+                        + (f", leaked={leaked[:30]!r}" if not result["safe"] else "")
+                    ),
+                    latency_ms=(time.time() - t0) * 1000,
+                    tokens_in=sum(u.prompt_tokens for u in safety_usages),
+                    tokens_out=sum(u.completion_tokens for u in safety_usages),
+                    metadata={"safe": result["safe"], "attempt": attempt + 1},
+                ))
+
             if result["safe"]:
                 return text
             logger.warning(

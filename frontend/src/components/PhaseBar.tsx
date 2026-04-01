@@ -4,6 +4,9 @@ import { useT } from '../i18n';
 interface PhaseBarProps {
   phase: string;
   timeRemaining: number | null; // seconds; null = no timer
+  skipVotes?: { voted: number; needed: number } | null;
+  hasSkipVoted?: boolean;
+  onSkip?: () => void;
 }
 
 const PHASE_ORDER = [
@@ -21,7 +24,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function PhaseBar({ phase, timeRemaining }: PhaseBarProps) {
+export function PhaseBar({ phase, timeRemaining, skipVotes, hasSkipVoted, onSkip }: PhaseBarProps) {
   const { t } = useT();
   const [localTime, setLocalTime] = useState<number | null>(timeRemaining);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -53,6 +56,7 @@ export function PhaseBar({ phase, timeRemaining }: PhaseBarProps) {
 
   const currentIdx = PHASE_ORDER.indexOf(phase);
   const isWarning = localTime !== null && localTime > 0 && localTime <= 30;
+  const canSkip = phase !== 'reveal' && !!onSkip;
 
   return (
     <div className="phase-bar">
@@ -71,12 +75,32 @@ export function PhaseBar({ phase, timeRemaining }: PhaseBarProps) {
         })}
       </div>
 
-      {localTime !== null && phase !== 'reveal' && (
-        <div className={`phase-timer${isWarning ? ' phase-timer--warning' : ''}`}>
-          <span className="phase-timer-icon">⏱</span>
-          <span className="phase-timer-value">{formatTime(localTime)}</span>
-        </div>
-      )}
+      <div className="phase-bar-controls">
+        {localTime !== null && phase !== 'reveal' && (
+          <div className={`phase-timer${isWarning ? ' phase-timer--warning' : ''}`}>
+            <span className="phase-timer-icon">⏱</span>
+            <span className="phase-timer-value">{formatTime(localTime)}</span>
+          </div>
+        )}
+
+        {canSkip && (
+          <div className="phase-skip">
+            <button
+              className={`btn btn-skip${hasSkipVoted ? ' btn-skip--voted' : ''}`}
+              onClick={onSkip}
+              disabled={hasSkipVoted}
+              title={t('phase.skip_hint')}
+            >
+              {hasSkipVoted ? t('phase.skip_voted') : t('phase.skip')}
+            </button>
+            {skipVotes && skipVotes.voted > 0 && (
+              <span className="skip-vote-count">
+                {skipVotes.voted}/{skipVotes.needed}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

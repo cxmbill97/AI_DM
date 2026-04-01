@@ -2,9 +2,50 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+# ---------------------------------------------------------------------------
+# Pricing constants (USD per 1 M tokens, MiniMax M2.5)
+# ---------------------------------------------------------------------------
+
+PRICING: dict[str, dict[str, float]] = {
+    "minimax": {
+        "input": 0.20,   # USD per 1 M input tokens
+        "output": 1.15,  # USD per 1 M output tokens
+    }
+}
+
+
+# ---------------------------------------------------------------------------
+# Agent trace models (Pydantic — for JSON serialisation in API responses)
+# ---------------------------------------------------------------------------
+
+
+class TraceStep(BaseModel):
+    """One agent invocation within the multi-agent pipeline."""
+
+    agent: str           # "router" | "judge" | "narrator" | "safety" | "npc"
+    input_summary: str   # sanitised — no secret content
+    output_summary: str
+    latency_ms: float
+    tokens_in: int = 0
+    tokens_out: int = 0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentTrace(BaseModel):
+    """Complete decision log produced for one player message."""
+
+    message_id: str
+    player_id: str
+    player_message: str
+    timestamp: float
+    steps: list[TraceStep] = Field(default_factory=list)
+    total_latency_ms: float = 0.0
+    total_tokens: int = 0
+    total_cost_usd: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +123,7 @@ class ChatResponse(BaseModel):
     hint: str | None = None  # only present when a hint is given
     truth: str | None = None  # populated when truth_progress >= 1.0 (game over)
     clue_unlocked: Clue | None = None  # newly unlocked clue this turn, if any
+    trace: AgentTrace | None = None  # agent decision log (multi-agent path only)
 
 
 class PuzzleSummary(BaseModel):

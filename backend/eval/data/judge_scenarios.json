@@ -1,0 +1,582 @@
+[
+  {
+    "id": "zh_rn_yes_01",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者的威士忌杯里含有安眠药成分",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_yes_02",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者是在昏迷状态下被人撞上壁炉石台致死的",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_yes_03",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "书房地毯上有从茶几到壁炉方向的拖拽痕迹",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_yes_04",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "22:13走廊监控拍到了一个朝书房方向走去的身影",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_yes_05",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "沈清卧室里发现了和死者体内药物成分一致的空药瓶",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_yes_06",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "管家在22:10看见沈清在书房茶几旁动了饮品杯",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_yes_07",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "别墅的出售合同已经签署",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_yes_08",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者生前拒绝承认沈清是他的私生女",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_yes_09",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "监控录像中那个人影穿着浅色衣物",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_yes_10",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "别墅出售合同签署后，沈清将被迫搬离",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_no_01",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者是被人用刀刺死的",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_no_02",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "监控拍到的人影穿着深色衣物",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_no_03",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "书房里没有任何拖拽痕迹",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_no_04",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者亲口承认了沈清的私生女身份",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_no_05",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "空药瓶是在厨房发现的",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_no_06",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "别墅出售合同还没有签署",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_no_07",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "管家是在22:30才看见沈清的",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_no_08",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者是在清醒状态下被人推倒的",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_no_09",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "监控录像的时间是21:13",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_no_10",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者的饮品里没有任何异常成分",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_na_01",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "案件是在星期五发生的",
+    "expected_judgment": "无关",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_na_02",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "别墅共有多少个房间",
+    "expected_judgment": "无关",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_na_03",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者的遗产由谁继承",
+    "expected_judgment": "无关",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_na_04",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "沈清是否有男朋友",
+    "expected_judgment": "无关",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_na_05",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "案发当天的天气如何",
+    "expected_judgment": "无关",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_partial_01",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者是被人推倒后摔死的",
+    "expected_judgment": "部分正确",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_partial_02",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者的茶里被下了安眠药",
+    "expected_judgment": "部分正确",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_partial_03",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "监控在22点多拍到了有人向书房走去",
+    "expected_judgment": "部分正确",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_partial_04",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "书房里发现了证明有人在场的痕迹",
+    "expected_judgment": "部分正确",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_yes_01",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "The tablets in Lord Thornfield's prescription bottle were four times the correct dose",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_yes_02",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Dr. Harrow was alone with the deceased during the afternoon medical visit",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_yes_03",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "A digoxin overdose can cause cardiac death that initially looks natural",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_yes_04",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Dr. Harrow returned to the study at 10:15 PM without telling anyone",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_yes_05",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Harrow had been embezzling money from the Thornfield Charitable Trust for three years",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_yes_06",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Lord Thornfield wrote a letter to his solicitor naming Dr. Harrow before he died",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_yes_07",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Eleanor Pemberton independently found financial irregularities that pointed to Harrow",
+    "expected_judgment": "是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_no_01",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Lord Thornfield was stabbed to death",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_no_02",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "The prescription tablets were the correct prescribed dose",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_no_03",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Dr. Harrow told the household about his evening return to the study",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_no_04",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Harrow had been embezzling from the trust for only six months",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_no_05",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Eleanor Pemberton found no financial irregularities in the charitable trust",
+    "expected_judgment": "不是",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_na_01",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Lord Thornfield had three children",
+    "expected_judgment": "无关",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_na_02",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "The weather was stormy on the night of the murder",
+    "expected_judgment": "无关",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_na_03",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Inspector Graves has been on the police force for twenty years",
+    "expected_judgment": "无关",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_na_04",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Lady Thornfield was in London on the day of the murder",
+    "expected_judgment": "无关",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_partial_01",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "The tablets in Lord Thornfield's bottle were stronger than prescribed",
+    "expected_judgment": "部分正确",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_partial_02",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Dr. Harrow visited the study twice on the day Lord Thornfield died",
+    "expected_judgment": "部分正确",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_partial_03",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Financial fraud was discovered at the Thornfield estate",
+    "expected_judgment": "部分正确",
+    "category": "accuracy",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_edge_01",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "威士忌杯里有东西",
+    "expected_judgment": "是",
+    "category": "edge_case",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_edge_02",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者没有死于意外",
+    "expected_judgment": "是",
+    "category": "edge_case",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_edge_03",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "有人在22点10分前后在书房附近出现",
+    "expected_judgment": "是",
+    "category": "edge_case",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_edge_04",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者威士忌杯中含有毒素",
+    "expected_judgment": "部分正确",
+    "category": "edge_case",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_edge_05",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "沈清与死者之间存在家庭纠纷",
+    "expected_judgment": "是",
+    "category": "edge_case",
+    "is_adversarial": false
+  },
+  {
+    "id": "zh_rn_edge_06",
+    "source_id": "rain_night_001",
+    "source_type": "script",
+    "language": "zh",
+    "question": "死者和沈清的关系完全正常，没有任何矛盾",
+    "expected_judgment": "不是",
+    "category": "edge_case",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_edge_01",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Something was wrong with Lord Thornfield's medication",
+    "expected_judgment": "是",
+    "category": "edge_case",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_edge_02",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Lord Thornfield did not die of natural causes",
+    "expected_judgment": "是",
+    "category": "edge_case",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_edge_03",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "There was a financial motive for the murder",
+    "expected_judgment": "是",
+    "category": "edge_case",
+    "is_adversarial": false
+  },
+  {
+    "id": "en_th_edge_04",
+    "source_id": "en_thornfield_001",
+    "source_type": "script",
+    "language": "en",
+    "question": "Dr. Harrow had no reason to harm Lord Thornfield",
+    "expected_judgment": "不是",
+    "category": "edge_case",
+    "is_adversarial": false
+  }
+]

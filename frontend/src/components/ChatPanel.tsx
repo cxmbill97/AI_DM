@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { sendMessage } from '../api';
-import type { ChatResponse, Clue } from '../api';
+import type { AgentTrace, ChatResponse, Clue } from '../api';
+import { TracePanel } from './TracePanel';
 import { useT } from '../i18n';
 
 // ---------------------------------------------------------------------------
@@ -16,6 +17,7 @@ interface DMMessage {
   role: 'dm';
   text: string;
   judgment: string;
+  trace?: AgentTrace | null;
 }
 
 interface ClueNoticeMessage {
@@ -61,6 +63,7 @@ interface ChatPanelProps {
   onQuestionAsked: () => void;
   onClueUnlocked?: (clue: Clue) => void;
   cluePanelRef?: React.RefObject<HTMLDivElement>;
+  showTraces?: boolean;
 }
 
 export function ChatPanel({
@@ -72,6 +75,7 @@ export function ChatPanel({
   onQuestionAsked,
   onClueUnlocked,
   cluePanelRef,
+  showTraces = false,
 }: ChatPanelProps) {
   const { t } = useT();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -100,7 +104,7 @@ export function ChatPanel({
 
       setMessages((prev) => [
         ...prev,
-        { role: 'dm', text: res.response, judgment: res.judgment },
+        { role: 'dm', text: res.response, judgment: res.judgment, trace: res.trace ?? null },
       ]);
       onProgress(res.truth_progress);
 
@@ -159,6 +163,9 @@ export function ChatPanel({
             <div key={i} className={`message message--${m.role}`}>
               {m.role === 'dm' && <JudgmentBadge judgment={m.judgment} />}
               <div className="message-bubble">{m.text}</div>
+              {m.role === 'dm' && showTraces && m.trace && (
+                <TracePanel trace={m.trace} />
+              )}
             </div>
           );
         })}
