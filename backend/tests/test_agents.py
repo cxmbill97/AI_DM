@@ -43,7 +43,7 @@ KEY_FACTS = [
 ]
 
 CHARACTER_SECRETS = {
-    "char_su":   "与死者存在长达十年的秘密婚外情，并育有一名未对外公开的孩子，案发当晚曾单独与死者见面",
+    "char_su": "与死者存在长达十年的秘密婚外情，并育有一名未对外公开的孩子，案发当晚曾单独与死者见面",
     "char_chen": "欠死者三百万债务，曾多次恳求宽限还款期限但均遭死者拒绝，案发前一天再次被催款",
     "char_shen": "是死者私生女，案发当晚在死者威士忌中秘密投入安眠药后趁其昏迷推倒致死",
 }
@@ -236,11 +236,13 @@ class TestJudgeAgent:
             self.mock_calls.append((system, messages))
             return self._response
 
-        self._response = json.dumps({
-            "result": "是",
-            "confidence": 0.9,
-            "relevant_fact_ids": ["fact_0"],
-        })
+        self._response = json.dumps(
+            {
+                "result": "是",
+                "confidence": 0.9,
+                "relevant_fact_ids": ["fact_0"],
+            }
+        )
         monkeypatch.setattr("app.agents.judge.chat", fake_chat)
 
     async def test_judge_returns_correct_result(self) -> None:
@@ -274,9 +276,7 @@ class TestJudgeAgent:
         judgment = await self.judge.judge("test")
         assert judgment["result"] == "不是"
 
-    async def test_judge_invalid_result_normalised_to_wuguan(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_judge_invalid_result_normalised_to_wuguan(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def bad_chat(*_: Any) -> str:
             return json.dumps({"result": "UNKNOWN", "confidence": 0.5, "relevant_fact_ids": []})
 
@@ -348,9 +348,7 @@ class TestNarratorAgent:
         assert "真相揭晓" in system_prompt
         assert "沈清" in system_prompt
 
-    async def test_narrator_fallback_on_empty_response(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_narrator_fallback_on_empty_response(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def empty_chat(*_: Any) -> str:
             return ""
 
@@ -364,9 +362,7 @@ class TestNarratorAgent:
         )
         assert text == _FALLBACK_RESPONSE
 
-    async def test_narrator_fallback_on_llm_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_narrator_fallback_on_llm_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def failing_chat(*_: Any) -> str:
             raise RuntimeError("timeout")
 
@@ -465,11 +461,13 @@ class TestOrchestratorPipeline:
             player_char_map={"p1": "char_su", "p2": "char_shen"},
         )
         # Patch chat to return safe narrator text + safe safety result
-        self._judge_response = json.dumps({
-            "result": "是",
-            "confidence": 0.85,
-            "relevant_fact_ids": ["fact_0"],
-        })
+        self._judge_response = json.dumps(
+            {
+                "result": "是",
+                "confidence": 0.85,
+                "relevant_fact_ids": ["fact_0"],
+            }
+        )
         self._narrator_response = "这是一个很重要的发现，值得深入探讨。"
         self._safety_response = json.dumps({"safe": True, "leaked_content": None})
         self._call_count = 0
@@ -549,9 +547,7 @@ class TestOrchestratorPipeline:
         assert response is not None
         assert response.type == RESP_META
 
-    async def test_safety_retry_uses_fallback_after_max_retries(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_safety_retry_uses_fallback_after_max_retries(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Make safety.check always return unsafe by patching the method directly
         from app.agents.safety import SafetyResult
 
@@ -578,6 +574,7 @@ class TestNPCAgent:
     @pytest.fixture(autouse=True)
     def setup(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from app.agents.npc import NPCAgent as _NPCAgent
+
         self._NPCAgent = _NPCAgent
         self._clues_by_id = {
             "clue_001": ScriptClue(

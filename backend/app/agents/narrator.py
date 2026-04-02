@@ -44,21 +44,21 @@ You don't know the full truth. Don't speculate beyond the judgment."""
 # ---------------------------------------------------------------------------
 
 _PHASE_INSTRUCTIONS_ZH: dict[str, str] = {
-    "opening":         "开场叙事阶段，介绍案件背景，语气神秘庄重，不解答问题。",
-    "reading":         "角色阅读阶段，不进行DM互动。",
+    "opening": "开场叙事阶段，介绍案件背景，语气神秘庄重，不解答问题。",
+    "reading": "角色阅读阶段，不进行DM互动。",
     "investigation_1": "调查阶段。鼓励探索、搜查、询问NPC。接近线索时可暗示「这方向有价值」。",
-    "discussion":      "讨论阶段。鼓励分享推断、相互交流。提出思考性问题，适时总结关键点。",
-    "voting":          "投票阶段。引导玩家做最终判断，不再回答调查问题。",
-    "reveal":          "真相揭晓阶段。完整揭露凶手、动机、手法，叙事戏剧化有层次感。",
+    "discussion": "讨论阶段。鼓励分享推断、相互交流。提出思考性问题，适时总结关键点。",
+    "voting": "投票阶段。引导玩家做最终判断，不再回答调查问题。",
+    "reveal": "真相揭晓阶段。完整揭露凶手、动机、手法，叙事戏剧化有层次感。",
 }
 
 _PHASE_INSTRUCTIONS_EN: dict[str, str] = {
-    "opening":         "Opening narration — introduce the case, mysterious tone, no questions answered.",
-    "reading":         "Character reading phase — no DM interaction.",
+    "opening": "Opening narration — introduce the case, mysterious tone, no questions answered.",
+    "reading": "Character reading phase — no DM interaction.",
     "investigation_1": "Investigation. Encourage exploring, searching, questioning NPCs. Hint 'This direction looks promising' when close.",
-    "discussion":      "Discussion. Encourage sharing deductions. Pose questions, summarise key points.",
-    "voting":          "Voting phase. Guide players to final judgment; don't answer new investigation questions.",
-    "reveal":          "Reveal phase. Fully disclose culprit, motive, method — dramatic layered storytelling.",
+    "discussion": "Discussion. Encourage sharing deductions. Pose questions, summarise key points.",
+    "voting": "Voting phase. Guide players to final judgment; don't answer new investigation questions.",
+    "reveal": "Reveal phase. Fully disclose culprit, motive, method — dramatic layered storytelling.",
 }
 
 _DEFAULT_PHASE_INSTRUCTION_ZH = "引导玩家继续推理，维持紧张悬疑的氛围。"
@@ -190,9 +190,7 @@ class NarratorAgent:
                 parts.append(f"\n## Case Background (known to all players)\n{visible_context.surface}")
 
             if visible_context.public_clues:
-                clue_lines = "\n".join(
-                    f"- [{c['title']}] {c['content']}" for c in visible_context.public_clues
-                )
+                clue_lines = "\n".join(f"- [{c['title']}] {c['content']}" for c in visible_context.public_clues)
                 parts.append(f"\n## Publicly Discovered Clues\n{clue_lines}")
             else:
                 parts.append("\n## Publicly Discovered Clues\n(No public clues discovered yet.)")
@@ -217,23 +215,15 @@ class NarratorAgent:
                 parts.append(f"\n## 案件背景（所有玩家已知）\n{visible_context.surface}")
 
             if visible_context.public_clues:
-                clue_lines = "\n".join(
-                    f"- 【{c['title']}】{c['content']}" for c in visible_context.public_clues
-                )
+                clue_lines = "\n".join(f"- 【{c['title']}】{c['content']}" for c in visible_context.public_clues)
                 parts.append(f"\n## 已公开发现的线索\n{clue_lines}")
             else:
                 parts.append("\n## 已公开发现的线索\n（暂无已发现的公开线索）")
 
             if truth_for_reveal is not None:
-                parts.append(
-                    f"\n## 【真相揭晓——仅在此阶段可见】\n{truth_for_reveal}\n"
-                    "现在，请完整地向所有玩家揭露以上真相，语气戏剧化且有层次感。"
-                )
+                parts.append(f"\n## 【真相揭晓——仅在此阶段可见】\n{truth_for_reveal}\n现在，请完整地向所有玩家揭露以上真相，语气戏剧化且有层次感。")
             else:
-                parts.append(
-                    "\n## 重要限制\n"
-                    "你不知道案件的完整真相。不要猜测，不要推断超出以上信息和判断结果之外的内容。"
-                )
+                parts.append("\n## 重要限制\n你不知道案件的完整真相。不要猜测，不要推断超出以上信息和判断结果之外的内容。")
 
         return "\n".join(parts)
 

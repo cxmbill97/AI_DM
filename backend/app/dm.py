@@ -102,6 +102,7 @@ def _json_schema(lang: str, is_private: bool = False) -> str:
 # Prompt assembly — single-player / proactive (no player context)
 # ---------------------------------------------------------------------------
 
+
 def assemble_prompt(
     puzzle: Puzzle,
     unlocked_clue_ids: set[str] | None = None,
@@ -135,10 +136,14 @@ def assemble_prompt(
             unlocked_section = ""
         locked_clues = [c for c in puzzle.clues if c.id not in unlocked_clue_ids]
         locked_section = (
-            "\n\n## Undiscovered Clues\n"
-            "There are clues the player has not yet found. Do not reveal their content. "
-            "The system will unlock them automatically when the player asks in the right direction."
-        ) if locked_clues else ""
+            (
+                "\n\n## Undiscovered Clues\n"
+                "There are clues the player has not yet found. Do not reveal their content. "
+                "The system will unlock them automatically when the player asks in the right direction."
+            )
+            if locked_clues
+            else ""
+        )
 
         return f"""{_DM_RULES_EN}
 
@@ -163,21 +168,17 @@ Field notes:
 - audience: always "public" in this mode"""
     else:
         if unlocked_clues:
-            unlocked_block = "\n".join(
-                f"- 【{c.title}】{c.content}" for c in unlocked_clues
-            )
-            unlocked_section = (
-                f"\n\n## 玩家已发现的线索\n{unlocked_block}\n"
-                "（你可以在引导时提及这些线索，如「正如你之前发现的线索所示…」）"
-            )
+            unlocked_block = "\n".join(f"- 【{c.title}】{c.content}" for c in unlocked_clues)
+            unlocked_section = f"\n\n## 玩家已发现的线索\n{unlocked_block}\n（你可以在引导时提及这些线索，如「正如你之前发现的线索所示…」）"
         else:
             unlocked_section = ""
 
         locked_clues = [c for c in puzzle.clues if c.id not in unlocked_clue_ids]
         locked_section = (
-            "\n\n## 尚未发现的线索\n"
-            "还有未被玩家发现的线索，请勿透露其内容。玩家提问时如果触及正确方向，系统会自动解锁线索。"
-        ) if locked_clues else ""
+            ("\n\n## 尚未发现的线索\n还有未被玩家发现的线索，请勿透露其内容。玩家提问时如果触及正确方向，系统会自动解锁线索。")
+            if locked_clues
+            else ""
+        )
 
         return f"""{_DM_RULES_ZH}
 
@@ -206,6 +207,7 @@ Field notes:
 # Prompt assembly — per-player (Phase 3, multiplayer with private clues)
 # ---------------------------------------------------------------------------
 
+
 def assemble_prompt_for_player(
     vis_ctx: VisibleContext,
     dm_ctx: DMContext,
@@ -231,18 +233,14 @@ def assemble_prompt_for_player(
     if lang == "en":
         # (e) This player's private clues
         if vis_ctx.private_clues:
-            priv_block = "\n".join(
-                f"- [{pc['title']}] {pc['content']}" for pc in vis_ctx.private_clues
-            )
+            priv_block = "\n".join(f"- [{pc['title']}] {pc['content']}" for pc in vis_ctx.private_clues)
             private_section = f"\n\n## Current Player's Private Clues (visible only to this player)\n{priv_block}"
         else:
             private_section = "\n\n## Current Player's Private Clues\n(This player has no private clues.)"
 
         # (f) Publicly unlocked shared clues
         if dm_ctx.public_clues_unlocked:
-            pub_block = "\n".join(
-                f"- [{c['title']}] {c['content']}" for c in dm_ctx.public_clues_unlocked
-            )
+            pub_block = "\n".join(f"- [{c['title']}] {c['content']}" for c in dm_ctx.public_clues_unlocked)
             public_section = (
                 f"\n\n## Publicly Unlocked Shared Clues\n{pub_block}\n"
                 "(You may reference these when guiding, e.g. 'As the clue everyone found shows…')"
@@ -253,8 +251,7 @@ def assemble_prompt_for_player(
         # (g) All-players private summary — DM awareness only
         if dm_ctx.all_private_summary:
             summary_section = (
-                "\n\n## All Players' Private Clue Overview (DM reference only — never reveal to any player)\n"
-                f"{dm_ctx.all_private_summary}"
+                f"\n\n## All Players' Private Clue Overview (DM reference only — never reveal to any player)\n{dm_ctx.all_private_summary}"
             )
         else:
             summary_section = ""
@@ -267,7 +264,7 @@ def assemble_prompt_for_player(
                 "- You may discuss this player's own private clues in more detail.\n"
                 "- Still must not reveal the truth (unless the game is over).\n"
                 "- Still must not reveal other players' private clue content.\n"
-                "- Set `audience` to \"private\"."
+                '- Set `audience` to "private".'
             )
             schema = _PRIVATE_JSON_SCHEMA_EN
         else:
@@ -276,17 +273,14 @@ def assemble_prompt_for_player(
                 "This reply will be broadcast to all players in the room.\n"
                 "- Base your judgment only on public info (surface, public clues) and this player's private clues.\n"
                 "- Never reference other players' private clue content in your reply.\n"
-                "- If the question depends on another player's private clue, judge it as \"Irrelevant\".\n"
-                "- Set `audience` to \"public\"."
+                '- If the question depends on another player\'s private clue, judge it as "Irrelevant".\n'
+                '- Set `audience` to "public".'
             )
             schema = _JSON_SCHEMA_EN
 
         # (i) Locked public clues reminder
         if dm_ctx.public_clues_locked_ids:
-            locked_section = (
-                "\n\n## Undiscovered Shared Clues\n"
-                "There are shared clues the players have not yet found. Do not reveal their content."
-            )
+            locked_section = "\n\n## Undiscovered Shared Clues\nThere are shared clues the players have not yet found. Do not reveal their content."
         else:
             locked_section = ""
 
@@ -315,31 +309,21 @@ Field notes:
     # ---- Chinese version ----
     # (e) This player's private clues
     if vis_ctx.private_clues:
-        priv_block = "\n".join(
-            f"- 【{pc['title']}】{pc['content']}" for pc in vis_ctx.private_clues
-        )
+        priv_block = "\n".join(f"- 【{pc['title']}】{pc['content']}" for pc in vis_ctx.private_clues)
         private_section = f"\n\n## 当前提问玩家的私有线索（仅该玩家知晓，其他玩家不可见）\n{priv_block}"
     else:
         private_section = "\n\n## 当前提问玩家的私有线索\n（该玩家暂无私有线索）"
 
     # (f) Publicly unlocked shared clues
     if dm_ctx.public_clues_unlocked:
-        pub_block = "\n".join(
-            f"- 【{c['title']}】{c['content']}" for c in dm_ctx.public_clues_unlocked
-        )
-        public_section = (
-            f"\n\n## 公开已解锁的共享线索\n{pub_block}\n"
-            "（你可以在引导时提及，如「正如大家发现的线索所示…」）"
-        )
+        pub_block = "\n".join(f"- 【{c['title']}】{c['content']}" for c in dm_ctx.public_clues_unlocked)
+        public_section = f"\n\n## 公开已解锁的共享线索\n{pub_block}\n（你可以在引导时提及，如「正如大家发现的线索所示…」）"
     else:
         public_section = ""
 
     # (g) All-players private summary — DM awareness only
     if dm_ctx.all_private_summary:
-        summary_section = (
-            f"\n\n## 各玩家私有线索概览（仅供DM参考，绝对不得告知任何玩家）\n"
-            f"{dm_ctx.all_private_summary}"
-        )
+        summary_section = f"\n\n## 各玩家私有线索概览（仅供DM参考，绝对不得告知任何玩家）\n{dm_ctx.all_private_summary}"
     else:
         summary_section = ""
 
@@ -351,7 +335,7 @@ Field notes:
             "- 你可以更详细地讨论该玩家自己的私有线索，帮助玩家理解自己掌握的信息。\n"
             "- 仍然不得透露汤底真相（除非游戏已结束）。\n"
             "- 仍然不得透露其他玩家的私有线索内容。\n"
-            "- `audience` 字段请填写 \"private\"。"
+            '- `audience` 字段请填写 "private"。'
         )
         schema = _PRIVATE_JSON_SCHEMA
     else:
@@ -362,16 +346,13 @@ Field notes:
             "- 绝对不得在回复中涉及其他玩家的私有线索内容。\n"
             "- 如果该问题所依赖的信息只存在于其他玩家的私有线索中，"
             "请判断为「无关」（该信息对当前玩家不可见）。\n"
-            "- `audience` 字段请填写 \"public\"。"
+            '- `audience` 字段请填写 "public"。'
         )
         schema = _JSON_SCHEMA
 
     # (i) Locked public clues reminder
     if dm_ctx.public_clues_locked_ids:
-        locked_section = (
-            "\n\n## 尚未发现的共享线索\n"
-            "还有未被玩家发现的共享线索，请勿透露其内容。"
-        )
+        locked_section = "\n\n## 尚未发现的共享线索\n还有未被玩家发现的共享线索，请勿透露其内容。"
     else:
         locked_section = ""
 
@@ -456,9 +437,7 @@ def check_spoiler_leak(response: str, puzzle: Puzzle) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def check_clue_unlock_active(
-    message: str, puzzle: Puzzle, unlocked_ids: set[str]
-) -> Clue | None:
+def check_clue_unlock_active(message: str, puzzle: Puzzle, unlocked_ids: set[str]) -> Clue | None:
     """Phase 2: return a clue if any of its unlock_keywords appear in the player message."""
     for clue in puzzle.clues:
         if clue.id in unlocked_ids:
@@ -545,9 +524,7 @@ async def dm_proactive_message(session: GameSession, level: str) -> str:
             )
         else:  # nudge
             instruction = (
-                "（系统指令：玩家已沉默一段时间，请发表一句温和鼓励，"
-                "提醒玩家继续思考，不超过30字。"
-                "只输出这一句话，不要任何前缀或JSON格式。）"
+                "（系统指令：玩家已沉默一段时间，请发表一句温和鼓励，提醒玩家继续思考，不超过30字。只输出这一句话，不要任何前缀或JSON格式。）"
             )
         fallback_leak = "大家继续思考，相信你们能找到答案！"
         fallback_empty = "大家继续加油！"
@@ -610,6 +587,7 @@ async def dm_turn(
     trimmed = session.history[-MAX_HISTORY:]
     if player_id and session.puzzle.private_clues:
         from app.visibility import VisibilityRegistry
+
         registry = VisibilityRegistry(session)
         vis_ctx = registry.get_visible_context(player_id)
         dm_ctx = registry.get_dm_context()
@@ -648,9 +626,7 @@ async def dm_turn(
         session.consecutive_misses += 1
 
     # 8. Clue unlock: active first, passive fallback
-    unlocked_clue: Clue | None = check_clue_unlock_active(
-        player_message, session.puzzle, session.unlocked_clue_ids
-    )
+    unlocked_clue: Clue | None = check_clue_unlock_active(player_message, session.puzzle, session.unlocked_clue_ids)
     give_hint = dm_output.should_hint or check_hint_needed(session)
     if unlocked_clue is None and give_hint:
         unlocked_clue = check_clue_unlock_passive(session)
@@ -721,9 +697,7 @@ async def dm_turn_private(
         if not response:
             response = text[:300]
     except Exception:
-        response = text[:300] if text else (
-            "(System error, please try again.)" if lang == "en" else "（系统错误，请重试）"
-        )
+        response = text[:300] if text else ("(System error, please try again.)" if lang == "en" else "（系统错误，请重试）")
 
     # Safety: key_fact leak guard
     if check_spoiler_leak(response, session.puzzle):
@@ -734,6 +708,4 @@ async def dm_turn_private(
             else "这个问题很有意思，但我现在不能直接回答。试着从你的私有线索出发，换个角度想想。"
         )
 
-    return response if response else (
-        "(System error, please try again.)" if lang == "en" else "（系统错误，请重试）"
-    )
+    return response if response else ("(System error, please try again.)" if lang == "en" else "（系统错误，请重试）")

@@ -162,4 +162,3 @@ class SafetyAgent:
         except Exception:
             pass
         return None
-

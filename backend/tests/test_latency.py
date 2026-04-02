@@ -58,6 +58,7 @@ _QUESTIONS = [
 # Helper: measure a single LLM chat() call
 # ---------------------------------------------------------------------------
 
+
 async def _time_chat(system: str, user: str) -> dict[str, Any]:
     """Return {latency_ms, tokens_in_est, response_len}."""
     messages = [{"role": "user", "content": user}]
@@ -73,6 +74,7 @@ async def _time_chat(system: str, user: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Helper: measure TTFT + total for chat_stream()
 # ---------------------------------------------------------------------------
+
 
 async def _time_stream(system: str, user: str) -> dict[str, Any]:
     """Return {ttft_ms, total_ms, chunks, total_chars}."""
@@ -102,6 +104,7 @@ async def _time_stream(system: str, user: str) -> dict[str, Any]:
 # Test 1: Raw LLM latency (chat blocking)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_raw_chat_latency() -> None:
     """Measure baseline blocking chat() latency with a short prompt."""
@@ -114,11 +117,14 @@ async def test_raw_chat_latency() -> None:
         results.append(r["latency_ms"])
 
     p50 = statistics.median(results)
-    _print_section("Raw chat() latency (3 calls)", [
-        ("P50 ms", f"{p50:.0f}"),
-        ("Min ms", f"{min(results):.0f}"),
-        ("Max ms", f"{max(results):.0f}"),
-    ])
+    _print_section(
+        "Raw chat() latency (3 calls)",
+        [
+            ("P50 ms", f"{p50:.0f}"),
+            ("Min ms", f"{min(results):.0f}"),
+            ("Max ms", f"{max(results):.0f}"),
+        ],
+    )
     # Sanity: at least got a response
     assert p50 > 0
 
@@ -126,6 +132,7 @@ async def test_raw_chat_latency() -> None:
 # ---------------------------------------------------------------------------
 # Test 2: Streaming TTFT vs total
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_stream_ttft() -> None:
@@ -140,12 +147,15 @@ async def test_stream_ttft() -> None:
         ttfts.append(r["ttft_ms"])
         totals.append(r["total_ms"])
 
-    _print_section("chat_stream() latency (3 calls)", [
-        ("TTFT P50 ms",  f"{statistics.median(ttfts):.0f}"),
-        ("TTFT min ms",  f"{min(ttfts):.0f}"),
-        ("Total P50 ms", f"{statistics.median(totals):.0f}"),
-        ("Total min ms", f"{min(totals):.0f}"),
-    ])
+    _print_section(
+        "chat_stream() latency (3 calls)",
+        [
+            ("TTFT P50 ms", f"{statistics.median(ttfts):.0f}"),
+            ("TTFT min ms", f"{min(ttfts):.0f}"),
+            ("Total P50 ms", f"{statistics.median(totals):.0f}"),
+            ("Total min ms", f"{min(totals):.0f}"),
+        ],
+    )
     assert statistics.median(ttfts) > 0
     assert statistics.median(totals) >= statistics.median(ttfts)
 
@@ -153,6 +163,7 @@ async def test_stream_ttft() -> None:
 # ---------------------------------------------------------------------------
 # Test 3: Judge latency (real API)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_judge_latency() -> None:
@@ -167,17 +178,21 @@ async def test_judge_latency() -> None:
         latencies.append(elapsed)
         assert judgment["result"] in ("是", "不是", "无关", "部分正确")
 
-    _print_section(f"JudgeAgent latency ({len(_QUESTIONS)} questions)", [
-        ("P50 ms", f"{statistics.median(latencies):.0f}"),
-        ("Min ms", f"{min(latencies):.0f}"),
-        ("Max ms", f"{max(latencies):.0f}"),
-        ("Avg ms", f"{statistics.mean(latencies):.0f}"),
-    ])
+    _print_section(
+        f"JudgeAgent latency ({len(_QUESTIONS)} questions)",
+        [
+            ("P50 ms", f"{statistics.median(latencies):.0f}"),
+            ("Min ms", f"{min(latencies):.0f}"),
+            ("Max ms", f"{max(latencies):.0f}"),
+            ("Avg ms", f"{statistics.mean(latencies):.0f}"),
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
 # Test 4: Narrator streaming TTFT (real API)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_narrator_stream_ttft() -> None:
@@ -209,50 +224,67 @@ async def test_narrator_stream_ttft() -> None:
         ttfts.append(ttft_ms or total_ms)
         totals.append(total_ms)
 
-    _print_section(f"NarratorAgent stream TTFT ({len(_QUESTIONS)} messages)", [
-        ("TTFT P50 ms",  f"{statistics.median(ttfts):.0f}"),
-        ("TTFT min ms",  f"{min(ttfts):.0f}"),
-        ("Total P50 ms", f"{statistics.median(totals):.0f}"),
-        ("Total min ms", f"{min(totals):.0f}"),
-    ])
+    _print_section(
+        f"NarratorAgent stream TTFT ({len(_QUESTIONS)} messages)",
+        [
+            ("TTFT P50 ms", f"{statistics.median(ttfts):.0f}"),
+            ("TTFT min ms", f"{min(ttfts):.0f}"),
+            ("Total P50 ms", f"{statistics.median(totals):.0f}"),
+            ("Total min ms", f"{min(totals):.0f}"),
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
 # Test 5: Full orchestrator pipeline — end-to-end latency breakdown
 # ---------------------------------------------------------------------------
 
+
 def _make_script() -> Script:
     phases = [
-        Phase(id="opening", type="narration", next="investigation_1",
-              duration_seconds=120, allowed_actions={"listen"},
-              dm_script="欢迎来到雨夜迷踪"),
-        Phase(id="investigation_1", type="investigation", next="discussion",
-              duration_seconds=600, allowed_actions={"ask_dm", "search", "private_chat"},
-              available_clues=["clue_001"]),
+        Phase(id="opening", type="narration", next="investigation_1", duration_seconds=120, allowed_actions={"listen"}, dm_script="欢迎来到雨夜迷踪"),
+        Phase(
+            id="investigation_1",
+            type="investigation",
+            next="discussion",
+            duration_seconds=600,
+            allowed_actions={"ask_dm", "search", "private_chat"},
+            available_clues=["clue_001"],
+        ),
     ]
     characters = [
-        Character(id="char_su", name="苏雅", public_bio="演员",
-                  secret_bio="与死者有秘密关系", is_culprit=False),
-        Character(id="char_shen", name="沈清", public_bio="管理人",
-                  secret_bio="是死者私生女，投下安眠药", is_culprit=True),
+        Character(id="char_su", name="苏雅", public_bio="演员", secret_bio="与死者有秘密关系", is_culprit=False),
+        Character(id="char_shen", name="沈清", public_bio="管理人", secret_bio="是死者私生女，投下安眠药", is_culprit=True),
     ]
     clues = [
-        ScriptClue(id="clue_001", title="毒理报告", content="威士忌含安眠药",
-                   phase_available="investigation_1", visibility="public",
-                   unlock_keywords=["毒", "药", "威士忌"]),
+        ScriptClue(
+            id="clue_001",
+            title="毒理报告",
+            content="威士忌含安眠药",
+            phase_available="investigation_1",
+            visibility="public",
+            unlock_keywords=["毒", "药", "威士忌"],
+        ),
     ]
     npcs = [
-        NPC(id="npc_butler", name="管家老周", persona="沉稳老管家",
-            knowledge=["clue_001"], speech_style="formal_elderly"),
+        NPC(id="npc_butler", name="管家老周", persona="沉稳老管家", knowledge=["clue_001"], speech_style="formal_elderly"),
     ]
     truth = ScriptTruth(
-        culprit="char_shen", motive="私生女动机", method="投药后推倒",
-        timeline="22:00投药，22:20推倒", key_facts=_KEY_FACTS,
+        culprit="char_shen",
+        motive="私生女动机",
+        method="投药后推倒",
+        timeline="22:00投药，22:20推倒",
+        key_facts=_KEY_FACTS,
     )
     return Script(
-        id="test_latency", title="延迟测试剧本",
+        id="test_latency",
+        title="延迟测试剧本",
         metadata=ScriptMetadata(player_count=2, duration_minutes=20, difficulty="beginner"),
-        characters=characters, phases=phases, clues=clues, npcs=npcs, truth=truth,
+        characters=characters,
+        phases=phases,
+        clues=clues,
+        npcs=npcs,
+        truth=truth,
     )
 
 
@@ -295,12 +327,14 @@ async def test_orchestrator_streaming_latency() -> None:
             elif etype == "dm_stream_end":
                 t_end = (now - t0) * 1000
 
-        rows.append({
-            "question": q[:12],
-            "judge_ms": f"{t_start:.0f}" if t_start else "n/a",
-            "ttft_ms":  f"{t_first_chunk:.0f}" if t_first_chunk else "n/a",
-            "total_ms": f"{t_end:.0f}" if t_end else "n/a",
-        })
+        rows.append(
+            {
+                "question": q[:12],
+                "judge_ms": f"{t_start:.0f}" if t_start else "n/a",
+                "ttft_ms": f"{t_first_chunk:.0f}" if t_first_chunk else "n/a",
+                "total_ms": f"{t_end:.0f}" if t_end else "n/a",
+            }
+        )
 
     print("\n")
     print("=" * 65)
@@ -323,6 +357,7 @@ async def test_orchestrator_streaming_latency() -> None:
 # Test 6: Judge system prompt size analysis
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_judge_prompt_size() -> None:
     """Inspect Judge system prompt size and estimate token overhead."""
@@ -330,27 +365,29 @@ async def test_judge_prompt_size() -> None:
     prompt = judge._system_prompt
 
     # Rough token estimate: 1 token ≈ 2.5 CJK chars or 4 Latin chars
-    cjk_chars = sum(1 for c in prompt if '\u4e00' <= c <= '\u9fff')
+    cjk_chars = sum(1 for c in prompt if "\u4e00" <= c <= "\u9fff")
     latin_chars = len(prompt) - cjk_chars
     estimated_tokens = cjk_chars // 2 + latin_chars // 4
 
-    _print_section("Judge system prompt analysis", [
-        ("Total chars",       str(len(prompt))),
-        ("CJK chars",         str(cjk_chars)),
-        ("Estimated tokens",  str(estimated_tokens)),
-        ("Key facts count",   str(len(_KEY_FACTS))),
-        ("Chars per fact",    f"{cjk_chars / max(len(_KEY_FACTS), 1):.0f} avg"),
-    ])
+    _print_section(
+        "Judge system prompt analysis",
+        [
+            ("Total chars", str(len(prompt))),
+            ("CJK chars", str(cjk_chars)),
+            ("Estimated tokens", str(estimated_tokens)),
+            ("Key facts count", str(len(_KEY_FACTS))),
+            ("Chars per fact", f"{cjk_chars / max(len(_KEY_FACTS), 1):.0f} avg"),
+        ],
+    )
 
     # The prompt should be reasonable — flag if surprisingly large
-    assert len(prompt) < 3000, (
-        f"Judge system prompt is {len(prompt)} chars — consider trimming"
-    )
+    assert len(prompt) < 3000, f"Judge system prompt is {len(prompt)} chars — consider trimming"
 
 
 # ---------------------------------------------------------------------------
 # Utility: pretty-print a section table
 # ---------------------------------------------------------------------------
+
 
 def _print_section(title: str, rows: list[tuple[str, str]]) -> None:
     width = 55

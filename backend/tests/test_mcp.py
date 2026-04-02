@@ -196,6 +196,7 @@ async def test_ask_question_game_over():
         truth_progress=1.0,
         truth="真正的真相在这里",
     )
+
     # dm_turn sets session.finished = True internally; simulate it
     async def _finishing_dm_turn(s, q, **kw):
         s.finished = True
@@ -270,9 +271,7 @@ async def test_full_game_flow_mocked():
     sid = game["session_id"]
     assert "surface" in game
 
-    fake_mid = _fake_chat_response(
-        judgment="No", response="That is not correct.", truth_progress=0.3
-    )
+    fake_mid = _fake_chat_response(judgment="No", response="That is not correct.", truth_progress=0.3)
 
     async def _mid_dm(session, q, **kw):
         # simulate dm_turn appending to history (so questions_asked counts correctly)
@@ -287,9 +286,7 @@ async def test_full_game_flow_mocked():
     status = get_game_status(sid)
     assert status["questions_asked"] == 1
 
-    fake_end = _fake_chat_response(
-        judgment="Yes", response="Exactly right!", truth_progress=1.0, truth="The full truth."
-    )
+    fake_end = _fake_chat_response(judgment="Yes", response="Exactly right!", truth_progress=1.0, truth="The full truth.")
 
     async def _end(s, q, **kw):
         s.finished = True

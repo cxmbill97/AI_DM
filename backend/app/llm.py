@@ -33,9 +33,7 @@ class Usage:
 
 # When set to a list, each chat() call appends a Usage record to it.
 # None (default) = tracking disabled.
-_usage_accumulator: ContextVar[list[Usage] | None] = ContextVar(
-    "_usage_accumulator", default=None
-)
+_usage_accumulator: ContextVar[list[Usage] | None] = ContextVar("_usage_accumulator", default=None)
 
 
 def reset_usage_accumulator() -> None:
@@ -58,6 +56,7 @@ def drain_usage() -> list[Usage]:
     result = list(acc)
     acc.clear()
     return result
+
 
 # ---------------------------------------------------------------------------
 # LLM call logger — writes one JSON-lines file per day to logs/llm/
@@ -105,6 +104,7 @@ _client: AsyncOpenAI | None = None
 _llm_logger = logging.getLogger("llm")
 if not _llm_logger.handlers:
     import sys
+
     _h = logging.StreamHandler(sys.stdout)
     _h.setFormatter(logging.Formatter("%(asctime)s [LLM] %(message)s", datefmt="%H:%M:%S"))
     _llm_logger.addHandler(_h)
@@ -158,7 +158,8 @@ async def chat(system_prompt: str, messages: list[dict]) -> str:
     last_user = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
     _llm_logger.info(
         "LLM call → model=%s  prompt=%r",
-        MODEL, last_user[:120],
+        MODEL,
+        last_user[:120],
     )
 
     t0 = time.time()
@@ -173,7 +174,10 @@ async def chat(system_prompt: str, messages: list[dict]) -> str:
     tok_out = response.usage.completion_tokens if response.usage else 0
     _llm_logger.info(
         "LLM resp  ← %.0fms  in=%d out=%d  reply=%r",
-        elapsed, tok_in, tok_out, strip_think(raw)[:120],
+        elapsed,
+        tok_in,
+        tok_out,
+        strip_think(raw)[:120],
     )
 
     # Append usage to the active accumulator (if one is set)
@@ -190,9 +194,7 @@ async def chat(system_prompt: str, messages: list[dict]) -> str:
     return raw
 
 
-async def chat_stream(
-    system_prompt: str, messages: list[dict]
-) -> AsyncGenerator[str, None]:
+async def chat_stream(system_prompt: str, messages: list[dict]) -> AsyncGenerator[str, None]:
     """Stream tokens from the LLM, filtering out <think>…</think> blocks.
 
     Yields string chunks as they arrive from the API.  Callers should

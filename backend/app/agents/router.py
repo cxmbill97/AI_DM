@@ -49,9 +49,7 @@ class Classification:
 _RE_VOTE = re.compile(r"^/vote\b|^我投|投票给", re.IGNORECASE)
 
 # Accusation: confident culprit statement (not a question)
-_RE_ACCUSE = re.compile(
-    r"凶手是|我认为.*是凶手|我判断.*是凶手|一定是.*杀|肯定是.*杀|就是.*干的"
-)
+_RE_ACCUSE = re.compile(r"凶手是|我认为.*是凶手|我判断.*是凶手|一定是.*杀|肯定是.*杀|就是.*干的")
 
 # Interrogative question markers (Chinese + English)
 _RE_QUESTION = re.compile(
@@ -110,7 +108,10 @@ class RouterAgent:
         def _classify_and_log(intent: str, rule: str) -> Classification:
             logger.debug(
                 "[ROUTER] classify: phase=%s intent=%s rule=%s message=%r",
-                current_phase, intent, rule, text[:80],
+                current_phase,
+                intent,
+                rule,
+                text[:80],
             )
             return Classification(intent=intent, raw_message=message, matched_rule=rule)
 

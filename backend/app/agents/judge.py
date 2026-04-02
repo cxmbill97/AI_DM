@@ -29,8 +29,8 @@ _JUDGMENT_SCHEMA = """{"result":"是|不是|无关|部分正确","confidence":0.
 
 
 class Judgment(TypedDict):
-    result: str             # "是" | "不是" | "无关" | "部分正确"
-    confidence: float       # 0.0–1.0
+    result: str  # "是" | "不是" | "无关" | "部分正确"
+    confidence: float  # 0.0–1.0
     relevant_fact_ids: list[str]  # e.g. ["fact_0", "fact_3"]
 
 
@@ -67,9 +67,7 @@ class JudgeAgent:
     def __init__(self, key_facts: list[str]) -> None:
         self._key_facts = key_facts
         # Pre-build the facts block and fact_id → content map for logging
-        self._fact_lines = "\n".join(
-            f"[fact_{i}] {fact}" for i, fact in enumerate(key_facts)
-        )
+        self._fact_lines = "\n".join(f"[fact_{i}] {fact}" for i, fact in enumerate(key_facts))
         self._system_prompt = self._build_system_prompt()
 
     # ------------------------------------------------------------------
@@ -122,9 +120,7 @@ class JudgeAgent:
         content_parts = []
         if player_visible_facts:
             visible_block = "\n".join(f"- {f}" for f in player_visible_facts)
-            content_parts.append(
-                f"【玩家已知信息（供参考）】\n{visible_block}"
-            )
+            content_parts.append(f"【玩家已知信息（供参考）】\n{visible_block}")
         content_parts.append(f"【玩家陈述/问题】\n{message}")
         return [{"role": "user", "content": "\n\n".join(content_parts)}]
 

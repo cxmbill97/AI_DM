@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 PRICING: dict[str, dict[str, float]] = {
     "minimax": {
-        "input": 0.20,   # USD per 1 M input tokens
+        "input": 0.20,  # USD per 1 M input tokens
         "output": 1.15,  # USD per 1 M output tokens
     }
 }
@@ -26,8 +26,8 @@ PRICING: dict[str, dict[str, float]] = {
 class TraceStep(BaseModel):
     """One agent invocation within the multi-agent pipeline."""
 
-    agent: str           # "router" | "judge" | "narrator" | "safety" | "npc"
-    input_summary: str   # sanitised — no secret content
+    agent: str  # "router" | "judge" | "narrator" | "safety" | "npc"
+    input_summary: str  # sanitised — no secret content
     output_summary: str
     latency_ms: float
     tokens_in: int = 0
@@ -100,7 +100,7 @@ class Puzzle(BaseModel):
 
 class StartRequest(BaseModel):
     puzzle_id: str | None = None  # None → random puzzle
-    language: str = "zh"          # "zh" | "en"
+    language: str = "zh"  # "zh" | "en"
 
 
 class StartResponse(BaseModel):
@@ -252,8 +252,8 @@ class Character(BaseModel):
 
     id: str
     name: str
-    public_bio: str   # shown to all players in the lobby
-    secret_bio: str   # shown only to the assigned player (VisibilityRegistry)
+    public_bio: str  # shown to all players in the lobby
+    secret_bio: str  # shown only to the assigned player (VisibilityRegistry)
     is_culprit: bool = False
 
 
@@ -268,8 +268,8 @@ class Phase(BaseModel):
     """
 
     id: str
-    type: str          # "narration" | "reading" | "investigation" | "discussion" | "voting" | "reveal"
-    next: str | None   # id of the next phase, or None if this is the last
+    type: str  # "narration" | "reading" | "investigation" | "discussion" | "voting" | "reveal"
+    next: str | None  # id of the next phase, or None if this is the last
     duration_seconds: int | None = None
     allowed_actions: set[str] = set()
     dm_script: str | None = None
@@ -287,8 +287,8 @@ class ScriptClue(BaseModel):
     id: str
     title: str
     content: str
-    phase_available: str          # phase id when this clue becomes discoverable
-    visibility: str = "public"    # "public" | "private"
+    phase_available: str  # phase id when this clue becomes discoverable
+    visibility: str = "public"  # "public" | "private"
     unlock_keywords: list[str] = []
 
 
@@ -302,9 +302,9 @@ class NPC(BaseModel):
 
     id: str
     name: str
-    persona: str         # description of personality and role
+    persona: str  # description of personality and role
     knowledge: list[str]  # clue ids this NPC knows about
-    speech_style: str    # e.g. "formal_elderly", "curt_official"
+    speech_style: str  # e.g. "formal_elderly", "curt_official"
 
 
 class ScriptTruth(BaseModel):
@@ -314,7 +314,7 @@ class ScriptTruth(BaseModel):
     Judge Agent receives decomposed key_facts, not this object.
     """
 
-    culprit: str    # character id of the killer
+    culprit: str  # character id of the killer
     motive: str
     method: str
     timeline: str
@@ -324,7 +324,7 @@ class ScriptTruth(BaseModel):
 class ScriptMetadata(BaseModel):
     player_count: int
     duration_minutes: int
-    difficulty: str    # "beginner" | "intermediate" | "advanced"
+    difficulty: str  # "beginner" | "intermediate" | "advanced"
     age_rating: str = "12+"
 
 

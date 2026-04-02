@@ -16,12 +16,12 @@ from enum import StrEnum
 
 
 class VoteStatus(StrEnum):
-    OPEN = "open"          # still collecting votes
-    DECIDED = "decided"    # one winner found, no tie
-    TIE = "tie"            # tie — runoff needed
-    RUNOFF = "runoff"      # runoff vote in progress
+    OPEN = "open"  # still collecting votes
+    DECIDED = "decided"  # one winner found, no tie
+    TIE = "tie"  # tie — runoff needed
+    RUNOFF = "runoff"  # runoff vote in progress
     RUNOFF_TIE = "runoff_tie"  # runoff still tied → random/DM decides
-    CLOSED = "closed"      # final result recorded
+    CLOSED = "closed"  # final result recorded
 
 
 class VoteError(Exception):
@@ -33,8 +33,8 @@ class VoteResult:
     """Immutable result returned after all votes are in."""
 
     status: VoteStatus
-    winner: str | None       # character_id of the winner, or None if unresolved tie
-    tally: dict[str, int]    # character_id → vote count (only tied candidates in runoff)
+    winner: str | None  # character_id of the winner, or None if unresolved tie
+    tally: dict[str, int]  # character_id → vote count (only tied candidates in runoff)
     is_correct: bool = False  # set by caller after comparing with truth.culprit
 
 
@@ -89,10 +89,7 @@ class VotingModule:
             if player_id in self._runoff_votes:
                 raise VoteError(f"Player {player_id!r} has already voted in the runoff")
             if target_character_id not in self._runoff_candidates:
-                raise VoteError(
-                    f"Invalid runoff candidate: {target_character_id!r}. "
-                    f"Choose from: {sorted(self._runoff_candidates)}"
-                )
+                raise VoteError(f"Invalid runoff candidate: {target_character_id!r}. Choose from: {sorted(self._runoff_candidates)}")
             self._runoff_votes[player_id] = target_character_id
 
     def all_voted(self) -> bool:

@@ -76,18 +76,11 @@ class VisibilityRegistry:
         player_slot = session.player_slot_map.get(player_id, "")
 
         # Public unlocked clues
-        public_clues = [
-            {"id": c.id, "title": c.title, "content": c.content}
-            for c in puzzle.clues
-            if c.id in session.unlocked_clue_ids
-        ]
+        public_clues = [{"id": c.id, "title": c.title, "content": c.content} for c in puzzle.clues if c.id in session.unlocked_clue_ids]
 
         # Private clues for this player's slot only
         private_frags: list[PrivateClue] = puzzle.private_clues.get(player_slot, [])
-        private_clues = [
-            {"id": pc.id, "title": pc.title, "content": pc.content}
-            for pc in private_frags
-        ]
+        private_clues = [{"id": pc.id, "title": pc.title, "content": pc.content} for pc in private_frags]
 
         return VisibleContext(
             player_id=player_id,
@@ -102,11 +95,7 @@ class VisibilityRegistry:
         session = self._session
         puzzle = session.puzzle
 
-        unlocked = [
-            {"id": c.id, "title": c.title, "content": c.content}
-            for c in puzzle.clues
-            if c.id in session.unlocked_clue_ids
-        ]
+        unlocked = [{"id": c.id, "title": c.title, "content": c.content} for c in puzzle.clues if c.id in session.unlocked_clue_ids]
         locked_ids = [c.id for c in puzzle.clues if c.id not in session.unlocked_clue_ids]
 
         return DMContext(

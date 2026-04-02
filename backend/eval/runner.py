@@ -55,16 +55,16 @@ def _cost_usd(tokens_in: int, tokens_out: int, provider: str) -> float:
 @dataclass
 class EvalResult:
     scenario_id: str
-    puzzle_id: str         # source_id (script or puzzle)
+    puzzle_id: str  # source_id (script or puzzle)
     category: str
     is_adversarial: bool
     question: str
     expected_judgment: str
-    actual_judgment: str | None    # None if an exception occurred
-    is_correct: bool | None        # None on error
-    leaked: bool                   # Proxy: True if adversarial prompt confused the judge
-                                   # (judge returned non-Irrelevant for a redteam question)
-    response_text: str             # serialised judgment dict as string
+    actual_judgment: str | None  # None if an exception occurred
+    is_correct: bool | None  # None on error
+    leaked: bool  # Proxy: True if adversarial prompt confused the judge
+    # (judge returned non-Irrelevant for a redteam question)
+    response_text: str  # serialised judgment dict as string
     latency_ms: float
     tokens_in: int
     tokens_out: int
@@ -131,9 +131,9 @@ async def _run_one(
         )
 
     actual = judgment["result"]
-    tokens_in  = sum(u.prompt_tokens for u in usages)
+    tokens_in = sum(u.prompt_tokens for u in usages)
     tokens_out = sum(u.completion_tokens for u in usages)
-    cost_usd   = _cost_usd(tokens_in, tokens_out, provider)
+    cost_usd = _cost_usd(tokens_in, tokens_out, provider)
 
     if scenario.is_adversarial:
         # Redteam: the judge should return Irrelevant for every adversarial prompt.
@@ -196,9 +196,7 @@ async def run_eval(
     results: list[EvalResult] = []
     sem = asyncio.Semaphore(concurrency)
 
-    async def _bounded(
-        s: EvalScenario, judge: JudgeAgent, kf: list[str]
-    ) -> EvalResult:
+    async def _bounded(s: EvalScenario, judge: JudgeAgent, kf: list[str]) -> EvalResult:
         async with sem:
             return await _run_one(s, judge, kf, provider)
 
@@ -209,23 +207,25 @@ async def run_eval(
         except (KeyError, Exception) as exc:
             logger.error("Cannot load source %r (%s): %s", source_id, source_type, exc)
             for s in group_scenarios:
-                results.append(EvalResult(
-                    scenario_id=s.id,
-                    puzzle_id=s.source_id,
-                    category=s.category,
-                    is_adversarial=s.is_adversarial,
-                    question=s.question,
-                    expected_judgment=s.expected_judgment,
-                    actual_judgment=None,
-                    is_correct=None,
-                    leaked=False,
-                    response_text="",
-                    latency_ms=0.0,
-                    tokens_in=0,
-                    tokens_out=0,
-                    cost_usd=0.0,
-                    error=f"Source load failed: {exc}",
-                ))
+                results.append(
+                    EvalResult(
+                        scenario_id=s.id,
+                        puzzle_id=s.source_id,
+                        category=s.category,
+                        is_adversarial=s.is_adversarial,
+                        question=s.question,
+                        expected_judgment=s.expected_judgment,
+                        actual_judgment=None,
+                        is_correct=None,
+                        leaked=False,
+                        response_text="",
+                        latency_ms=0.0,
+                        tokens_in=0,
+                        tokens_out=0,
+                        cost_usd=0.0,
+                        error=f"Source load failed: {exc}",
+                    )
+                )
             continue
 
         judge = JudgeAgent(key_facts=key_facts)

@@ -226,6 +226,7 @@ class TestRoomStateMachine:
 
     def test_intervention_engine_attached(self, icicle_room):
         from app.intervention import InterventionEngine
+
         assert isinstance(icicle_room.intervention, InterventionEngine)
 
     def test_tick_task_initially_none(self, icicle_room):
@@ -343,12 +344,14 @@ class TestRoomCapacityLimit:
 class TestMessageBroadcast:
     def test_dm_response_reaches_both_players(self, mock_llm):
         """Player A sends a message; both A and B receive dm_response."""
-        mock_llm.set_response({
-            "judgment": "不是",
-            "response": "这与真相无关。",
-            "truth_progress": 0.05,
-            "should_hint": False,
-        })
+        mock_llm.set_response(
+            {
+                "judgment": "不是",
+                "response": "这与真相无关。",
+                "truth_progress": 0.05,
+                "should_hint": False,
+            }
+        )
 
         with TestClient(app) as client:
             resp = client.post("/api/rooms", json={"puzzle_id": "icicle_murder"})
@@ -359,7 +362,7 @@ class TestMessageBroadcast:
 
                 with client.websocket_connect(f"/ws/{room_id}?player_name=Bob") as ws_b:
                     _drain_others_join_notice(ws_a)  # Alice: "Bob joined"
-                    _drain_join(ws_b)                # Bob: join + snapshot
+                    _drain_join(ws_b)  # Bob: join + snapshot
 
                     # Alice sends a chat message (no clue keyword)
                     ws_a.send_json({"type": "chat", "text": "死者是男性吗？"})
@@ -385,19 +388,21 @@ class TestMessageBroadcast:
                     assert dm_b["judgment"] == "不是"
 
     def test_dm_response_includes_truth_progress(self, mock_llm):
-        mock_llm.set_response({
-            "judgment": "是",
-            "response": "对！",
-            "truth_progress": 0.4,
-            "should_hint": False,
-        })
+        mock_llm.set_response(
+            {
+                "judgment": "是",
+                "response": "对！",
+                "truth_progress": 0.4,
+                "should_hint": False,
+            }
+        )
         with TestClient(app) as client:
             resp = client.post("/api/rooms", json={"puzzle_id": "icicle_murder"})
             room_id = resp.json()["room_id"]
             with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws:
                 _drain_join(ws)
                 ws.send_json({"type": "chat", "text": "凶器是固体的吗？"})
-                ws.receive_json()   # player_message
+                ws.receive_json()  # player_message
                 dm = _next_non_typing(ws)
                 assert dm["type"] == "dm_response"
                 assert dm["truth_progress"] == pytest.approx(0.4)
@@ -411,12 +416,14 @@ class TestMessageBroadcast:
 class TestSharedClueState:
     def test_clue_unlock_appears_in_session_and_dm_response(self, mock_llm):
         """Player A asks about 仓库 → clue_building unlocked, visible in session + dm_response."""
-        mock_llm.set_response({
-            "judgment": "是",
-            "response": "正确！",
-            "truth_progress": 0.2,
-            "should_hint": False,
-        })
+        mock_llm.set_response(
+            {
+                "judgment": "是",
+                "response": "正确！",
+                "truth_progress": 0.2,
+                "should_hint": False,
+            }
+        )
         with TestClient(app) as client:
             resp = client.post("/api/rooms", json={"puzzle_id": "icicle_murder"})
             room_id = resp.json()["room_id"]
@@ -426,7 +433,7 @@ class TestSharedClueState:
                 _drain_join(ws)
                 # "仓库" is in clue_building.unlock_keywords
                 ws.send_json({"type": "chat", "text": "案发地点旁边有仓库吗？"})
-                ws.receive_json()   # player_message
+                ws.receive_json()  # player_message
                 dm = _next_non_typing(ws)
                 assert dm["type"] == "dm_response"
                 assert dm["clue_unlocked"] is not None
@@ -437,12 +444,14 @@ class TestSharedClueState:
 
     def test_unlocked_clue_appears_in_subsequent_dm_prompt(self, mock_llm):
         """After A unlocks a clue, B's DM call has the clue in its system prompt."""
-        mock_llm.set_response({
-            "judgment": "无关",
-            "response": "这与谜题无关。",
-            "truth_progress": 0.0,
-            "should_hint": False,
-        })
+        mock_llm.set_response(
+            {
+                "judgment": "无关",
+                "response": "这与谜题无关。",
+                "truth_progress": 0.0,
+                "should_hint": False,
+            }
+        )
         with TestClient(app) as client:
             resp = client.post("/api/rooms", json={"puzzle_id": "icicle_murder"})
             room_id = resp.json()["room_id"]
@@ -456,29 +465,33 @@ class TestSharedClueState:
 
                     # Alice unlocks clue_building with keyword "仓库"
                     ws_a.send_json({"type": "chat", "text": "旁边有仓库吗？"})
-                    ws_a.receive_json()          # player_message
-                    _next_non_typing(ws_a)       # dm_response (clue unlocked)
-                    ws_b.receive_json()          # player_message (broadcast)
-                    _next_non_typing(ws_b)       # dm_response (broadcast)
+                    ws_a.receive_json()  # player_message
+                    _next_non_typing(ws_a)  # dm_response (clue unlocked)
+                    ws_b.receive_json()  # player_message (broadcast)
+                    _next_non_typing(ws_b)  # dm_response (broadcast)
 
                     # Bob sends a follow-up question
                     ws_b.send_json({"type": "chat", "text": "凶手站在仓库里吗？"})
-                    ws_b.receive_json()          # player_message
-                    _next_non_typing(ws_b)       # dm_response
+                    ws_b.receive_json()  # player_message
+                    _next_non_typing(ws_b)  # dm_response
 
                     # The LLM should have been called with the unlocked clue in its prompt
-                    assert "clue_building" in mock_llm.last_system_prompt or \
-                           "现场周边勘察" in mock_llm.last_system_prompt or \
-                           "冰柱" in mock_llm.last_system_prompt
+                    assert (
+                        "clue_building" in mock_llm.last_system_prompt
+                        or "现场周边勘察" in mock_llm.last_system_prompt
+                        or "冰柱" in mock_llm.last_system_prompt
+                    )
 
     def test_clue_not_unlocked_twice(self, mock_llm):
         """Asking about the same keyword twice does not produce a second unlock."""
-        mock_llm.set_response({
-            "judgment": "是",
-            "response": "正确！",
-            "truth_progress": 0.2,
-            "should_hint": False,
-        })
+        mock_llm.set_response(
+            {
+                "judgment": "是",
+                "response": "正确！",
+                "truth_progress": 0.2,
+                "should_hint": False,
+            }
+        )
         with TestClient(app) as client:
             resp = client.post("/api/rooms", json={"puzzle_id": "icicle_murder"})
             room_id = resp.json()["room_id"]
@@ -488,20 +501,22 @@ class TestSharedClueState:
                 _drain_join(ws)
                 # First question — should unlock clue_building
                 ws.send_json({"type": "chat", "text": "现场旁边有仓库吗？"})
-                ws.receive_json()   # player_message
+                ws.receive_json()  # player_message
                 dm1 = _next_non_typing(ws)
                 assert dm1["clue_unlocked"] is not None
 
                 # Second question with same keyword — should NOT unlock again
                 ws.send_json({"type": "chat", "text": "那个废弃仓库有多大？"})
-                ws.receive_json()   # player_message
+                ws.receive_json()  # player_message
                 dm2 = _next_non_typing(ws)
                 assert dm2["clue_unlocked"] is None
 
             # Only one entry in the set
-            assert room.game_session.unlocked_clue_ids.count("clue_building") if isinstance(
-                room.game_session.unlocked_clue_ids, list
-            ) else "clue_building" in room.game_session.unlocked_clue_ids
+            assert (
+                room.game_session.unlocked_clue_ids.count("clue_building")
+                if isinstance(room.game_session.unlocked_clue_ids, list)
+                else "clue_building" in room.game_session.unlocked_clue_ids
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -542,11 +557,7 @@ class TestPlayerDisconnectReconnect:
             alice_id = room.find_player_by_name("Alice")
             assert alice_id is not None
             assert not room.players[alice_id]["connected"]
-            assert any(
-                "Alice" in m.get("text", "") and "断开" in m.get("text", "")
-                for m in room.message_history
-                if m.get("type") == "system"
-            )
+            assert any("Alice" in m.get("text", "") and "断开" in m.get("text", "") for m in room.message_history if m.get("type") == "system")
 
     def test_disconnected_slot_within_reconnect_window(self, mock_llm):
         """Freshly disconnected player is still within the 60 s reconnect window."""
@@ -613,16 +624,27 @@ class TestPlayerDisconnectReconnect:
 
             # Inject messages as if Bob sent them while Alice was away
             t = t_base + 0.1
-            room.message_history.append({
-                "type": "player_message", "player_name": "Bob",
-                "text": "凶器是什么？", "timestamp": t,
-            })
-            room.message_history.append({
-                "type": "dm_response", "player_name": "Bob",
-                "judgment": "是", "response": "对！", "truth_progress": 0.1,
-                "clue_unlocked": None, "hint": None, "truth": None,
-                "timestamp": t + 0.1,
-            })
+            room.message_history.append(
+                {
+                    "type": "player_message",
+                    "player_name": "Bob",
+                    "text": "凶器是什么？",
+                    "timestamp": t,
+                }
+            )
+            room.message_history.append(
+                {
+                    "type": "dm_response",
+                    "player_name": "Bob",
+                    "judgment": "是",
+                    "response": "对！",
+                    "truth_progress": 0.1,
+                    "clue_unlocked": None,
+                    "hint": None,
+                    "truth": None,
+                    "timestamp": t + 0.1,
+                }
+            )
 
             with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws2:
                 ws2.receive_json()  # reconnect broadcast to Alice
@@ -639,12 +661,14 @@ class TestPlayerDisconnectReconnect:
 class TestSinglePlayerStillWorks:
     def test_start_and_chat_via_rest(self, mock_llm):
         """Phase 1 REST endpoints function normally alongside Phase 2 rooms."""
-        mock_llm.set_response({
-            "judgment": "是",
-            "response": "对，这是正确的方向！",
-            "truth_progress": 0.25,
-            "should_hint": False,
-        })
+        mock_llm.set_response(
+            {
+                "judgment": "是",
+                "response": "对，这是正确的方向！",
+                "truth_progress": 0.25,
+                "should_hint": False,
+            }
+        )
         with TestClient(app) as client:
             # Start a single-player game
             start = client.post("/api/start", json={"puzzle_id": "icicle_murder"})
@@ -652,13 +676,16 @@ class TestSinglePlayerStillWorks:
             session_data = start.json()
             assert "session_id" in session_data
             assert "surface" in session_data
-            assert "truth" not in session_data   # truth never returned from /api/start
+            assert "truth" not in session_data  # truth never returned from /api/start
 
             # Send a chat message
-            chat = client.post("/api/chat", json={
-                "session_id": session_data["session_id"],
-                "message": "死者身上有明显的穿刺伤吗？",
-            })
+            chat = client.post(
+                "/api/chat",
+                json={
+                    "session_id": session_data["session_id"],
+                    "message": "死者身上有明显的穿刺伤吗？",
+                },
+            )
             assert chat.status_code == 200
             chat_data = chat.json()
             assert chat_data["judgment"] == "是"
@@ -667,12 +694,14 @@ class TestSinglePlayerStillWorks:
 
     def test_room_creation_does_not_affect_single_player_session(self, mock_llm):
         """Creating multiplayer rooms doesn't pollute the single-player session store."""
-        mock_llm.set_response({
-            "judgment": "无关",
-            "response": "与谜题无关。",
-            "truth_progress": 0.0,
-            "should_hint": False,
-        })
+        mock_llm.set_response(
+            {
+                "judgment": "无关",
+                "response": "与谜题无关。",
+                "truth_progress": 0.0,
+                "should_hint": False,
+            }
+        )
         with TestClient(app) as client:
             # Create a multiplayer room
             client.post("/api/rooms", json={"puzzle_id": "icicle_murder"})
@@ -681,10 +710,13 @@ class TestSinglePlayerStillWorks:
             start = client.post("/api/start", json={})
             session_id = start.json()["session_id"]
 
-            chat = client.post("/api/chat", json={
-                "session_id": session_id,
-                "message": "这与天气有关吗？",
-            })
+            chat = client.post(
+                "/api/chat",
+                json={
+                    "session_id": session_id,
+                    "message": "这与天气有关吗？",
+                },
+            )
             assert chat.status_code == 200
             assert chat.json()["judgment"] == "无关"
 
@@ -706,18 +738,24 @@ class TestSinglePlayerStillWorks:
 
     def test_chat_with_nonexistent_session_returns_404(self, mock_llm):
         with TestClient(app) as client:
-            resp = client.post("/api/chat", json={
-                "session_id": "does-not-exist",
-                "message": "任何问题",
-            })
+            resp = client.post(
+                "/api/chat",
+                json={
+                    "session_id": "does-not-exist",
+                    "message": "任何问题",
+                },
+            )
             assert resp.status_code == 404
 
     def test_chat_with_empty_message_returns_422(self, mock_llm):
         with TestClient(app) as client:
             start = client.post("/api/start", json={})
             session_id = start.json()["session_id"]
-            resp = client.post("/api/chat", json={
-                "session_id": session_id,
-                "message": "   ",  # whitespace only
-            })
+            resp = client.post(
+                "/api/chat",
+                json={
+                    "session_id": session_id,
+                    "message": "   ",  # whitespace only
+                },
+            )
             assert resp.status_code == 422

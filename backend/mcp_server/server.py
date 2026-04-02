@@ -57,6 +57,7 @@ _sessions: dict[str, GameSession] = {}
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _get_session(session_id: str) -> GameSession:
     session = _sessions.get(session_id)
     if session is None:
@@ -67,6 +68,7 @@ def _get_session(session_id: str) -> GameSession:
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool()
 def list_puzzles(language: str = "zh") -> list[dict[str, Any]]:
@@ -198,10 +200,7 @@ async def ask_question(session_id: str, question: str) -> dict[str, Any]:
     session = _get_session(session_id)
 
     if session.finished:
-        raise ValueError(
-            "Game is already finished. "
-            "Call get_game_status to see the result, or start_game to play again."
-        )
+        raise ValueError("Game is already finished. Call get_game_status to see the result, or start_game to play again.")
 
     question = question.strip()
     if not question:
@@ -258,9 +257,11 @@ def get_game_status(session_id: str) -> dict[str, Any]:
 # Internal helper
 # ---------------------------------------------------------------------------
 
+
 def _latest_progress(session: GameSession) -> float:
     """Extract the most recent truth_progress value from DM responses in history."""
     import re
+
     for msg in reversed(session.history):
         if msg.get("role") != "assistant":
             continue

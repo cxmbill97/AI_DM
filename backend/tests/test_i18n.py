@@ -73,9 +73,7 @@ class TestPuzzleLoading:
     def test_load_chinese_puzzles_surfaces_are_chinese(self) -> None:
         """All Chinese puzzles have surface text containing CJK characters."""
         for p in load_all_puzzles("zh"):
-            assert _has_cjk(p.surface), (
-                f"Puzzle {p.id!r} surface has no CJK characters: {p.surface[:60]!r}"
-            )
+            assert _has_cjk(p.surface), f"Puzzle {p.id!r} surface has no CJK characters: {p.surface[:60]!r}"
 
     def test_load_english_puzzles_returns_results(self) -> None:
         """load_all_puzzles('en') returns at least one puzzle."""
@@ -85,16 +83,12 @@ class TestPuzzleLoading:
     def test_load_english_puzzles_surfaces_are_english(self) -> None:
         """All English puzzles have surface text without CJK characters."""
         for p in load_all_puzzles("en"):
-            assert not _has_cjk(p.surface), (
-                f"English puzzle {p.id!r} surface contains CJK: {p.surface[:80]!r}"
-            )
+            assert not _has_cjk(p.surface), f"English puzzle {p.id!r} surface contains CJK: {p.surface[:80]!r}"
 
     def test_load_nonexistent_language_returns_empty(self) -> None:
         """load_all_puzzles('fr') returns an empty list — no French data directory."""
         puzzles = load_all_puzzles("fr")
-        assert puzzles == [], (
-            f"Expected empty list for unsupported language 'fr', got {len(puzzles)} puzzles"
-        )
+        assert puzzles == [], f"Expected empty list for unsupported language 'fr', got {len(puzzles)} puzzles"
 
     def test_zh_and_en_puzzle_ids_do_not_overlap(self) -> None:
         """Chinese and English puzzle sets are independent (no shared IDs)."""
@@ -129,9 +123,7 @@ class TestAssemblePromptLanguage:
         prompt = assemble_prompt(sample_en_puzzle, lang="en")
         assert "You are the DM" in prompt
 
-    def test_english_prompt_contains_english_judgment_values(
-        self, sample_en_puzzle: Puzzle
-    ) -> None:
+    def test_english_prompt_contains_english_judgment_values(self, sample_en_puzzle: Puzzle) -> None:
         """English prompt specifies English judgment values (Yes/No/Irrelevant)."""
         prompt = assemble_prompt(sample_en_puzzle, lang="en")
         assert "Yes" in prompt
@@ -146,9 +138,7 @@ class TestAssemblePromptLanguage:
         """
         prompt = assemble_prompt(sample_en_puzzle, lang="en")
         before_surface = prompt.split(sample_en_puzzle.surface)[0]
-        assert not _has_cjk(before_surface), (
-            f"English rules section contains CJK: {before_surface[:200]!r}"
-        )
+        assert not _has_cjk(before_surface), f"English rules section contains CJK: {before_surface[:200]!r}"
 
     def test_chinese_prompt_contains_chinese_rules(self, sample_puzzle: Puzzle) -> None:
         """assemble_prompt with lang='zh' produces a Chinese DM persona section."""
@@ -156,9 +146,7 @@ class TestAssemblePromptLanguage:
         before_surface = prompt.split(sample_puzzle.surface)[0]
         assert _has_cjk(before_surface), "Chinese rules section should contain CJK characters"
 
-    def test_chinese_prompt_contains_chinese_judgment_values(
-        self, sample_puzzle: Puzzle
-    ) -> None:
+    def test_chinese_prompt_contains_chinese_judgment_values(self, sample_puzzle: Puzzle) -> None:
         """Chinese prompt specifies Chinese judgment values (是/不是/无关/部分正确)."""
         prompt = assemble_prompt(sample_puzzle, lang="zh")
         assert "是" in prompt
@@ -183,97 +171,87 @@ class TestAssemblePromptLanguage:
 
 
 class TestDmTurnLanguage:
-    async def test_english_session_sends_english_system_prompt(
-        self, mock_llm, sample_en_puzzle: Puzzle
-    ) -> None:
+    async def test_english_session_sends_english_system_prompt(self, mock_llm, sample_en_puzzle: Puzzle) -> None:
         """dm_turn with language='en' sends an English system prompt to the LLM."""
-        mock_llm.set_response({
-            "judgment": "No",
-            "response": "That is not quite right, keep thinking.",
-            "truth_progress": 0.0,
-            "should_hint": False,
-        })
+        mock_llm.set_response(
+            {
+                "judgment": "No",
+                "response": "That is not quite right, keep thinking.",
+                "truth_progress": 0.0,
+                "should_hint": False,
+            }
+        )
         session = _fresh_session(sample_en_puzzle, language="en")
         await dm_turn(session, "Did a man die?")
 
         prompt = mock_llm.last_system_prompt
-        assert "You are the DM" in prompt, (
-            f"Expected English persona in system prompt, got: {prompt[:200]!r}"
-        )
+        assert "You are the DM" in prompt, f"Expected English persona in system prompt, got: {prompt[:200]!r}"
 
-    async def test_english_session_parses_english_judgment(
-        self, mock_llm, sample_en_puzzle: Puzzle
-    ) -> None:
+    async def test_english_session_parses_english_judgment(self, mock_llm, sample_en_puzzle: Puzzle) -> None:
         """dm_turn correctly parses English judgment values ('Yes', 'No', etc.)."""
         for judgment in ("Yes", "No", "Irrelevant", "Partially correct"):
-            mock_llm.set_response({
-                "judgment": judgment,
-                "response": "Keep thinking.",
-                "truth_progress": 0.0,
-                "should_hint": False,
-            })
+            mock_llm.set_response(
+                {
+                    "judgment": judgment,
+                    "response": "Keep thinking.",
+                    "truth_progress": 0.0,
+                    "should_hint": False,
+                }
+            )
             session = _fresh_session(sample_en_puzzle, language="en")
             result = await dm_turn(session, "Test question")
-            assert result.judgment == judgment, (
-                f"Expected judgment={judgment!r}, got {result.judgment!r}"
-            )
+            assert result.judgment == judgment, f"Expected judgment={judgment!r}, got {result.judgment!r}"
 
-    async def test_chinese_session_sends_chinese_system_prompt(
-        self, mock_llm, sample_puzzle: Puzzle
-    ) -> None:
+    async def test_chinese_session_sends_chinese_system_prompt(self, mock_llm, sample_puzzle: Puzzle) -> None:
         """dm_turn with language='zh' sends a Chinese system prompt to the LLM."""
-        mock_llm.set_response({
-            "judgment": "无关",
-            "response": "与谜题无关，请换个角度。",
-            "truth_progress": 0.0,
-            "should_hint": False,
-        })
+        mock_llm.set_response(
+            {
+                "judgment": "无关",
+                "response": "与谜题无关，请换个角度。",
+                "truth_progress": 0.0,
+                "should_hint": False,
+            }
+        )
         session = _fresh_session(sample_puzzle, language="zh")
         await dm_turn(session, "男人去了哪里？")
 
         prompt = mock_llm.last_system_prompt
         before_surface = prompt.split(sample_puzzle.surface)[0]
-        assert _has_cjk(before_surface), (
-            f"Expected CJK in Chinese system prompt rules section, got: {before_surface[:200]!r}"
-        )
+        assert _has_cjk(before_surface), f"Expected CJK in Chinese system prompt rules section, got: {before_surface[:200]!r}"
 
-    async def test_english_hint_title_is_english(
-        self, mock_llm, sample_en_puzzle: Puzzle
-    ) -> None:
+    async def test_english_hint_title_is_english(self, mock_llm, sample_en_puzzle: Puzzle) -> None:
         """Passive hint clue card in English sessions uses 'DM Hint' as title."""
-        mock_llm.set_response({
-            "judgment": "No",
-            "response": "Not quite.",
-            "truth_progress": 0.0,
-            "should_hint": True,
-        })
+        mock_llm.set_response(
+            {
+                "judgment": "No",
+                "response": "Not quite.",
+                "truth_progress": 0.0,
+                "should_hint": True,
+            }
+        )
         session = _fresh_session(sample_en_puzzle, language="en")
         session.consecutive_misses = 10  # force passive hint
         result = await dm_turn(session, "Any question")
 
         if result.clue_unlocked is not None:
-            assert result.clue_unlocked.title == "DM Hint", (
-                f"Expected 'DM Hint', got {result.clue_unlocked.title!r}"
-            )
+            assert result.clue_unlocked.title == "DM Hint", f"Expected 'DM Hint', got {result.clue_unlocked.title!r}"
 
-    async def test_chinese_hint_title_is_chinese(
-        self, mock_llm, sample_puzzle: Puzzle
-    ) -> None:
+    async def test_chinese_hint_title_is_chinese(self, mock_llm, sample_puzzle: Puzzle) -> None:
         """Passive hint clue card in Chinese sessions uses 'DM 提示' as title."""
-        mock_llm.set_response({
-            "judgment": "不是",
-            "response": "不对，换个角度想。",
-            "truth_progress": 0.0,
-            "should_hint": True,
-        })
+        mock_llm.set_response(
+            {
+                "judgment": "不是",
+                "response": "不对，换个角度想。",
+                "truth_progress": 0.0,
+                "should_hint": True,
+            }
+        )
         session = _fresh_session(sample_puzzle, language="zh")
         session.consecutive_misses = 10
         result = await dm_turn(session, "任意问题")
 
         if result.clue_unlocked is not None:
-            assert result.clue_unlocked.title == "DM 提示", (
-                f"Expected 'DM 提示', got {result.clue_unlocked.title!r}"
-            )
+            assert result.clue_unlocked.title == "DM 提示", f"Expected 'DM 提示', got {result.clue_unlocked.title!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -288,9 +266,7 @@ class TestInterventionLanguage:
         engine = InterventionEngine(room)
         for _ in range(30):
             msg = engine.random_gentle_message(lang="en")
-            assert msg in _GENTLE_MESSAGES_EN, (
-                f"Message {msg!r} not in English gentle messages list"
-            )
+            assert msg in _GENTLE_MESSAGES_EN, f"Message {msg!r} not in English gentle messages list"
 
     def test_english_gentle_message_has_no_cjk(self) -> None:
         """Every English gentle message is free of CJK characters."""
@@ -303,9 +279,7 @@ class TestInterventionLanguage:
         engine = InterventionEngine(room)
         for _ in range(30):
             msg = engine.random_gentle_message(lang="zh")
-            assert msg in _GENTLE_MESSAGES_ZH, (
-                f"Message {msg!r} not in Chinese gentle messages list"
-            )
+            assert msg in _GENTLE_MESSAGES_ZH, f"Message {msg!r} not in Chinese gentle messages list"
 
     def test_chinese_gentle_messages_all_have_cjk(self) -> None:
         """Every Chinese gentle message contains CJK characters."""
@@ -338,9 +312,7 @@ class TestInterventionLanguage:
         engine = InterventionEngine(room)
         for phrase in ("Can you give me a hint?", "Help me please", "Tell me something"):
             trigger = engine._evaluate_explicit("uid-1", phrase)
-            assert trigger is not None, (
-                f"Expected explicit trigger for English phrase {phrase!r}, got None"
-            )
+            assert trigger is not None, f"Expected explicit trigger for English phrase {phrase!r}, got None"
             assert trigger.type == "explicit"
 
     def test_chinese_explicit_keywords_still_work(self) -> None:
@@ -349,9 +321,7 @@ class TestInterventionLanguage:
         engine = InterventionEngine(room)
         for phrase in ("给我提示吧", "帮我想想", "告诉我"):
             trigger = engine._evaluate_explicit("uid-1", phrase)
-            assert trigger is not None, (
-                f"Expected explicit trigger for Chinese phrase {phrase!r}, got None"
-            )
+            assert trigger is not None, f"Expected explicit trigger for Chinese phrase {phrase!r}, got None"
             assert trigger.type == "explicit"
 
     def test_at_dm_triggers_in_both_languages(self) -> None:
@@ -366,11 +336,10 @@ class TestInterventionLanguage:
     def test_english_investigation_messages_are_english(self) -> None:
         """Investigation-phase gentle messages in English room are in English."""
         from app.intervention import _INVESTIGATION_MESSAGES_EN
+
         room = _make_room("en")
         engine = InterventionEngine(room)
         for _ in range(20):
             msg = engine.random_gentle_message(phase="investigation", lang="en")
-            assert not _has_cjk(msg), (
-                f"English investigation message contains CJK: {msg!r}"
-            )
+            assert not _has_cjk(msg), f"English investigation message contains CJK: {msg!r}"
             assert msg in _INVESTIGATION_MESSAGES_EN

@@ -118,11 +118,7 @@ class Room:
     def _active_player_count(self) -> int:
         """Count players that are connected OR within the reconnect window."""
         now = time.time()
-        return sum(
-            1
-            for p in self.players.values()
-            if p["connected"] or (now - p["last_seen"]) < RECONNECT_WINDOW_SECS
-        )
+        return sum(1 for p in self.players.values() if p["connected"] or (now - p["last_seen"]) < RECONNECT_WINDOW_SECS)
 
     def is_full(self) -> bool:
         return self._active_player_count() >= MAX_PLAYERS
@@ -209,9 +205,7 @@ class Room:
 
     async def broadcast(self, message: dict[str, Any]) -> None:
         """Send *message* as JSON to every currently-connected player."""
-        await asyncio.gather(
-            *(self._send_to_slot(slot, message) for slot in self.players.values())
-        )
+        await asyncio.gather(*(self._send_to_slot(slot, message) for slot in self.players.values()))
 
     async def send_to(self, player_id: str, message: dict[str, Any]) -> None:
         """Send *message* to a single player only."""

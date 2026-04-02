@@ -36,21 +36,21 @@ from app.voting import VoteError, VotingModule  # noqa: E402
 # ---------------------------------------------------------------------------
 
 _PHASE_DESCRIPTIONS_ZH: dict[str, str] = {
-    "opening":         "开场叙事 — 聆听案件背景介绍",
-    "reading":         "角色阅读 — 阅读你的角色剧本",
+    "opening": "开场叙事 — 聆听案件背景介绍",
+    "reading": "角色阅读 — 阅读你的角色剧本",
     "investigation_1": "调查阶段 — 搜查线索，询问NPC，向DM提问",
-    "discussion":      "讨论阶段 — 与其他玩家分享推理",
-    "voting":          "投票阶段 — 选出你认为的凶手",
-    "reveal":          "真相揭晓 — 案件真相大白",
+    "discussion": "讨论阶段 — 与其他玩家分享推理",
+    "voting": "投票阶段 — 选出你认为的凶手",
+    "reveal": "真相揭晓 — 案件真相大白",
 }
 
 _PHASE_DESCRIPTIONS_EN: dict[str, str] = {
-    "opening":         "Opening — listen to the case background",
-    "reading":         "Reading — read your character script",
+    "opening": "Opening — listen to the case background",
+    "reading": "Reading — read your character script",
     "investigation_1": "Investigation — search for clues, question NPCs, ask the DM",
-    "discussion":      "Discussion — share your deductions with other players",
-    "voting":          "Voting — choose who you believe is the culprit",
-    "reveal":          "Reveal — the truth of the case is unveiled",
+    "discussion": "Discussion — share your deductions with other players",
+    "voting": "Voting — choose who you believe is the culprit",
+    "reveal": "Reveal — the truth of the case is unveiled",
 }
 
 # Keep old name for backward compatibility
@@ -95,10 +95,7 @@ def _mm_snapshot(room: Room, player_id: str) -> dict[str, Any]:
             for pid, p in room.players.items()
         ],
         # Public character list — no secret_bio, no is_culprit
-        "characters": [
-            {"id": c.id, "name": c.name, "public_bio": c.public_bio}
-            for c in room.script.characters
-        ],
+        "characters": [{"id": c.id, "name": c.name, "public_bio": c.public_bio} for c in room.script.characters],
     }
 
 
@@ -107,9 +104,7 @@ def _mm_snapshot(room: Room, player_id: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-async def _send_mm_character_info(
-    room: Room, player_id: str, player_name: str
-) -> None:
+async def _send_mm_character_info(room: Room, player_id: str, player_name: str) -> None:
     """Broadcast public character assignment + send private secret_bio."""
     assert room.script is not None
     assert room.state_machine is not None
@@ -202,18 +197,11 @@ async def _advance_mm_phase(room: Room) -> None:
             culprit_id=room.script.truth.culprit,
         )
         _vote_lang = getattr(room, "language", "zh")
-        _vote_text = (
-            'Voting time! Select the culprit you believe is guilty.'
-            if _vote_lang == "en"
-            else '投票时间到！请选出你认为的凶手。'
-        )
+        _vote_text = "Voting time! Select the culprit you believe is guilty." if _vote_lang == "en" else "投票时间到！请选出你认为的凶手。"
         vote_prompt: dict[str, Any] = {
             "type": "vote_prompt",
             "text": _vote_text,
-            "candidates": [
-                {"id": c.id, "name": c.name, "public_bio": c.public_bio}
-                for c in room.script.characters
-            ],
+            "candidates": [{"id": c.id, "name": c.name, "public_bio": c.public_bio} for c in room.script.characters],
             "timestamp": time.time(),
         }
         room.message_history.append(vote_prompt)
@@ -253,27 +241,15 @@ async def _do_mm_reveal(room: Room) -> None:
 
     truth = room.script.truth
     lang = getattr(room, "language", "zh")
-    culprit_char = next(
-        (c for c in room.script.characters if c.id == truth.culprit), None
-    )
+    culprit_char = next((c for c in room.script.characters if c.id == truth.culprit), None)
     culprit_name = culprit_char.name if culprit_char else truth.culprit
     if lang == "en":
-        truth_text = (
-            f"Culprit: {culprit_name}\n"
-            f"Motive: {truth.motive}\n"
-            f"Method: {truth.method}\n"
-            f"Timeline: {truth.timeline}"
-        )
+        truth_text = f"Culprit: {culprit_name}\nMotive: {truth.motive}\nMethod: {truth.method}\nTimeline: {truth.timeline}"
         reveal_player_msg = "The truth is revealed"
         canned_fallback = f"The truth is out! {truth_text}"
         error_fallback = f"The culprit is {culprit_name}.\n{truth_text}"
     else:
-        truth_text = (
-            f"凶手：{culprit_name}\n"
-            f"动机：{truth.motive}\n"
-            f"手法：{truth.method}\n"
-            f"时间线：{truth.timeline}"
-        )
+        truth_text = f"凶手：{culprit_name}\n动机：{truth.motive}\n手法：{truth.method}\n时间线：{truth.timeline}"
         reveal_player_msg = "真相揭晓"
         canned_fallback = f"真相揭晓！{truth_text}"
         error_fallback = f"真相大白！凶手是{culprit_name}。\n{truth_text}"
@@ -313,9 +289,7 @@ async def _do_mm_reveal(room: Room) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _handle_mm_vote(
-    room: Room, player_id: str, player_name: str, data: dict[str, Any]
-) -> None:
+async def _handle_mm_vote(room: Room, player_id: str, player_name: str, data: dict[str, Any]) -> None:
     """Process a {type:"vote", target:"<char_id>"} message."""
     assert room.state_machine is not None
 
@@ -354,11 +328,7 @@ async def _handle_mm_vote(
 
     # Anonymous broadcast
     _vc_lang = getattr(room, "language", "zh")
-    _vc_text = (
-        f"Someone voted ({count}/{total} voted)"
-        if _vc_lang == "en"
-        else f"有人投票了（{count}/{total} 人已投票）"
-    )
+    _vc_text = f"Someone voted ({count}/{total} voted)" if _vc_lang == "en" else f"有人投票了（{count}/{total} 人已投票）"
     vote_cast_msg: dict[str, Any] = {
         "type": "vote_cast",
         "text": _vc_text,
@@ -393,9 +363,7 @@ async def _resolve_mm_votes(room: Room) -> None:
             result_text = f"投票结果：{winner_name} 获得最多票数！"
             result_text += " 恭喜大家，找到了真正的凶手！" if result.is_correct else " 很遗憾，这不是真正的凶手……"
     else:
-        tied_names = (", " if _vr_lang == "en" else "、").join(
-            char_name_map.get(c, c) for c in result.tally
-        )
+        tied_names = (", " if _vr_lang == "en" else "、").join(char_name_map.get(c, c) for c in result.tally)
         if _vr_lang == "en":
             result_text = f"Vote result: {tied_names} are tied! The truth will be revealed directly."
         else:
@@ -422,16 +390,15 @@ async def _resolve_mm_votes(room: Room) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _handle_mm_chat(
-    room: Room, player_id: str, player_name: str, text: str
-) -> None:
+async def _handle_mm_chat(room: Room, player_id: str, player_name: str, text: str) -> None:
     """Route a chat message through the orchestrator streaming pipeline."""
     assert room.orchestrator is not None
 
     ts = time.time()
     logger.info(
         "[MM-CHAT] room=%s player=%s phase=%s text=%r",
-        room.room_id, player_name,
+        room.room_id,
+        player_name,
         room.state_machine.current_phase if room.state_machine else "?",
         text[:80],
     )
@@ -470,7 +437,8 @@ async def _handle_mm_chat(
                     dm_started = True
                     logger.info(
                         "[MM-CHAT] dm_stream_start → judgment=%s confidence=%.0f%%",
-                        event.get("judgment"), (event.get("confidence", 0) * 100),
+                        event.get("judgment"),
+                        (event.get("confidence", 0) * 100),
                     )
 
                 elif event_type == "dm_stream_chunk":
@@ -490,7 +458,8 @@ async def _handle_mm_chat(
                     replaced = "replace" in event
                     logger.info(
                         "[MM-CHAT] dm_stream_end clue=%s replaced=%s",
-                        event.get("clue") is not None, replaced,
+                        event.get("clue") is not None,
+                        replaced,
                     )
 
                 elif event_type in ("phase_blocked", "error"):
@@ -737,10 +706,7 @@ async def websocket_endpoint(
             if pid != player_id:
                 await room.send_to(pid, players_update)
     else:
-        players_list = [
-            {"id": pid, "name": p["name"], "connected": p["connected"]}
-            for pid, p in room.players.items()
-        ]
+        players_list = [{"id": pid, "name": p["name"], "connected": p["connected"]} for pid, p in room.players.items()]
         snapshot = {
             "type": "room_snapshot",
             "game_type": "turtle_soup",
@@ -779,10 +745,7 @@ async def websocket_endpoint(
                     {
                         "type": "private_clue",
                         "slot": player_slot,
-                        "clues": [
-                            {"id": pc.id, "title": pc.title, "content": pc.content}
-                            for pc in private_frags
-                        ],
+                        "clues": [{"id": pc.id, "title": pc.title, "content": pc.content} for pc in private_frags],
                     },
                 )
 
@@ -849,9 +812,7 @@ async def websocket_endpoint(
                         # Can't skip the final phase
                         continue
                     room._skip_votes.add(player_id)
-                    connected_ids = [
-                        pid for pid, p in room.players.items() if p["connected"]
-                    ]
+                    connected_ids = [pid for pid, p in room.players.items() if p["connected"]]
                     needed = len(connected_ids)  # all players must agree to skip
                     voted = len(room._skip_votes & set(connected_ids))
                     if voted >= needed:
@@ -860,13 +821,15 @@ async def websocket_endpoint(
                         await _advance_mm_phase(room)
                     else:
                         # Broadcast vote progress so all players see it
-                        await room.broadcast({
-                            "type": "skip_vote_update",
-                            "phase": current,
-                            "voted": voted,
-                            "needed": needed,
-                            "timestamp": time.time(),
-                        })
+                        await room.broadcast(
+                            {
+                                "type": "skip_vote_update",
+                                "phase": current,
+                                "voted": voted,
+                                "needed": needed,
+                                "timestamp": time.time(),
+                            }
+                        )
                     continue
 
                 # Chat / question / search → orchestrator
@@ -904,9 +867,7 @@ async def websocket_endpoint(
                     continue
                 try:
                     async with room._lock:
-                        private_response = await dm_turn_private(
-                            room.game_session, player_id, text
-                        )
+                        private_response = await dm_turn_private(room.game_session, player_id, text)
                 except Exception as exc:
                     logger.exception("dm_turn_private failed for %s: %s", player_name, exc)
                     await room.send_to(
@@ -935,16 +896,13 @@ async def websocket_endpoint(
             assert room.puzzle is not None
 
             if room.game_session.finished:
-                await room.send_to(
-                    player_id, {"type": "system", "text": "游戏已结束，无法继续提问"}
-                )
+                await room.send_to(player_id, {"type": "system", "text": "游戏已结束，无法继续提问"})
                 continue
 
             # Anti-leak check
             if room.puzzle.private_clues:
                 registry = VisibilityRegistry(room.game_session)
-                if registry.is_own_clue_verbatim(text, player_id) or \
-                        registry.is_private_content_leaked(text, player_id):
+                if registry.is_own_clue_verbatim(text, player_id) or registry.is_private_content_leaked(text, player_id):
                     await room.send_to(
                         player_id,
                         {
@@ -987,8 +945,7 @@ async def websocket_endpoint(
                 "judgment": result.judgment,
                 "response": result.response,
                 "truth_progress": result.truth_progress,
-                "clue_unlocked": result.clue_unlocked.model_dump()
-                    if result.clue_unlocked else None,
+                "clue_unlocked": result.clue_unlocked.model_dump() if result.clue_unlocked else None,
                 "hint": result.hint,
                 "truth": result.truth,
                 "timestamp": time.time(),
@@ -1013,10 +970,7 @@ async def websocket_endpoint(
         # Broadcast updated player list so other players' banners update
         players_update = {
             "type": "players_update",
-            "players": [
-                {"id": pid, "name": p["name"], "connected": p["connected"]}
-                for pid, p in room.players.items()
-            ],
+            "players": [{"id": pid, "name": p["name"], "connected": p["connected"]} for pid, p in room.players.items()],
         }
         await room.broadcast(players_update)
         _maybe_cancel_tick(room)

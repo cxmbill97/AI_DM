@@ -179,7 +179,7 @@ class InterventionEngine:
     def silence_threshold(self) -> float:
         """Exponential backoff: 45 s → 90 s → 180 s → 240 s cap."""
         base = 45.0
-        return min(base * (2 ** self.silence_nudge_count), 240.0)
+        return min(base * (2**self.silence_nudge_count), 240.0)
 
     def silence_level(self, elapsed: float) -> str:
         if elapsed < 90:
@@ -200,9 +200,7 @@ class InterventionEngine:
             canned_text=canned,
         )
 
-    def _evaluate_explicit(
-        self, player_id: str, text: str
-    ) -> InterventionTrigger | None:
+    def _evaluate_explicit(self, player_id: str, text: str) -> InterventionTrigger | None:
         """Tier-1 fast rules — no LLM call."""
         lang = getattr(self.room, "language", "zh")
         keywords = _EXPLICIT_KEYWORDS_EN if lang == "en" else _EXPLICIT_KEYWORDS_ZH
