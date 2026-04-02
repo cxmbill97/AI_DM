@@ -104,7 +104,7 @@ class InterventionEngine:
     Every player chat message calls on_player_message().
     """
 
-    def __init__(self, room: "Room") -> None:
+    def __init__(self, room: Room) -> None:
         self.room = room
         self.last_dm_time: float = 0.0
         self.silence_start: float = time.time()

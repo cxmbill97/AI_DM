@@ -17,7 +17,6 @@ the truth — because it genuinely does not have it.
 from __future__ import annotations
 
 import logging
-
 from collections.abc import AsyncGenerator
 
 from app.agents.judge import Judgment

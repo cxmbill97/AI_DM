@@ -45,7 +45,6 @@ from app.main import app
 from app.puzzle_loader import load_puzzle
 from app.room import room_manager
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

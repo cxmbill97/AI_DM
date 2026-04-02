@@ -18,7 +18,6 @@ import pytest
 from app.models import Phase
 from app.state_machine import GameStateMachine
 
-
 # ---------------------------------------------------------------------------
 # Helpers / Fixtures
 # ---------------------------------------------------------------------------

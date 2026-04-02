@@ -13,10 +13,9 @@ players must NOT see.  This module enforces that boundary:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from app.models import GameSession, PrivateClue
-
 
 # ---------------------------------------------------------------------------
 # Data-transfer objects

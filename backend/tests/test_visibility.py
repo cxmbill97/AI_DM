@@ -11,10 +11,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.models import GameSession, PrivateClue, Puzzle
+from app.models import GameSession, Puzzle
 from app.puzzle_loader import load_puzzle
 from app.visibility import VisibilityRegistry
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -128,7 +127,6 @@ class TestPublicContextHasNoOtherPrivateInfo:
         reg = VisibilityRegistry(two_player_session)
 
         # Build a set of all clue ids that do NOT belong to player_1
-        player_1_ids = {pc.id for pc in puzzle.private_clues.get("player_1", [])}
         non_player_1_ids = {
             pc.id
             for slot, pcs in puzzle.private_clues.items()

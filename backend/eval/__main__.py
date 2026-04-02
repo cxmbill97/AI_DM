@@ -26,9 +26,9 @@ _BACKEND = Path(__file__).parent.parent
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
-from eval.report import generate_report
-from eval.runner import run_eval
-from eval.scenarios import load_all_scenarios
+from eval.report import generate_report  # noqa: E402
+from eval.runner import run_eval  # noqa: E402
+from eval.scenarios import load_all_scenarios  # noqa: E402
 
 REPORTS_DIR = Path(__file__).parent / "reports"
 

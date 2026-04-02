@@ -77,7 +77,7 @@ class SafetyAgent:
         self,
         text: str,
         audience_player_id: str,  # noqa: ARG002 — reserved for future per-player secrets
-        visibility: "VisibilityRegistryLike | None" = None,  # noqa: F821
+        visibility: VisibilityRegistryLike | None = None,  # noqa: F821
         viewer_char_id: str | None = None,
     ) -> SafetyResult:
         """Check *text* for secret information leakage.

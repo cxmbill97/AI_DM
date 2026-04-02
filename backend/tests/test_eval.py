@@ -10,15 +10,11 @@ Slow tests are gated behind @pytest.mark.slow and require MINIMAX_API_KEY.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from unittest.mock import AsyncMock, patch
-
 import pytest
 
 from eval.report import generate_report
 from eval.runner import EvalResult, run_eval
-from eval.scenarios import DATA_DIR, EvalScenario, load_all_scenarios, load_scenarios
+from eval.scenarios import DATA_DIR, load_all_scenarios, load_scenarios
 
 # ---------------------------------------------------------------------------
 # test_load_scenarios
@@ -43,7 +39,7 @@ class TestLoadScenarios:
     def test_all_scenarios_have_required_fields(self) -> None:
         scenarios = load_all_scenarios("all")
         for s in scenarios:
-            assert s.id, f"Scenario missing id"
+            assert s.id, "Scenario missing id"
             assert s.source_id, f"Scenario {s.id} missing source_id"
             assert s.question, f"Scenario {s.id} has empty question"
             assert s.expected_judgment, f"Scenario {s.id} missing expected_judgment"

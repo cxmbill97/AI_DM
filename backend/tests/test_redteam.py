@@ -381,13 +381,13 @@ class TestPhase3RedTeamRealLLM:
 # Phase 4 adversarial tests — murder mystery orchestrator
 # ---------------------------------------------------------------------------
 
-from app.agents.orchestrator import (
+from app.agents.orchestrator import (  # noqa: E402
     RESP_PHASE_BLOCKED,
     AgentOrchestrator,
 )
-from app.models import NPC, Character, Phase, Script, ScriptClue, ScriptMetadata, ScriptTruth
-from app.puzzle_loader import load_all_puzzles
-from app.state_machine import GameStateMachine
+from app.models import NPC, Character, Phase, Script, ScriptClue, ScriptMetadata, ScriptTruth  # noqa: E402
+from app.puzzle_loader import load_all_puzzles  # noqa: E402
+from app.state_machine import GameStateMachine  # noqa: E402
 
 
 def _make_mm_script() -> Script:
@@ -437,7 +437,7 @@ def _make_mm_script() -> Script:
     )
 
 
-def _make_mm_orchestrator_at(phase: str) -> "AgentOrchestrator":
+def _make_mm_orchestrator_at(phase: str) -> AgentOrchestrator:
     script = _make_mm_script()
     sm = GameStateMachine(script.phases)
     sm.current_phase = phase

@@ -11,7 +11,6 @@ import app.llm as llm_module
 from app.models import GameSession, Puzzle
 from app.puzzle_loader import load_puzzle
 
-
 # ---------------------------------------------------------------------------
 # --slow flag: gates real-LLM integration tests
 # ---------------------------------------------------------------------------
@@ -149,6 +148,7 @@ def real_llm() -> None:
     """
     import os
     from pathlib import Path
+
     from dotenv import load_dotenv
 
     # Load .env so the key is available even when not exported to the shell

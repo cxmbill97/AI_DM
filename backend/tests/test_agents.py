@@ -17,23 +17,20 @@ from typing import Any
 
 import pytest
 
-from app.agents.judge import JudgeAgent, _FALLBACK_JUDGMENT
-from app.agents.narrator import NarratorAgent, _FALLBACK_RESPONSE, _REGENERATION_FALLBACK
+from app.agents.judge import _FALLBACK_JUDGMENT, JudgeAgent
+from app.agents.narrator import _FALLBACK_RESPONSE, _REGENERATION_FALLBACK, NarratorAgent
 from app.agents.orchestrator import (
     RESP_CLUE_FOUND,
     RESP_DM,
     RESP_META,
-    RESP_NO_RESPONSE,
     RESP_PHASE_BLOCKED,
     AgentOrchestrator,
 )
 from app.agents.router import RouterAgent
 from app.agents.safety import SafetyAgent
-from app.models import NPC, Phase, Script, ScriptClue, ScriptMetadata, ScriptTruth
-from app.models import Character
+from app.models import NPC, Character, Phase, Script, ScriptClue, ScriptMetadata, ScriptTruth
 from app.state_machine import GameStateMachine
 from app.visibility import VisibleContext
-
 
 # ---------------------------------------------------------------------------
 # Shared test data
@@ -326,7 +323,7 @@ class TestNarratorAgent:
 
     async def test_narrator_without_truth(self) -> None:
         judgment = {"result": "无关", "confidence": 0.3, "relevant_fact_ids": []}
-        text = await self.narrator.narrate(
+        await self.narrator.narrate(
             judgment=judgment,
             player_message="随便问问",
             visible_context=_make_visible(),

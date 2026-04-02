@@ -62,7 +62,7 @@ interface ChatPanelProps {
   onFinish: (truth: string) => void;
   onQuestionAsked: () => void;
   onClueUnlocked?: (clue: Clue) => void;
-  cluePanelRef?: React.RefObject<HTMLDivElement>;
+  cluePanelRef?: React.RefObject<HTMLDivElement | null>;
   showTraces?: boolean;
 }
 

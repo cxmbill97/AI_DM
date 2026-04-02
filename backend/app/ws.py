@@ -26,10 +26,10 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
-from app.dm import dm_proactive_message, dm_turn, dm_turn_private
-from app.room import RECONNECT_WINDOW_SECS, Room, room_manager
-from app.visibility import VisibilityRegistry
-from app.voting import VoteError, VotingModule
+from app.dm import dm_proactive_message, dm_turn, dm_turn_private  # noqa: E402
+from app.room import RECONNECT_WINDOW_SECS, Room, room_manager  # noqa: E402
+from app.visibility import VisibilityRegistry  # noqa: E402
+from app.voting import VoteError, VotingModule  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Phase display helpers
@@ -283,7 +283,6 @@ async def _do_mm_reveal(room: Room) -> None:
     player_id = next(iter(room.players), None)
     try:
         if player_id:
-            from app.visibility import VisibleContext
             visible = room.orchestrator._build_visible_context(player_id)
             text = await room.orchestrator.narrator.narrate(
                 judgment=reveal_judgment,

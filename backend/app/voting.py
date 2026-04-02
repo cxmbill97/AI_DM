@@ -11,13 +11,11 @@ Design (from CLAUDE.md):
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import TypedDict
+from dataclasses import dataclass
+from enum import StrEnum
 
 
-class VoteStatus(str, Enum):
+class VoteStatus(StrEnum):
     OPEN = "open"          # still collecting votes
     DECIDED = "decided"    # one winner found, no tie
     TIE = "tie"            # tie — runoff needed

@@ -187,7 +187,7 @@ function DmBubble({ msg, showTraces }: { msg: DmResponseMsg; showTraces: boolean
     <div className="room-msg room-msg--dm">
       <div className="room-dm-header">
         <span className="room-dm-label">DM</span>
-        <span className="room-dm-asker">{t('dm.reply_to', { name: msg.player_name })}</span>
+        <span className="room-dm-asker">{t('dm.reply_to', { name: msg.player_name ?? '' })}</span>
         <span className="room-dm-judgment">{JUDGMENT_KEY[msg.judgment ?? ''] ? t(JUDGMENT_KEY[msg.judgment ?? '']) : (msg.judgment ?? '')}</span>
         <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
       </div>

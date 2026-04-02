@@ -21,7 +21,13 @@ from app.models import (
     StartRequest,
     StartResponse,
 )
-from app.puzzle_loader import load_all_puzzles, load_puzzle, load_script, load_scripts, random_puzzle
+from app.puzzle_loader import (
+    load_all_puzzles,
+    load_puzzle,
+    load_script,
+    load_scripts,
+    random_puzzle,
+)
 from app.room import room_manager
 from app.ws import websocket_endpoint
 

@@ -13,14 +13,12 @@ Tests cover:
 
 from __future__ import annotations
 
-import asyncio
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from app.intervention import InterventionEngine, InterventionTrigger
-
+from app.intervention import InterventionEngine
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -281,7 +279,6 @@ class TestCombinedScenarios:
 
 class TestRoomIntegration:
     def test_room_has_intervention_engine(self):
-        from app.models import Puzzle
         from app.puzzle_loader import load_puzzle
         from app.room import Room
 

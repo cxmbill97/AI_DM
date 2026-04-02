@@ -30,35 +30,33 @@ Response and the WebSocket handler decides what to broadcast.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
+import re
 import time
 from collections.abc import AsyncGenerator
-import dataclasses
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-import re
-
-from app.agents.judge import JudgeAgent, Judgment, _FALLBACK_JUDGMENT
+from app.agents.judge import JudgeAgent, Judgment
 from app.agents.narrator import (
-    NarratorAgent,
     _FALLBACK_RESPONSE_ZH,
-    _FALLBACK_RESPONSE_EN,
-    _REGENERATION_FALLBACK_ZH,
     _REGENERATION_FALLBACK_EN,
+    _REGENERATION_FALLBACK_ZH,
+    NarratorAgent,
 )
 
 # Keep old names as aliases for code that imports them directly
 _FALLBACK_RESPONSE = _FALLBACK_RESPONSE_ZH
 _REGENERATION_FALLBACK = _REGENERATION_FALLBACK_ZH
-from app.agents.npc import NPCAgent
-from app.agents.router import RouterAgent
-from app.agents.safety import SafetyAgent
-from app.agents.trace import AgentTrace, TraceStep, new_trace
-from app.llm import drain_usage, reset_usage_accumulator
-from app.models import Script, ScriptClue
-from app.state_machine import GameStateMachine
-from app.visibility import VisibleContext
+from app.agents.npc import NPCAgent  # noqa: E402
+from app.agents.router import RouterAgent  # noqa: E402
+from app.agents.safety import SafetyAgent  # noqa: E402
+from app.agents.trace import AgentTrace, TraceStep, new_trace  # noqa: E402
+from app.llm import drain_usage, reset_usage_accumulator  # noqa: E402
+from app.models import Script, ScriptClue  # noqa: E402
+from app.state_machine import GameStateMachine  # noqa: E402
+from app.visibility import VisibleContext  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

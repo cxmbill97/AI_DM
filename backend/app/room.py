@@ -18,6 +18,7 @@ from app.models import GameSession, Puzzle, Script
 
 if TYPE_CHECKING:
     from fastapi import WebSocket
+
     from app.agents.orchestrator import AgentOrchestrator
     from app.state_machine import GameStateMachine
     from app.voting import VotingModule
@@ -99,8 +100,8 @@ class Room:
             )
 
         if script is not None:
-            from app.state_machine import GameStateMachine
             from app.agents.orchestrator import AgentOrchestrator
+            from app.state_machine import GameStateMachine
 
             self.state_machine = GameStateMachine(script.phases)
             self.orchestrator = AgentOrchestrator(
@@ -162,7 +163,7 @@ class Room:
                 return char.id
         return None  # all characters already assigned
 
-    def add_player(self, player_id: str, name: str, websocket: "WebSocket") -> None:
+    def add_player(self, player_id: str, name: str, websocket: WebSocket) -> None:
         self.players[player_id] = {
             "name": name,
             "websocket": websocket,
@@ -175,7 +176,7 @@ class Room:
         else:
             self._assign_character(player_id)
 
-    def reconnect_player(self, player_id: str, websocket: "WebSocket") -> None:
+    def reconnect_player(self, player_id: str, websocket: WebSocket) -> None:
         slot = self.players[player_id]
         slot["websocket"] = websocket
         slot["connected"] = True

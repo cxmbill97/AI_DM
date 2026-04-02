@@ -9,15 +9,11 @@ All tests are deterministic (mock LLM).  They verify:
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
-from app.dm import assemble_prompt_for_player, dm_turn, dm_turn_private
+from app.dm import dm_turn, dm_turn_private
 from app.models import GameSession
 from app.puzzle_loader import load_puzzle
-from app.visibility import VisibilityRegistry
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

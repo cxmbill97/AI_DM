@@ -8,7 +8,6 @@ from app.dm import check_clue_unlock_active, check_clue_unlock_passive
 from app.models import GameSession, Puzzle
 from app.puzzle_loader import load_all_puzzles, load_puzzle
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

@@ -11,12 +11,11 @@ Coverage:
 from __future__ import annotations
 
 import json
-from typing import Any
 
 import pytest
 
 from app.agents.orchestrator import AgentOrchestrator
-from app.agents.trace import PRICING_USD_PER_MTOK, AgentTrace
+from app.agents.trace import PRICING_USD_PER_MTOK
 from app.llm import Usage, _usage_accumulator
 from app.models import (
     NPC,
@@ -289,7 +288,7 @@ async def test_trace_cost_calculated(orchestrator_with_trace: AgentOrchestrator)
 
 async def test_trace_cost_zero_when_no_tokens() -> None:
     """A trace with no LLM calls (only router) should have zero cost."""
-    from app.agents.trace import new_trace, TraceStep
+    from app.agents.trace import TraceStep, new_trace
 
     trace = new_trace("p1", "rules")
     trace.steps.append(TraceStep(

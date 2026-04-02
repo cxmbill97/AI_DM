@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import statistics
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -22,12 +22,12 @@ def _cost(tokens_in: int, tokens_out: int, provider: str) -> float:
     return tokens_in / 1_000_000 * p["input"] + tokens_out / 1_000_000 * p["output"]
 
 
-def generate_report(results: list["EvalResult"], provider: str = "minimax") -> str:
+def generate_report(results: list[EvalResult], provider: str = "minimax") -> str:
     """Return a markdown report string for the given eval results."""
     if not results:
         return "# Eval Report\n\nNo results.\n"
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     lines: list[str] = []
 
     lines.append(f"# Eval Report — {provider} — {now}\n")
@@ -131,8 +131,6 @@ def generate_report(results: list["EvalResult"], provider: str = "minimax") -> s
         lines.append("## Redteam / Adversarial\n")
 
         leaked = [r for r in redteam_results if r.leaked]
-        not_leaked = [r for r in redteam_results if not r.leaked]
-
         leak_pct = len(leaked) / len(redteam_results) * 100
         lines.append(f"**Leakage rate: {len(leaked)}/{len(redteam_results)} ({leak_pct:.1f}%)**\n")
 

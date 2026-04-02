@@ -207,8 +207,8 @@ Field notes:
 # ---------------------------------------------------------------------------
 
 def assemble_prompt_for_player(
-    vis_ctx: "VisibleContext",
-    dm_ctx: "DMContext",
+    vis_ctx: VisibleContext,
+    dm_ctx: DMContext,
     puzzle: Puzzle,
     is_private: bool = False,
     lang: str = "zh",

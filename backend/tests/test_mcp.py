@@ -8,7 +8,6 @@ Mark live-LLM tests with @pytest.mark.slow; they are excluded from normal CI.
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -22,7 +21,6 @@ from mcp_server.server import (
     list_scripts,
     start_game,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -192,7 +190,6 @@ async def test_ask_question_with_clue():
 async def test_ask_question_game_over():
     game = start_game(language="zh")
     sid = game["session_id"]
-    session = _sessions[sid]
 
     fake = _fake_chat_response(
         judgment="是",

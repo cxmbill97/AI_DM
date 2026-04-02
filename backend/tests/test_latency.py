@@ -11,14 +11,11 @@ Results are printed as a table at the end of the run.
 
 from __future__ import annotations
 
-import asyncio
-import json
 import statistics
 import time
 from typing import Any
 
 import pytest
-import pytest_asyncio
 
 from app.agents.judge import JudgeAgent
 from app.agents.narrator import NarratorAgent

@@ -260,7 +260,6 @@ def get_game_status(session_id: str) -> dict[str, Any]:
 
 def _latest_progress(session: GameSession) -> float:
     """Extract the most recent truth_progress value from DM responses in history."""
-    import json
     import re
     for msg in reversed(session.history):
         if msg.get("role") != "assistant":

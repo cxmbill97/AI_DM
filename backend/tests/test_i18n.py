@@ -6,21 +6,20 @@ All tests are deterministic (no real LLM calls) unless marked @pytest.mark.slow.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
 
 from app.dm import assemble_prompt, dm_turn
 from app.intervention import (
-    InterventionEngine,
     _GENTLE_MESSAGES_EN,
     _GENTLE_MESSAGES_ZH,
     _VOTE_REMINDER_EN,
     _VOTE_REMINDER_ZH,
+    InterventionEngine,
 )
 from app.models import GameSession, Puzzle
-from app.puzzle_loader import load_all_puzzles, load_puzzle
+from app.puzzle_loader import load_all_puzzles
 
 # ---------------------------------------------------------------------------
 # Helpers
