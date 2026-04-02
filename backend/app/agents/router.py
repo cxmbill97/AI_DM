@@ -17,8 +17,11 @@ Intent priority order (first match wins):
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -43,7 +46,7 @@ class Classification:
 # ---------------------------------------------------------------------------
 
 # Vote: /vote … OR 我投 … OR 投票给 …
-_RE_VOTE = re.compile(r"^/vote\b|^我投\b|投票给", re.IGNORECASE)
+_RE_VOTE = re.compile(r"^/vote\b|^我投|投票给", re.IGNORECASE)
 
 # Accusation: confident culprit statement (not a question)
 _RE_ACCUSE = re.compile(
@@ -104,30 +107,37 @@ class RouterAgent:
         """
         text = message.strip()
 
+        def _classify_and_log(intent: str, rule: str) -> Classification:
+            logger.debug(
+                "[ROUTER] classify: phase=%s intent=%s rule=%s message=%r",
+                current_phase, intent, rule, text[:80],
+            )
+            return Classification(intent=intent, raw_message=message, matched_rule=rule)
+
         # 1. Vote
         if _RE_VOTE.search(text):
-            return Classification(intent="vote", raw_message=message, matched_rule="vote_pattern")
+            return _classify_and_log("vote", "vote_pattern")
 
         # 2. NPC — @mention or NPC name in message
         if self._re_npc and self._re_npc.search(text):
-            return Classification(intent="npc", raw_message=message, matched_rule="npc_mention")
+            return _classify_and_log("npc", "npc_mention")
 
         # 3. Accuse — confident culprit statement (check before question to catch
         #    "凶手是X吗" as accuse, not question — accusation framing takes priority)
         if _RE_ACCUSE.search(text):
-            return Classification(intent="accuse", raw_message=message, matched_rule="accuse_pattern")
+            return _classify_and_log("accuse", "accuse_pattern")
 
         # 4. Question — interrogative markers
         if _RE_QUESTION.search(text):
-            return Classification(intent="question", raw_message=message, matched_rule="question_marker")
+            return _classify_and_log("question", "question_marker")
 
         # 5. Search / investigation action
         if _RE_SEARCH.search(text):
-            return Classification(intent="search", raw_message=message, matched_rule="search_keyword")
+            return _classify_and_log("search", "search_keyword")
 
         # 6. Meta / help
         if _RE_META.search(text):
-            return Classification(intent="meta", raw_message=message, matched_rule="meta_keyword")
+            return _classify_and_log("meta", "meta_keyword")
 
         # 7. Default → player-to-player chat (no DM response)
-        return Classification(intent="chat", raw_message=message, matched_rule="default_chat")
+        return _classify_and_log("chat", "default_chat")

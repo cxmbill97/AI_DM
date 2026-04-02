@@ -1,6 +1,6 @@
 /* ============================================================
-   海龟汤 — Global Styles
-   Warm / cozy palette · mobile-first · Chinese typography
+   AI DM — Dark Mystery Theme
+   Deep noir palette · mobile-first · Chinese / English typography
    ============================================================ */
 
 *, *::before, *::after {
@@ -11,39 +11,42 @@
   --font: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC',
           system-ui, sans-serif;
 
-  /* Background tones */
-  --bg:           #faf7f2;
-  --surface:      #fffaf4;
-  --surface-2:    #fff5e8;
+  /* Background tones — near-black, deep navy */
+  --bg:           #0d0d12;
+  --surface:      #16161f;
+  --surface-2:    #1e1e2c;
 
   /* Borders */
-  --border:       #e8d9c8;
-  --border-2:     #d4bfa0;
+  --border:       #2a2a3e;
+  --border-2:     #3a3a52;
 
-  /* Text */
-  --text:         #2c1a0e;
-  --text-2:       #7a5c3a;
-  --text-3:       #a68b6b;
+  /* Text — parchment tones */
+  --text:         #e8dcc8;
+  --text-2:       #a89f90;
+  --text-3:       #6a6278;
 
-  /* Brand: warm amber */
-  --primary:      #c17f3b;
-  --primary-h:    #a96e30;
-  --primary-bg:   #fdf0dc;
-  --primary-bd:   #f0c88a;
+  /* Brand: aged gold */
+  --primary:      #c4a35a;
+  --primary-h:    #d4b36a;
+  --primary-bg:   #1c1808;
+  --primary-bd:   #4a3c18;
 
   /* Judgment colors */
-  --yes:          #2d7a45;
-  --yes-bg:       #e8f5ed;
-  --no:           #b02020;
-  --no-bg:        #fde8e8;
-  --na:           #5a5a5a;
-  --na-bg:        #f0eeec;
-  --partial:      #c06000;
-  --partial-bg:   #fff0dc;
+  --yes:          #4ade80;
+  --yes-bg:       #0a1f12;
+  --no:           #f87171;
+  --no-bg:        #200d0d;
+  --na:           #6b7280;
+  --na-bg:        #181820;
+  --partial:      #fb923c;
+  --partial-bg:   #1e1004;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(44, 26, 14, .07), 0 1px 2px rgba(44, 26, 14, .04);
-  --shadow:    0 4px 12px rgba(44, 26, 14, .09), 0 2px 6px rgba(44, 26, 14, .05);
+  /* Private clue */
+  --private:      #a78bfa;
+
+  /* Shadows — deep */
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, .6);
+  --shadow:    0 4px 16px rgba(0, 0, 0, .7), 0 2px 6px rgba(0, 0, 0, .5);
 
   /* Radii */
   --r:    12px;
@@ -607,7 +610,7 @@ button {
 }
 
 .clue-notice:hover {
-  background: #fbe8c8;
+  background: #2a2010;
   border-color: var(--primary);
 }
 
@@ -631,9 +634,9 @@ button {
 }
 
 @keyframes clue-glow {
-  0%   { box-shadow: 0 0 0 0 rgba(193, 127, 59, 0.0); }
-  30%  { box-shadow: 0 0 0 4px rgba(193, 127, 59, 0.35); }
-  100% { box-shadow: 0 0 0 0 rgba(193, 127, 59, 0.0); }
+  0%   { box-shadow: 0 0 0 0 rgba(196, 163, 90, 0.0); }
+  30%  { box-shadow: 0 0 0 5px rgba(196, 163, 90, 0.5); }
+  100% { box-shadow: 0 0 0 0 rgba(196, 163, 90, 0.0); }
 }
 
 .clue-panel {
@@ -1319,10 +1322,10 @@ button {
 
 /* Language toggle */
 .lang-toggle {
-  background: var(--surface-2, #f3f4f6);
-  border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: var(--text-2, #6b7280);
+  color: var(--text-2);
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
@@ -1330,8 +1333,8 @@ button {
   transition: background 0.15s, color 0.15s;
 }
 .lang-toggle:hover {
-  background: var(--surface-3, #e9eaec);
-  color: var(--text-1, #111827);
+  background: var(--border);
+  color: var(--text);
 }
 
 /* Lobby lang toggle position */
@@ -1480,9 +1483,9 @@ button {
    ============================================================ */
 
 :root {
-  --private:    #6b4fa8;
-  --private-bg: #f2edfb;
-  --private-bd: #c9b8e8;
+  --private:    #a78bfa;
+  --private-bg: #1a1030;
+  --private-bd: #3d2a6e;
 }
 
 /* ============================================================
@@ -1494,7 +1497,7 @@ button {
   flex-direction: column;
   gap: 8px;
   padding: 14px 14px 16px;
-  background: #faf7ff;
+  background: var(--private-bg);
   border: 1.5px solid var(--private-bd);
   border-radius: var(--r);
 }
@@ -2532,4 +2535,24 @@ button {
   .mm-center {
     flex: 1;
   }
+}
+
+/* ============================================================
+   Streaming cursor — murder mystery DM streaming
+   ============================================================ */
+
+@keyframes dm-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.dm-stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--primary);
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  border-radius: 1px;
+  animation: dm-cursor-blink 0.8s step-end infinite;
 }

@@ -112,6 +112,14 @@ def _drain_join(ws: Any) -> dict:
     return snapshot
 
 
+def _next_non_typing(ws: Any) -> dict:
+    """Read messages until we get one that is not dm_typing."""
+    while True:
+        msg = ws.receive_json()
+        if msg.get("type") != "dm_typing":
+            return msg
+
+
 def _drain_others_join_notice(ws: Any) -> dict:
     """When another player joins, existing players get a system notice
     followed by a players_update message.
@@ -357,23 +365,23 @@ class TestMessageBroadcast:
                     # Alice sends a chat message (no clue keyword)
                     ws_a.send_json({"type": "chat", "text": "死者是男性吗？"})
 
-                    # Alice gets: player_message, dm_response
+                    # Alice gets: player_message, (dm_typing), dm_response, (dm_typing)
                     pm_a = ws_a.receive_json()
                     assert pm_a["type"] == "player_message"
                     assert pm_a["player_name"] == "Alice"
                     assert pm_a["text"] == "死者是男性吗？"
 
-                    dm_a = ws_a.receive_json()
+                    dm_a = _next_non_typing(ws_a)
                     assert dm_a["type"] == "dm_response"
                     assert dm_a["judgment"] == "不是"
                     assert dm_a["player_name"] == "Alice"
 
-                    # Bob also gets: player_message, dm_response
+                    # Bob also gets: player_message, (dm_typing), dm_response, (dm_typing)
                     pm_b = ws_b.receive_json()
                     assert pm_b["type"] == "player_message"
                     assert pm_b["player_name"] == "Alice"
 
-                    dm_b = ws_b.receive_json()
+                    dm_b = _next_non_typing(ws_b)
                     assert dm_b["type"] == "dm_response"
                     assert dm_b["judgment"] == "不是"
 
@@ -391,7 +399,7 @@ class TestMessageBroadcast:
                 _drain_join(ws)
                 ws.send_json({"type": "chat", "text": "凶器是固体的吗？"})
                 ws.receive_json()   # player_message
-                dm = ws.receive_json()
+                dm = _next_non_typing(ws)
                 assert dm["type"] == "dm_response"
                 assert dm["truth_progress"] == pytest.approx(0.4)
 
@@ -420,7 +428,7 @@ class TestSharedClueState:
                 # "仓库" is in clue_building.unlock_keywords
                 ws.send_json({"type": "chat", "text": "案发地点旁边有仓库吗？"})
                 ws.receive_json()   # player_message
-                dm = ws.receive_json()
+                dm = _next_non_typing(ws)
                 assert dm["type"] == "dm_response"
                 assert dm["clue_unlocked"] is not None
                 assert dm["clue_unlocked"]["id"] == "clue_building"
@@ -449,15 +457,15 @@ class TestSharedClueState:
 
                     # Alice unlocks clue_building with keyword "仓库"
                     ws_a.send_json({"type": "chat", "text": "旁边有仓库吗？"})
-                    ws_a.receive_json()   # player_message
-                    ws_a.receive_json()   # dm_response (clue unlocked)
-                    ws_b.receive_json()   # player_message (broadcast)
-                    ws_b.receive_json()   # dm_response (broadcast)
+                    ws_a.receive_json()          # player_message
+                    _next_non_typing(ws_a)       # dm_response (clue unlocked)
+                    ws_b.receive_json()          # player_message (broadcast)
+                    _next_non_typing(ws_b)       # dm_response (broadcast)
 
                     # Bob sends a follow-up question
                     ws_b.send_json({"type": "chat", "text": "凶手站在仓库里吗？"})
-                    ws_b.receive_json()   # player_message
-                    ws_b.receive_json()   # dm_response
+                    ws_b.receive_json()          # player_message
+                    _next_non_typing(ws_b)       # dm_response
 
                     # The LLM should have been called with the unlocked clue in its prompt
                     assert "clue_building" in mock_llm.last_system_prompt or \
@@ -482,13 +490,13 @@ class TestSharedClueState:
                 # First question — should unlock clue_building
                 ws.send_json({"type": "chat", "text": "现场旁边有仓库吗？"})
                 ws.receive_json()   # player_message
-                dm1 = ws.receive_json()
+                dm1 = _next_non_typing(ws)
                 assert dm1["clue_unlocked"] is not None
 
                 # Second question with same keyword — should NOT unlock again
                 ws.send_json({"type": "chat", "text": "那个废弃仓库有多大？"})
                 ws.receive_json()   # player_message
-                dm2 = ws.receive_json()
+                dm2 = _next_non_typing(ws)
                 assert dm2["clue_unlocked"] is None
 
             # Only one entry in the set

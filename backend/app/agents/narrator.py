@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import logging
 
+from collections.abc import AsyncGenerator
+
 from app.agents.judge import Judgment
-from app.llm import chat, strip_think
+from app.llm import chat, chat_stream, strip_think
 from app.visibility import VisibleContext
 
 logger = logging.getLogger(__name__)
@@ -29,93 +31,35 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _DM_PERSONA_ZH = """\
-你是「雨夜迷踪」剧本杀游戏的主持人（DM）。你扮演一个神秘、沉稳、善于引导的叙事者。
-你的职责是引导玩家进行推理，营造紧张悬疑的氛围，帮助玩家发现线索并深入思考。
-
-## 你的行为准则
-- 根据判断引擎提供的判断结果，给出合适的引导性回复
-- 用中文回复，语言生动、有氛围感，不超过100字
-- 你不知道案件的完整真相——你只根据已经确认的事实来判断
-- 不猜测，不推断超出判断结果以外的内容
-- 如果判断是「无关」，温和地引导玩家换个方向思考
-- 如果判断是「是」，给予肯定但不过度透露
-- 如果判断是「不是」，暗示这个方向有偏差，鼓励重新思考
-- 如果判断是「部分正确」，引导玩家继续深入"""
+剧本杀DM，神秘沉稳的叙事者。根据判断结果给出引导性回复，中文，不超过80字，语言有氛围感。
+是→肯定引导，不是→暗示偏差，部分正确→鼓励深入，无关→温和换方向。
+不知道完整真相，不推测判断结果以外的内容。"""
 
 _DM_PERSONA_EN = """\
-You are the host (DM) of a murder mystery game. You play the role of a mysterious, composed narrator who guides the players.
-Your job is to guide players through deductive reasoning, build a tense and atmospheric mood, and help them discover clues.
-
-## Your Conduct Rules
-- Respond based on the judgment result provided by the Judge Agent
-- Reply in English, with vivid, atmospheric language — max 100 words
-- You do NOT know the complete truth of the case — you only judge based on confirmed facts
-- Do not speculate or infer beyond the judgment result and visible context
-- If the judgment is "Irrelevant", gently guide the player to think in a different direction
-- If the judgment is "Yes", affirm without revealing too much
-- If the judgment is "No", hint that this direction is off and encourage rethinking
-- If the judgment is "Partially correct", guide the player to dig deeper"""
+Murder mystery DM — mysterious, composed narrator. Reply in English ≤80 words, atmospheric.
+Yes→affirm, No→hint off-track, Partially correct→dig deeper, Irrelevant→redirect gently.
+You don't know the full truth. Don't speculate beyond the judgment."""
 
 # ---------------------------------------------------------------------------
 # Phase-specific behavior instructions
 # ---------------------------------------------------------------------------
 
 _PHASE_INSTRUCTIONS_ZH: dict[str, str] = {
-    "opening": (
-        "当前阶段：开场叙事。你正在向玩家介绍案件背景，语气神秘而庄重，不解答任何问题。"
-    ),
-    "reading": (
-        "当前阶段：角色阅读。玩家正在阅读自己的角色剧本，此阶段不进行DM互动。"
-    ),
-    "investigation_1": (
-        "当前阶段：调查阶段。鼓励玩家积极探索现场、搜查证据、询问相关人物。"
-        "如果玩家接近了重要线索，可以用「你感觉这个方向很有价值」来暗示。"
-        "提醒玩家可以询问NPC（管家老周、李探长），也可以搜查特定区域。"
-    ),
-    "discussion": (
-        "当前阶段：讨论阶段。鼓励玩家分享自己的推断，引导大家相互交流信息。"
-        "可以提出引发思考的问题，但不主动说出结论。"
-        "适时总结大家讨论的关键点，帮助梳理思路。"
-    ),
-    "voting": (
-        "当前阶段：投票阶段。提醒玩家是时候做出最终判断了。"
-        "不再回答新的调查问题，只引导玩家进行投票。"
-    ),
-    "reveal": (
-        "当前阶段：真相揭晓。现在可以完整揭露案件真相，包括凶手身份、作案动机和手法。"
-        "用戏剧性的叙事语言，结合玩家的调查发现，一步一步揭开谜底。"
-    ),
+    "opening":         "开场叙事阶段，介绍案件背景，语气神秘庄重，不解答问题。",
+    "reading":         "角色阅读阶段，不进行DM互动。",
+    "investigation_1": "调查阶段。鼓励探索、搜查、询问NPC。接近线索时可暗示「这方向有价值」。",
+    "discussion":      "讨论阶段。鼓励分享推断、相互交流。提出思考性问题，适时总结关键点。",
+    "voting":          "投票阶段。引导玩家做最终判断，不再回答调查问题。",
+    "reveal":          "真相揭晓阶段。完整揭露凶手、动机、手法，叙事戏剧化有层次感。",
 }
 
 _PHASE_INSTRUCTIONS_EN: dict[str, str] = {
-    "opening": (
-        "Current phase: Opening narration. You are introducing the case background to the players. "
-        "Your tone is mysterious and solemn — do not answer any questions yet."
-    ),
-    "reading": (
-        "Current phase: Character reading. Players are reading their character scripts. "
-        "No DM interaction at this stage."
-    ),
-    "investigation_1": (
-        "Current phase: Investigation. Encourage players to actively explore the scene, search for evidence, "
-        "and question relevant persons. If a player is close to an important clue, "
-        "hint with 'You sense this direction could be valuable.' "
-        "Remind players they can question NPCs (Mrs. Daly, Inspector Graves) or search specific areas."
-    ),
-    "discussion": (
-        "Current phase: Discussion. Encourage players to share their deductions and exchange information. "
-        "Pose thought-provoking questions but don't volunteer conclusions. "
-        "Summarize key discussion points to help players organise their thinking."
-    ),
-    "voting": (
-        "Current phase: Voting. Remind players it's time to make their final judgment. "
-        "No longer answer new investigation questions — only guide players toward casting their vote."
-    ),
-    "reveal": (
-        "Current phase: Reveal. You may now fully disclose the truth of the case — "
-        "the culprit's identity, motive, and method. "
-        "Use dramatic, layered storytelling, tying in the players' own discoveries."
-    ),
+    "opening":         "Opening narration — introduce the case, mysterious tone, no questions answered.",
+    "reading":         "Character reading phase — no DM interaction.",
+    "investigation_1": "Investigation. Encourage exploring, searching, questioning NPCs. Hint 'This direction looks promising' when close.",
+    "discussion":      "Discussion. Encourage sharing deductions. Pose questions, summarise key points.",
+    "voting":          "Voting phase. Guide players to final judgment; don't answer new investigation questions.",
+    "reveal":          "Reveal phase. Fully disclose culprit, motive, method — dramatic layered storytelling.",
 }
 
 _DEFAULT_PHASE_INSTRUCTION_ZH = "引导玩家继续推理，维持紧张悬疑的氛围。"
@@ -203,6 +147,29 @@ class NarratorAgent:
         except Exception as exc:
             logger.exception("NarratorAgent.narrate failed: %s", exc)
             return fallback
+
+    async def narrate_stream(
+        self,
+        judgment: Judgment,
+        player_message: str,
+        visible_context: VisibleContext,
+        phase: str,
+        truth_for_reveal: str | None = None,
+        language: str = "zh",
+    ) -> AsyncGenerator[str, None]:
+        """Stream the narrator response token-by-token.
+
+        Yields string chunks.  The caller should accumulate them for safety
+        checks; <think> filtering is handled inside chat_stream().
+        """
+        system_prompt = self._build_system_prompt(
+            phase=phase,
+            visible_context=visible_context,
+            truth_for_reveal=truth_for_reveal,
+            language=language,
+        )
+        messages = self._build_messages(judgment, player_message, language=language)
+        return chat_stream(system_prompt, messages)
 
     # ------------------------------------------------------------------
     # Private helpers

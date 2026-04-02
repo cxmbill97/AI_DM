@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import AsyncGenerator
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
@@ -82,11 +83,12 @@ def _get_llm_logger() -> logging.Logger:
     return logger
 
 
-def _log_call(system_prompt: str, messages: list[dict], raw_response: str) -> None:
+def _log_call(system_prompt: str, messages: list[dict], raw_response: str, elapsed_ms: float) -> None:
     """Append one JSON-lines record with the full input/output for this LLM call."""
     record = {
         "ts": datetime.now().isoformat(timespec="seconds"),
         "model": MODEL,
+        "elapsed_ms": round(elapsed_ms, 1),
         "system_prompt": system_prompt,
         "messages": messages,
         "raw_response": raw_response,
@@ -184,5 +186,58 @@ async def chat(system_prompt: str, messages: list[dict]) -> str:
                     completion_tokens=tok_out,
                 )
             )
-    _log_call(system_prompt, messages, raw)
+    _log_call(system_prompt, messages, raw, elapsed)
     return raw
+
+
+async def chat_stream(
+    system_prompt: str, messages: list[dict]
+) -> AsyncGenerator[str, None]:
+    """Stream tokens from the LLM, filtering out <think>…</think> blocks.
+
+    Yields string chunks as they arrive from the API.  Callers should
+    accumulate chunks for logging / safety checks after the stream ends.
+    """
+    client = _get_client()
+    full_messages: list[dict] = [{"role": "system", "content": system_prompt}] + messages
+
+    last_user = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
+    _llm_logger.info("LLM stream → model=%s  prompt=%r", MODEL, last_user[:120])
+
+    stream = await client.chat.completions.create(
+        model=MODEL,
+        messages=full_messages,  # type: ignore[arg-type]
+        stream=True,
+    )
+
+    buffer = ""
+    in_think = False
+
+    async for chunk in stream:
+        delta = (chunk.choices[0].delta.content or "") if chunk.choices else ""
+        if not delta:
+            continue
+        buffer += delta
+
+        if in_think:
+            # Wait for closing tag
+            if "</think>" in buffer:
+                _, _, after = buffer.partition("</think>")
+                buffer = after
+                in_think = False
+            else:
+                continue  # still inside think block, keep buffering
+        else:
+            if "<think>" in buffer:
+                before, _, rest = buffer.partition("<think>")
+                if before:
+                    yield before
+                buffer = rest
+                in_think = True
+            else:
+                yield buffer
+                buffer = ""
+
+    # Flush any remaining non-think content
+    if buffer and not in_think:
+        yield buffer

@@ -46,9 +46,9 @@ KEY_FACTS = [
 ]
 
 CHARACTER_SECRETS = {
-    "char_su":   "与死者有秘密子女关系",
-    "char_chen": "欠死者三百万债务",
-    "char_shen": "是死者私生女，在威士忌中投入安眠药",
+    "char_su":   "与死者存在长达十年的秘密婚外情，并育有一名未对外公开的孩子，案发当晚曾单独与死者见面",
+    "char_chen": "欠死者三百万债务，曾多次恳求宽限还款期限但均遭死者拒绝，案发前一天再次被催款",
+    "char_shen": "是死者私生女，案发当晚在死者威士忌中秘密投入安眠药后趁其昏迷推倒致死",
 }
 
 
@@ -391,16 +391,11 @@ class TestNarratorAgent:
 
 class TestSafetyAgent:
     @pytest.fixture(autouse=True)
-    def setup(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def setup(self) -> None:
         self.safety = SafetyAgent(
             key_facts=KEY_FACTS,
             character_secrets=CHARACTER_SECRETS,
         )
-
-        async def safe_chat(*_: Any) -> str:
-            return json.dumps({"safe": True, "leaked_content": None})
-
-        monkeypatch.setattr("app.agents.safety.chat", safe_chat)
 
     async def test_safe_text_passes(self) -> None:
         result = await self.safety.check(
@@ -430,8 +425,8 @@ class TestSafetyAgent:
         assert result["safe"] is True
 
     async def test_other_player_secret_blocked(self) -> None:
-        # char_su viewing, but text contains char_chen's secret verbatim
-        secret_snippet = CHARACTER_SECRETS["char_chen"]  # 9 chars, > _MIN_SNIPPET_LEN
+        # char_su viewing, but text contains char_chen's secret verbatim (30+ chars)
+        secret_snippet = CHARACTER_SECRETS["char_chen"]  # 30+ chars, > _MIN_SECRET_SNIPPET_LEN
         text = f"陈博的情况：{secret_snippet}"
         result = await self.safety.check(
             text=text,
@@ -440,29 +435,17 @@ class TestSafetyAgent:
         )
         assert result["safe"] is False
 
-    async def test_short_text_skips_llm(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        llm_called = []
-
-        async def tracking_chat(*_: Any) -> str:
-            llm_called.append(True)
-            return json.dumps({"safe": True, "leaked_content": None})
-
-        monkeypatch.setattr("app.agents.safety.chat", tracking_chat)
-
-        # < 30 chars — should skip LLM check
+    async def test_short_safe_text(self) -> None:
+        # Short text with no forbidden content
         result = await self.safety.check(
             text="ok",
             audience_player_id="p1",
         )
         assert result["safe"] is True
-        assert len(llm_called) == 0
 
-    async def test_llm_failure_defaults_to_safe(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def failing_chat(*_: Any) -> str:
-            raise RuntimeError("down")
-
-        monkeypatch.setattr("app.agents.safety.chat", failing_chat)
-        long_text = "这是一段足够长的文本，用于触发LLM安全检查，没有任何违禁内容在其中。"
+    async def test_long_safe_text_no_llm(self) -> None:
+        # Verbatim-clean long text should pass without needing LLM (LLM removed)
+        long_text = "这是一段足够长的文本，没有任何违禁内容在其中。探案中，每位玩家都在努力寻找真相。"
         result = await self.safety.check(text=long_text, audience_player_id="p1")
         assert result["safe"] is True
 
@@ -505,7 +488,6 @@ class TestOrchestratorPipeline:
 
         monkeypatch.setattr("app.agents.judge.chat", fake_chat)
         monkeypatch.setattr("app.agents.narrator.chat", fake_chat)
-        monkeypatch.setattr("app.agents.safety.chat", fake_chat)
 
     async def test_question_intent_returns_dm_response(self) -> None:
         response, trace = await self.orchestrator.handle_message("p1", "威士忌杯有毒吗")

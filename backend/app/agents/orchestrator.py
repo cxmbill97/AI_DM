@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import AsyncGenerator
+import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -263,6 +265,208 @@ class AgentOrchestrator:
 
         # Unreachable — all intents handled above
         return None, trace
+
+    async def handle_message_stream(
+        self,
+        player_id: str,
+        message: str,
+    ) -> AsyncGenerator[dict, None]:
+        """Streaming variant of handle_message for murder mystery.
+
+        Yields WebSocket-ready dicts:
+          {type: "dm_stream_start", judgment: str, confidence: float}
+          {type: "dm_stream_chunk", text: str}
+          {type: "dm_stream_end", clue: dict|None, trace: dict}
+          OR on safety fail:
+          {type: "dm_stream_end", replace: str, clue: None, trace: dict}
+        """
+        return self._stream_generator(player_id, message)
+
+    async def _stream_generator(
+        self, player_id: str, message: str
+    ) -> AsyncGenerator[dict, None]:
+        trace = new_trace(player_id, message)
+        phase = self._sm.current_phase
+        logger.info("[ORCH] stream_generator: player=%s phase=%s message=%r", player_id, phase, message[:80])
+
+        # Route (rules-only)
+        t0 = time.time()
+        classification = self.router.classify(message, phase)
+        router_latency = (time.time() - t0) * 1000
+        intent = classification.intent
+        logger.info("[ORCH] router: intent=%s rule=%s latency=%.1fms", intent, classification.matched_rule, router_latency)
+
+        trace.steps.append(TraceStep(
+            agent="router",
+            input_summary=f"message={message[:80]!r}, phase={phase}",
+            output_summary=f"intent={intent}, rule={classification.matched_rule}",
+            latency_ms=router_latency,
+            tokens_in=0, tokens_out=0,
+            metadata={"intent": intent},
+        ))
+
+        # Non-streaming intents — fall through to non-streaming handler
+        if intent in ("meta", "chat", "vote"):
+            logger.info("[ORCH] intent=%s → no DM response (non-streaming path)", intent)
+            resp, _ = await self.handle_message(player_id, message)
+            if resp is not None:
+                logger.debug("[ORCH] non-streaming response: type=%s", resp.type)
+                yield {"type": resp.type, "text": resp.text, "clue": resp.clue}
+            return
+
+        # State machine guard
+        required_action = _INTENT_TO_ACTION.get(intent)
+        if required_action and not self._sm.can_act(required_action):
+            logger.info("[ORCH] phase_blocked: intent=%s required=%s phase=%s", intent, required_action, phase)
+            blocked = (
+                f"This action is not available in the current phase ({phase})."
+                if self._language == "en"
+                else f"当前阶段（{phase}）不能执行此操作。"
+            )
+            yield {"type": RESP_PHASE_BLOCKED, "text": blocked}
+            return
+
+        if intent == "npc":
+            resp, _ = await self.handle_message(player_id, message)
+            if resp is not None:
+                yield {"type": resp.type, "text": resp.text, "clue": resp.clue}
+            return
+
+        # --- Streaming path: question / accuse / search ---
+        visible = self._build_visible_context(player_id)
+        viewer_char_id = self._player_char_map.get(player_id)
+        player_visible_facts = [c["content"] for c in visible.public_clues]
+
+        clue_dict: dict | None = None
+
+        if intent == "search":
+            # Try clue unlock first (rules-based)
+            phase_obj = self._sm.current()
+            available = set(phase_obj.available_clues or [])
+            clue_found = None
+            for clue_id in available:
+                if clue_id in self._unlocked_clue_ids:
+                    continue
+                clue = self._clues_by_id.get(clue_id)
+                if clue and any(kw in message for kw in clue.unlock_keywords):
+                    self._unlocked_clue_ids.add(clue_id)
+                    clue_found = clue
+                    break
+            if clue_found:
+                clue_dict = {"id": clue_found.id, "title": clue_found.title, "content": clue_found.content}
+                visible.public_clues.append(clue_dict)
+            judgment: Judgment = {
+                "result": "Yes" if self._language == "en" else "是",
+                "confidence": 1.0,
+                "relevant_fact_ids": [],
+            } if clue_found else {
+                "result": "Irrelevant" if self._language == "en" else "无关",
+                "confidence": 0.5,
+                "relevant_fact_ids": [],
+            }
+        else:
+            # Judge
+            logger.info("[ORCH] calling Judge: key_facts=%d, visible_facts=%d", len(self.judge._key_facts), len(player_visible_facts))
+            reset_usage_accumulator()
+            t0 = time.time()
+            judgment = await self.judge.judge(message, player_visible_facts)
+            judge_latency = (time.time() - t0) * 1000
+            judge_usages = drain_usage()
+            logger.info("[ORCH] Judge done: result=%s confidence=%.0f%% latency=%.0fms tokens_in=%d tokens_out=%d",
+                judgment["result"], judgment["confidence"] * 100, judge_latency,
+                sum(u.prompt_tokens for u in judge_usages),
+                sum(u.completion_tokens for u in judge_usages),
+            )
+            trace.steps.append(TraceStep(
+                agent="judge",
+                input_summary=f"key_facts: {len(self.judge._key_facts)} items",
+                output_summary=f"result={judgment['result']}, confidence={judgment['confidence']:.0%}",
+                latency_ms=judge_latency,
+                tokens_in=sum(u.prompt_tokens for u in judge_usages),
+                tokens_out=sum(u.completion_tokens for u in judge_usages),
+                metadata={"judgment": judgment["result"]},
+            ))
+
+        # Broadcast judgment immediately — player sees result before narrator finishes
+        logger.info("[ORCH] yielding dm_stream_start: judgment=%s", judgment["result"])
+        yield {
+            "type": "dm_stream_start",
+            "judgment": judgment["result"],
+            "confidence": judgment["confidence"],
+        }
+
+        # Stream narrator
+        phase_val = self._sm.current_phase
+        truth_for_reveal = self._build_truth_reveal_text() if phase_val == "reveal" else None
+
+        logger.info("[ORCH] starting Narrator stream: phase=%s", phase_val)
+        reset_usage_accumulator()
+        t0 = time.time()
+        accumulated = ""
+        chunk_count = 0
+        try:
+            stream_gen = await self.narrator.narrate_stream(
+                judgment=judgment,
+                player_message=message,
+                visible_context=visible,
+                phase=phase_val,
+                truth_for_reveal=truth_for_reveal,
+                language=self._language,
+            )
+            async for chunk in stream_gen:
+                accumulated += chunk
+                chunk_count += 1
+                if chunk_count == 1:
+                    logger.info("[ORCH] Narrator first chunk arrived: TTFT=%.0fms", (time.time() - t0) * 1000)
+                yield {"type": "dm_stream_chunk", "text": chunk}
+        except Exception as exc:
+            logger.exception("[ORCH] Narrator stream failed: %s", exc)
+            fallback = _REGENERATION_FALLBACK_EN if self._language == "en" else _REGENERATION_FALLBACK_ZH
+            accumulated = fallback
+            yield {"type": "dm_stream_chunk", "text": fallback}
+
+        narrator_usages = drain_usage()
+        narrator_latency = (time.time() - t0) * 1000
+        logger.info("[ORCH] Narrator stream done: chars=%d chunks=%d total_latency=%.0fms tokens_in=%d tokens_out=%d",
+            len(accumulated), chunk_count, narrator_latency,
+            sum(u.prompt_tokens for u in narrator_usages),
+            sum(u.completion_tokens for u in narrator_usages),
+        )
+        trace.steps.append(TraceStep(
+            agent="narrator",
+            input_summary=f"judgment={judgment['result']}, phase={phase_val}",
+            output_summary=f"response_len={len(accumulated)} chars",
+            latency_ms=narrator_latency,
+            tokens_in=sum(u.prompt_tokens for u in narrator_usages),
+            tokens_out=sum(u.completion_tokens for u in narrator_usages),
+            metadata={"phase": phase_val},
+        ))
+
+        # Verbatim safety check on complete text
+        logger.debug("[ORCH] running safety check on accumulated text: len=%d", len(accumulated))
+        result = await self.safety.check(
+            text=accumulated,
+            audience_player_id=player_id,
+            viewer_char_id=viewer_char_id,
+        )
+        fallback_text = _REGENERATION_FALLBACK_EN if self._language == "en" else _REGENERATION_FALLBACK_ZH
+
+        trace_dict = dataclasses.asdict(trace)
+        if result["safe"]:
+            logger.info("[ORCH] safety pass → dm_stream_end (safe)")
+            yield {
+                "type": "dm_stream_end",
+                "clue": clue_dict,
+                "trace": trace_dict,
+            }
+        else:
+            logger.warning("[ORCH] safety BLOCKED narrator output → replacing with fallback")
+            yield {
+                "type": "dm_stream_end",
+                "replace": fallback_text,
+                "clue": None,
+                "trace": trace_dict,
+            }
 
     # ------------------------------------------------------------------
     # Intent handlers

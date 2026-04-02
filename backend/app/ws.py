@@ -35,7 +35,7 @@ from app.voting import VoteError, VotingModule
 # Phase display helpers
 # ---------------------------------------------------------------------------
 
-_PHASE_DESCRIPTIONS: dict[str, str] = {
+_PHASE_DESCRIPTIONS_ZH: dict[str, str] = {
     "opening":         "开场叙事 — 聆听案件背景介绍",
     "reading":         "角色阅读 — 阅读你的角色剧本",
     "investigation_1": "调查阶段 — 搜查线索，询问NPC，向DM提问",
@@ -43,6 +43,24 @@ _PHASE_DESCRIPTIONS: dict[str, str] = {
     "voting":          "投票阶段 — 选出你认为的凶手",
     "reveal":          "真相揭晓 — 案件真相大白",
 }
+
+_PHASE_DESCRIPTIONS_EN: dict[str, str] = {
+    "opening":         "Opening — listen to the case background",
+    "reading":         "Reading — read your character script",
+    "investigation_1": "Investigation — search for clues, question NPCs, ask the DM",
+    "discussion":      "Discussion — share your deductions with other players",
+    "voting":          "Voting — choose who you believe is the culprit",
+    "reveal":          "Reveal — the truth of the case is unveiled",
+}
+
+# Keep old name for backward compatibility
+_PHASE_DESCRIPTIONS = _PHASE_DESCRIPTIONS_ZH
+
+
+def _phase_desc(phase_id: str, language: str = "zh") -> str:
+    """Return phase description in the given language."""
+    table = _PHASE_DESCRIPTIONS_EN if language == "en" else _PHASE_DESCRIPTIONS_ZH
+    return table.get(phase_id, phase_id)
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +83,7 @@ def _mm_snapshot(room: Room, player_id: str) -> dict[str, Any]:
         "script_id": room.script.id,
         "title": room.script.title,
         "current_phase": phase_id,
-        "phase_description": _PHASE_DESCRIPTIONS.get(phase_id, phase_id),
+        "phase_description": _phase_desc(phase_id, getattr(room, "language", "zh")),
         "time_remaining": None if time_remaining == float("inf") else int(time_remaining),
         "players": [
             {
@@ -151,7 +169,7 @@ async def _advance_mm_phase(room: Room) -> None:
 
     phase_obj = room.state_machine.current()
     duration = phase_obj.duration_seconds
-    description = _PHASE_DESCRIPTIONS.get(new_phase_id, new_phase_id)
+    description = _phase_desc(new_phase_id, getattr(room, "language", "zh"))
 
     phase_msg: dict[str, Any] = {
         "type": "phase_change",
@@ -183,9 +201,15 @@ async def _advance_mm_phase(room: Room) -> None:
             player_ids=player_ids,
             culprit_id=room.script.truth.culprit,
         )
+        _vote_lang = getattr(room, "language", "zh")
+        _vote_text = (
+            'Voting time! Select the culprit you believe is guilty.'
+            if _vote_lang == "en"
+            else '投票时间到！请选出你认为的凶手。'
+        )
         vote_prompt: dict[str, Any] = {
             "type": "vote_prompt",
-            "text": "投票时间到！请选出你认为的凶手，发送 {\"type\": \"vote\", \"target\": \"<char_id>\"} 。",
+            "text": _vote_text,
             "candidates": [
                 {"id": c.id, "name": c.name, "public_bio": c.public_bio}
                 for c in room.script.characters
@@ -194,9 +218,31 @@ async def _advance_mm_phase(room: Room) -> None:
         }
         room.message_history.append(vote_prompt)
         await room.broadcast(vote_prompt)
+        # Reset intervention cooldown so reminder doesn't fire immediately
+        room.intervention.record_dm_spoke()
 
     elif new_phase_id == "reveal":
         await _do_mm_reveal(room)
+
+
+async def _auto_advance_from_opening(room: Room) -> None:
+    """Auto-advance opening→reading→investigation_1 so players don't wait 8 minutes.
+
+    Opening narration plays for 10s, then reading for 15s, then investigation starts.
+    Players can still skip manually via skip_phase votes.
+    """
+    try:
+        logger.info("[AUTO-ADVANCE] waiting 10s before advancing opening phase")
+        await asyncio.sleep(10)
+        if room.state_machine and room.state_machine.current_phase == "opening":
+            logger.info("[AUTO-ADVANCE] advancing opening → reading")
+            await _advance_mm_phase(room)
+        await asyncio.sleep(15)
+        if room.state_machine and room.state_machine.current_phase == "reading":
+            logger.info("[AUTO-ADVANCE] advancing reading → investigation_1")
+            await _advance_mm_phase(room)
+    except Exception as exc:
+        logger.exception("[AUTO-ADVANCE] failed: %s", exc)
 
 
 async def _do_mm_reveal(room: Room) -> None:
@@ -206,16 +252,31 @@ async def _do_mm_reveal(room: Room) -> None:
     assert room.state_machine is not None
 
     truth = room.script.truth
+    lang = getattr(room, "language", "zh")
     culprit_char = next(
         (c for c in room.script.characters if c.id == truth.culprit), None
     )
     culprit_name = culprit_char.name if culprit_char else truth.culprit
-    truth_text = (
-        f"凶手：{culprit_name}\n"
-        f"动机：{truth.motive}\n"
-        f"手法：{truth.method}\n"
-        f"时间线：{truth.timeline}"
-    )
+    if lang == "en":
+        truth_text = (
+            f"Culprit: {culprit_name}\n"
+            f"Motive: {truth.motive}\n"
+            f"Method: {truth.method}\n"
+            f"Timeline: {truth.timeline}"
+        )
+        reveal_player_msg = "The truth is revealed"
+        canned_fallback = f"The truth is out! {truth_text}"
+        error_fallback = f"The culprit is {culprit_name}.\n{truth_text}"
+    else:
+        truth_text = (
+            f"凶手：{culprit_name}\n"
+            f"动机：{truth.motive}\n"
+            f"手法：{truth.method}\n"
+            f"时间线：{truth.timeline}"
+        )
+        reveal_player_msg = "真相揭晓"
+        canned_fallback = f"真相揭晓！{truth_text}"
+        error_fallback = f"真相大白！凶手是{culprit_name}。\n{truth_text}"
 
     # Use the narrator directly with truth injected
     reveal_judgment: Any = {"result": "是", "confidence": 1.0, "relevant_fact_ids": []}
@@ -226,17 +287,17 @@ async def _do_mm_reveal(room: Room) -> None:
             visible = room.orchestrator._build_visible_context(player_id)
             text = await room.orchestrator.narrator.narrate(
                 judgment=reveal_judgment,
-                player_message="真相揭晓",
+                player_message=reveal_player_msg,
                 visible_context=visible,
                 phase="reveal",
                 truth_for_reveal=truth_text,
             )
         else:
             # No players connected — use canned reveal text
-            text = f"真相揭晓！{truth_text}"
+            text = canned_fallback
     except Exception:
         logger.exception("Reveal narration failed; using canned text")
-        text = f"真相大白！凶手是{culprit_name}。\n{truth_text}"
+        text = error_fallback
 
     reveal_msg: dict[str, Any] = {
         "type": "dm_response",
@@ -293,9 +354,15 @@ async def _handle_mm_vote(
     total = len(room.players)
 
     # Anonymous broadcast
+    _vc_lang = getattr(room, "language", "zh")
+    _vc_text = (
+        f"Someone voted ({count}/{total} voted)"
+        if _vc_lang == "en"
+        else f"有人投票了（{count}/{total} 人已投票）"
+    )
     vote_cast_msg: dict[str, Any] = {
         "type": "vote_cast",
-        "text": f"有人投票了（{count}/{total} 人已投票）",
+        "text": _vc_text,
         "count": count,
         "total": total,
         "timestamp": time.time(),
@@ -315,28 +382,31 @@ async def _resolve_mm_votes(room: Room) -> None:
 
     result = room.voting.resolve()
 
-    # Build readable tally
+    _vr_lang = getattr(room, "language", "zh")
     char_name_map = {c.id: c.name for c in room.script.characters}
-    tally_readable = {
-        char_name_map.get(cid, cid): cnt for cid, cnt in result.tally.items()
-    }
 
     if result.winner:
         winner_name = char_name_map.get(result.winner, result.winner)
-        result_text = f"投票结果：{winner_name} 获得最多票数！"
-        if result.is_correct:
-            result_text += " 恭喜大家，找到了真正的凶手！"
+        if _vr_lang == "en":
+            result_text = f"Vote result: {winner_name} received the most votes!"
+            result_text += " Well done — you found the real culprit!" if result.is_correct else " Unfortunately, that wasn't the killer…"
         else:
-            result_text += " 很遗憾，这不是真正的凶手……"
+            result_text = f"投票结果：{winner_name} 获得最多票数！"
+            result_text += " 恭喜大家，找到了真正的凶手！" if result.is_correct else " 很遗憾，这不是真正的凶手……"
     else:
-        tied = "、".join(char_name_map.get(c, c) for c in result.tally)
-        result_text = f"投票结果：{tied} 票数相同，平局！真相将直接揭晓。"
+        tied_names = (", " if _vr_lang == "en" else "、").join(
+            char_name_map.get(c, c) for c in result.tally
+        )
+        if _vr_lang == "en":
+            result_text = f"Vote result: {tied_names} are tied! The truth will be revealed directly."
+        else:
+            result_text = f"投票结果：{tied_names} 票数相同，平局！真相将直接揭晓。"
 
     vote_result_msg: dict[str, Any] = {
         "type": "vote_result",
         "status": result.status.value,
         "winner": result.winner,
-        "tally": tally_readable,
+        "tally": dict(result.tally),  # char_id → count (frontend resolves names)
         "is_correct": result.is_correct,
         "text": result_text,
         "timestamp": time.time(),
@@ -356,10 +426,16 @@ async def _resolve_mm_votes(room: Room) -> None:
 async def _handle_mm_chat(
     room: Room, player_id: str, player_name: str, text: str
 ) -> None:
-    """Route a chat message through the orchestrator pipeline."""
+    """Route a chat message through the orchestrator streaming pipeline."""
     assert room.orchestrator is not None
 
     ts = time.time()
+    logger.info(
+        "[MM-CHAT] room=%s player=%s phase=%s text=%r",
+        room.room_id, player_name,
+        room.state_machine.current_phase if room.state_machine else "?",
+        text[:80],
+    )
 
     # Reset intervention silence timer
     room.intervention.on_player_message(player_id, text)
@@ -374,58 +450,83 @@ async def _handle_mm_chat(
     room.message_history.append(player_msg)
     await room.broadcast(player_msg)
 
-    # Run orchestrator pipeline
-    t_pipeline_start = time.time()
+    # Run streaming orchestrator pipeline
+    dm_started = False
     try:
         async with room._lock:
-            orch_response, orch_trace = await room.orchestrator.handle_message(player_id, text)
+            logger.debug("[MM-CHAT] lock acquired, starting orchestrator stream")
+            stream_gen = await room.orchestrator.handle_message_stream(player_id, text)
+            async for event in stream_gen:
+                event_type = event.get("type", "")
+                logger.debug("[MM-CHAT] stream event: type=%s", event_type)
+
+                if event_type == "dm_stream_start":
+                    # Broadcast judgment immediately — players see result before narrator finishes
+                    msg: dict[str, Any] = {
+                        **event,
+                        "player_name": player_name,
+                        "timestamp": time.time(),
+                    }
+                    await room.broadcast(msg)
+                    dm_started = True
+                    logger.info(
+                        "[MM-CHAT] dm_stream_start → judgment=%s confidence=%.0f%%",
+                        event.get("judgment"), (event.get("confidence", 0) * 100),
+                    )
+
+                elif event_type == "dm_stream_chunk":
+                    # Stream narrator tokens to all players
+                    await room.broadcast({**event, "timestamp": time.time()})
+
+                elif event_type == "dm_stream_end":
+                    # Finalize — includes trace and optional clue / replacement
+                    final_msg: dict[str, Any] = {
+                        **event,
+                        "player_name": player_name,
+                        "timestamp": time.time(),
+                    }
+                    room.message_history.append(final_msg)
+                    await room.broadcast(final_msg)
+                    room.intervention.record_dm_spoke()
+                    replaced = "replace" in event
+                    logger.info(
+                        "[MM-CHAT] dm_stream_end clue=%s replaced=%s",
+                        event.get("clue") is not None, replaced,
+                    )
+
+                elif event_type in ("phase_blocked", "error"):
+                    logger.info("[MM-CHAT] %s → %r", event_type, event.get("text", "")[:60])
+                    await room.send_to(player_id, {**event, "timestamp": time.time()})
+                    # Also clear typing for all players — they saw player_message set it
+                    await room.broadcast({"type": "dm_typing", "typing": False, "timestamp": time.time()})
+
+                else:
+                    # meta_response, clue_found, no_response, etc.
+                    if event_type == "no_response":
+                        logger.debug("[MM-CHAT] no_response (chat intent)")
+                    else:
+                        logger.info("[MM-CHAT] broadcast event type=%s", event_type)
+                        dm_msg: dict[str, Any] = {
+                            **event,
+                            "player_name": player_name,
+                            "timestamp": time.time(),
+                        }
+                        room.message_history.append(dm_msg)
+                        await room.broadcast(dm_msg)
+                        room.intervention.record_dm_spoke()
+
+            logger.debug("[MM-CHAT] stream complete dm_started=%s", dm_started)
+
     except NotImplementedError as exc:
-        logger.warning("Orchestrator stub hit: %s", exc)
-        await room.send_to(
-            player_id,
-            {"type": "error", "text": "该功能尚未实现，请稍候。"},
-        )
-        return
+        logger.warning("[MM-CHAT] orchestrator stub hit: %s", exc)
+        await room.send_to(player_id, {"type": "error", "text": "该功能尚未实现，请稍候。"})
     except Exception as exc:
-        logger.exception("Orchestrator failed for player %s: %s", player_name, exc)
-        await room.send_to(
-            player_id,
-            {"type": "error", "text": "DM 暂时无法回应，请稍后再试。"},
-        )
-        return
-
-    pipeline_ms = (time.time() - t_pipeline_start) * 1000
-    logger.info(
-        "Orchestrator done: player=%s intent=%s total=%.0fms steps=%d",
-        player_name,
-        orch_trace.steps[0].metadata.get("intent", "?") if orch_trace.steps else "?",
-        pipeline_ms,
-        len(orch_trace.steps),
-    )
-
-    if orch_response is None:
-        # "chat" intent — player-to-player, no DM reply; already echoed above
-        return
-
-    dm_msg: dict[str, Any] = {
-        "type": orch_response.type,
-        "player_name": player_name,  # so all players know who triggered the DM reply
-        "text": orch_response.text,
-        "clue": orch_response.clue,
-        "trace": orch_trace.to_dict(),
-        "timestamp": time.time(),
-    }
-    room.message_history.append(dm_msg)
-
-    if orch_response.type in ("phase_blocked", "error"):
-        # Private: only the asking player sees these
-        await room.send_to(player_id, dm_msg)
-    else:
-        # dm_response, clue_found, meta_response → broadcast so all players
-        # can follow the investigation (standard 剧本杀 rule: DM answers are public)
-        await room.broadcast(dm_msg)
-
-    room.intervention.record_dm_spoke()
+        logger.exception("[MM-CHAT] orchestrator stream failed for player %s: %s", player_name, exc)
+        await room.send_to(player_id, {"type": "error", "text": "DM 暂时无法回应，请稍后再试。"})
+    finally:
+        # If no DM response was sent (chat intent / phase not started), clear typing for everyone
+        if not dm_started:
+            await room.broadcast({"type": "dm_typing", "typing": False, "timestamp": time.time()})
 
 
 # ---------------------------------------------------------------------------
@@ -581,14 +682,16 @@ async def websocket_endpoint(
             room.reconnect_player(player_id, websocket)
         else:
             if room.is_full():
-                await websocket.send_json({"type": "error", "text": "房间已满（最多4人）"})
+                _full_msg = "Room is full (max 4 players)" if getattr(room, "language", "zh") == "en" else "房间已满（最多4人）"
+                await websocket.send_json({"type": "error", "text": _full_msg})
                 await websocket.close(code=4429)
                 return
             player_id = str(uuid.uuid4())
             room.add_player(player_id, player_name, websocket)
     else:
         if room.is_full():
-            await websocket.send_json({"type": "error", "text": "房间已满（最多4人）"})
+            _full_msg = "Room is full (max 4 players)" if getattr(room, "language", "zh") == "en" else "房间已满（最多4人）"
+            await websocket.send_json({"type": "error", "text": _full_msg})
             await websocket.close(code=4429)
             return
         player_id = str(uuid.uuid4())
@@ -597,10 +700,12 @@ async def websocket_endpoint(
     # ----------------------------------------------------------------
     # Announce presence
     # ----------------------------------------------------------------
+    _lang = getattr(room, "language", "zh")
     if is_reconnect:
+        _reconnect_text = f"{player_name} reconnected" if _lang == "en" else f"{player_name} 重新连接了"
         join_notice = {
             "type": "system",
-            "text": f"{player_name} 重新连接了",
+            "text": _reconnect_text,
             "timestamp": time.time(),
         }
         await room.broadcast(join_notice)
@@ -608,9 +713,10 @@ async def websocket_endpoint(
         for msg in missed:
             await room.send_to(player_id, msg)
     else:
+        _join_text = f"{player_name} joined the room" if _lang == "en" else f"{player_name} 加入了房间"
         join_notice = {
             "type": "system",
-            "text": f"{player_name} 加入了房间",
+            "text": _join_text,
             "timestamp": time.time(),
         }
         room.message_history.append(join_notice)
@@ -703,6 +809,9 @@ async def websocket_endpoint(
             }
             room.message_history.append(dm_open)
             await room.broadcast(dm_open)
+        # Auto-advance: opening → reading → investigation_1 after short delays
+        # so players don't wait the full 120s+360s before DM responds to questions
+        asyncio.create_task(_auto_advance_from_opening(room))
 
     # ----------------------------------------------------------------
     # Ensure silence-tick background task is running
@@ -744,7 +853,7 @@ async def websocket_endpoint(
                     connected_ids = [
                         pid for pid, p in room.players.items() if p["connected"]
                     ]
-                    needed = max(1, (len(connected_ids) + 1) // 2)  # majority
+                    needed = len(connected_ids)  # all players must agree to skip
                     voted = len(room._skip_votes & set(connected_ids))
                     if voted >= needed:
                         # Majority reached — advance immediately
@@ -859,16 +968,19 @@ async def websocket_endpoint(
             room.message_history.append(player_msg_ts)
             await room.broadcast(player_msg_ts)
 
+            await room.broadcast({"type": "dm_typing", "typing": True, "timestamp": time.time()})
             try:
                 async with room._lock:
                     result = await dm_turn(room.game_session, text, player_id=player_id)
             except Exception as exc:
                 logger.exception("dm_turn failed for %s: %s", player_name, exc)
+                await room.broadcast({"type": "dm_typing", "typing": False, "timestamp": time.time()})
                 await room.send_to(
                     player_id,
                     {"type": "error", "text": "DM 暂时无法回应，请稍后再试"},
                 )
                 continue
+            await room.broadcast({"type": "dm_typing", "typing": False, "timestamp": time.time()})
 
             dm_msg_ts: dict[str, Any] = {
                 "type": "dm_response",

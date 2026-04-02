@@ -125,7 +125,6 @@ def orchestrator_with_trace(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr("app.agents.judge.chat", fake_chat)
     monkeypatch.setattr("app.agents.narrator.chat", fake_chat)
-    monkeypatch.setattr("app.agents.safety.chat", fake_chat)
 
     return orch
 
