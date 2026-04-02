@@ -163,6 +163,7 @@
     "result_correct": "🎉 你们找到了凶手！",
     "result_wrong": "😱 凶手逍遥法外……",
     "winner_label": "凶手：",
+    "accused_label": "被指控：",
     "runoff_tie": "平局，进入加时投票…",
     "vote_distribution": "投票结果",
     "tally_votes": "{n}票",

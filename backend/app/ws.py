@@ -159,8 +159,9 @@ async def _advance_mm_phase(room: Room) -> None:
     if new_phase_id is None:
         return  # already terminal
 
-    # Reset skip votes for the new phase
+    # Reset skip votes and silence timer for the new phase
     room._skip_votes.clear()
+    room.intervention.on_phase_change()
 
     phase_obj = room.state_machine.current()
     duration = phase_obj.duration_seconds

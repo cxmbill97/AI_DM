@@ -163,6 +163,7 @@
     "result_correct": "🎉 You found the culprit!",
     "result_wrong": "😱 The culprit got away…",
     "winner_label": "Culprit: ",
+    "accused_label": "Accused: ",
     "runoff_tie": "Tie — entering runoff vote…",
     "vote_distribution": "Vote Results",
     "tally_votes": "{n} votes",

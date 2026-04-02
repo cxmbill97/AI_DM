@@ -44,7 +44,7 @@ export function VotePanel({
         </div>
         {voteResult.winner_name && (
           <div className="vote-result-winner">
-            {t('voting.winner_label')}<strong>{voteResult.winner_name}</strong>
+            {voteResult.is_correct ? t('voting.winner_label') : t('voting.accused_label')}<strong>{voteResult.winner_name}</strong>
           </div>
         )}
         {!voteResult.winner_name && voteResult.runoff && (

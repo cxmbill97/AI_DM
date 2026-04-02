@@ -57,7 +57,7 @@ export function PhaseBar({ phase, timeRemaining, skipVotes, hasSkipVoted, onSkip
 
   const currentIdx = PHASE_ORDER.indexOf(phase);
   const isWarning = localTime !== null && localTime > 0 && localTime <= 30;
-  const canSkip = phase !== 'reveal' && !!onSkip;
+  const canSkip = phase !== 'reveal' && phase !== 'voting' && !!onSkip;
 
   return (
     <div className="phase-bar">
