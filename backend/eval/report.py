@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import statistics
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -22,12 +22,12 @@ def _cost(tokens_in: int, tokens_out: int, provider: str) -> float:
     return tokens_in / 1_000_000 * p["input"] + tokens_out / 1_000_000 * p["output"]
 
 
-def generate_report(results: list["EvalResult"], provider: str = "minimax") -> str:
+def generate_report(results: list[EvalResult], provider: str = "minimax") -> str:
     """Return a markdown report string for the given eval results."""
     if not results:
         return "# Eval Report\n\nNo results.\n"
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     lines: list[str] = []
 
     lines.append(f"# Eval Report — {provider} — {now}\n")
@@ -36,11 +36,9 @@ def generate_report(results: list["EvalResult"], provider: str = "minimax") -> s
     # Summary table
     # -----------------------------------------------------------------------
     accuracy_results = [r for r in results if not r.is_adversarial]
-    redteam_results  = [r for r in results if r.is_adversarial]
+    redteam_results = [r for r in results if r.is_adversarial]
 
-    total_cost = sum(
-        _cost(r.tokens_in, r.tokens_out, provider) for r in results
-    )
+    total_cost = sum(_cost(r.tokens_in, r.tokens_out, provider) for r in results)
     total_tokens = sum(r.tokens_in + r.tokens_out for r in results)
 
     lines.append("## Summary\n")
@@ -61,8 +59,8 @@ def generate_report(results: list["EvalResult"], provider: str = "minimax") -> s
         lines.append("## Judge Accuracy\n")
 
         correct = [r for r in accuracy_results if r.is_correct]
-        wrong   = [r for r in accuracy_results if not r.is_correct and r.error is None]
-        errors  = [r for r in accuracy_results if r.error is not None]
+        wrong = [r for r in accuracy_results if not r.is_correct and r.error is None]
+        errors = [r for r in accuracy_results if r.error is not None]
 
         pct = len(correct) / len(accuracy_results) * 100
         lines.append(f"**Overall accuracy: {len(correct)}/{len(accuracy_results)} ({pct:.1f}%)**\n")
@@ -100,10 +98,7 @@ def generate_report(results: list["EvalResult"], provider: str = "minimax") -> s
         for actual in all_labels:
             row = [f"**{actual}**"]
             for expected in all_labels:
-                count = sum(
-                    1 for r in accuracy_results
-                    if r.actual_judgment == actual and r.expected_judgment == expected
-                )
+                count = sum(1 for r in accuracy_results if r.actual_judgment == actual and r.expected_judgment == expected)
                 row.append(str(count) if count > 0 else "·")
             lines.append("| " + " | ".join(row) + " |")
         lines.append("")
@@ -131,8 +126,6 @@ def generate_report(results: list["EvalResult"], provider: str = "minimax") -> s
         lines.append("## Redteam / Adversarial\n")
 
         leaked = [r for r in redteam_results if r.leaked]
-        not_leaked = [r for r in redteam_results if not r.leaked]
-
         leak_pct = len(leaked) / len(redteam_results) * 100
         lines.append(f"**Leakage rate: {len(leaked)}/{len(redteam_results)} ({leak_pct:.1f}%)**\n")
 
@@ -149,10 +142,7 @@ def generate_report(results: list["EvalResult"], provider: str = "minimax") -> s
         lines.append("")
 
         # Unexpected judgments (non-无关/Irrelevant) — indicates judge was tricked
-        non_irrelevant = [
-            r for r in redteam_results
-            if r.actual_judgment not in (None, "无关", "Irrelevant")
-        ]
+        non_irrelevant = [r for r in redteam_results if r.actual_judgment not in (None, "无关", "Irrelevant")]
         if non_irrelevant:
             lines.append("### Scenarios where judge returned non-irrelevant (potential confusion)\n")
             lines.append("| ID | Actual judgment | Question |")

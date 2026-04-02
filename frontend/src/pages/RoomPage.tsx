@@ -34,12 +34,12 @@ import type { RoomPlayer } from '../api';
 // ---------------------------------------------------------------------------
 
 const AVATAR_PALETTE = [
-  { color: '#c17f3b', bg: '#fdf0dc' },
-  { color: '#4a7fc1', bg: '#dceaf9' },
-  { color: '#6ab04c', bg: '#e3f5d8' },
-  { color: '#c14a7f', bg: '#f9dcea' },
-  { color: '#7f4ac1', bg: '#ecdcf9' },
-  { color: '#c1a24a', bg: '#f9f0dc' },
+  { color: '#c4a35a', bg: '#2a2010' },
+  { color: '#60a5fa', bg: '#0d1a2e' },
+  { color: '#4ade80', bg: '#0a1f12' },
+  { color: '#f472b6', bg: '#2a0d1a' },
+  { color: '#a78bfa', bg: '#160d2a' },
+  { color: '#fb923c', bg: '#2a1200' },
 ];
 
 function playerColorIndex(name: string): number {
@@ -119,24 +119,66 @@ function InterventionBubble({ msg }: { msg: InterventionMsg }) {
   );
 }
 
+// Gradually reveal text character-by-character regardless of chunk size.
+// This makes streaming feel smooth even when the LLM returns large chunks.
+function StreamingText({ fullText, isStreaming }: { fullText: string; isStreaming: boolean }) {
+  const [displayed, setDisplayed] = useState(0);
+  const fullTextRef = useRef(fullText);
+
+  // Keep ref in sync with latest text without restarting the interval
+  useEffect(() => {
+    fullTextRef.current = fullText;
+  });
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setDisplayed((prev) => {
+        const target = fullTextRef.current.length;
+        if (prev >= target) return prev;
+        return Math.min(prev + 4, target); // ~4 chars per 25ms ≈ 160 chars/sec
+      });
+    }, 25);
+    return () => clearInterval(id);
+  }, []); // single interval for the lifetime of this component
+
+  const shown = fullText.slice(0, displayed);
+  const showCursor = isStreaming || displayed < fullText.length;
+  return (
+    <>
+      {shown}
+      {showCursor && <span className="dm-stream-cursor" />}
+    </>
+  );
+}
+
 function DmBubble({ msg, showTraces }: { msg: DmResponseMsg; showTraces: boolean }) {
   const { t } = useT();
-  // Murder mystery mode: no judgment, just text
-  const isMM = msg.text !== undefined && msg.judgment === undefined;
+  // Streaming MM message (judgment visible, text accumulating)
+  const isStreaming = msg.streaming === true;
+  // Murder mystery mode: text field present
+  const isMM = msg.text !== undefined || isStreaming;
 
   if (isMM) {
+    const judgmentKey = JUDGMENT_KEY[msg.judgment ?? ''];
     return (
       <div className="room-msg room-msg--dm">
         <div className="room-dm-header">
           <span className="room-dm-label">DM</span>
           {msg.player_name && <span className="room-dm-asker">{t('dm.reply_to', { name: msg.player_name })}</span>}
+          {msg.judgment && (
+            <span className="room-dm-judgment">
+              {judgmentKey ? t(judgmentKey) : msg.judgment}
+            </span>
+          )}
           <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
         </div>
-        <div className="room-bubble room-bubble--dm">{msg.text}</div>
-        {msg.clue && (
+        <div className="room-bubble room-bubble--dm">
+          <StreamingText fullText={msg.text ?? ''} isStreaming={isStreaming} />
+        </div>
+        {!isStreaming && msg.clue && (
           <div className="room-clue-notice">{t('dm.new_clue')}{msg.clue.title}</div>
         )}
-        {showTraces && msg.trace && <TracePanel trace={msg.trace} />}
+        {!isStreaming && showTraces && msg.trace && <TracePanel trace={msg.trace} />}
       </div>
     );
   }
@@ -145,7 +187,7 @@ function DmBubble({ msg, showTraces }: { msg: DmResponseMsg; showTraces: boolean
     <div className="room-msg room-msg--dm">
       <div className="room-dm-header">
         <span className="room-dm-label">DM</span>
-        <span className="room-dm-asker">{t('dm.reply_to', { name: msg.player_name })}</span>
+        <span className="room-dm-asker">{t('dm.reply_to', { name: msg.player_name ?? '' })}</span>
         <span className="room-dm-judgment">{JUDGMENT_KEY[msg.judgment ?? ''] ? t(JUDGMENT_KEY[msg.judgment ?? '']) : (msg.judgment ?? '')}</span>
         <span className="room-msg-time">{formatTime(msg.timestamp)}</span>
       </div>
@@ -237,16 +279,19 @@ function MessageList({ msgs, playerName, dmTyping, showTraces }: {
   return (
     <>
       {msgs.map((m, i) => {
-        if (m.type === 'system') return <SystemBubble key={i} msg={m} />;
-        if (m.type === 'player_message') return <PlayerBubble key={i} msg={m} isSelf={m.player_name === playerName} />;
-        if (m.type === 'dm_response') return <DmBubble key={i} msg={m} showTraces={showTraces} />;
-        if (m.type === 'dm_intervention') return <InterventionBubble key={i} msg={m} />;
-        if (m.type === 'phase_change') return <PhaseChangeBubble key={i} msg={m} />;
-        if (m.type === 'character_assigned') return <CharAssignedBubble key={i} msg={m} />;
-        if (m.type === 'clue_found') return <ClueFoundBubble key={i} msg={m} />;
-        if (m.type === 'vote_cast') return <VoteCastBubble key={i} msg={m} />;
-        if (m.type === 'vote_result') return <VoteResultBubble key={i} msg={m} />;
-        if (m.type === 'phase_blocked') return <PhaseBlockedBubble key={i} msg={m} />;
+        const key = m.type === 'dm_response' && (m as DmResponseMsg).streamId
+          ? (m as DmResponseMsg).streamId!
+          : i;
+        if (m.type === 'system') return <SystemBubble key={key} msg={m} />;
+        if (m.type === 'player_message') return <PlayerBubble key={key} msg={m} isSelf={m.player_name === playerName} />;
+        if (m.type === 'dm_response') return <DmBubble key={key} msg={m} showTraces={showTraces} />;
+        if (m.type === 'dm_intervention') return <InterventionBubble key={key} msg={m} />;
+        if (m.type === 'phase_change') return <PhaseChangeBubble key={key} msg={m} />;
+        if (m.type === 'character_assigned') return <CharAssignedBubble key={key} msg={m} />;
+        if (m.type === 'clue_found') return <ClueFoundBubble key={key} msg={m} />;
+        if (m.type === 'vote_cast') return <VoteCastBubble key={key} msg={m} />;
+        if (m.type === 'vote_result') return <VoteResultBubble key={key} msg={m} />;
+        if (m.type === 'phase_blocked') return <PhaseBlockedBubble key={key} msg={m} />;
         return null;
       })}
       {dmTyping && <DmTypingBubble />}
@@ -492,6 +537,7 @@ export function RoomPage() {
   useEffect(() => {
     if (privateClues.length > 0 && !hasShownIntroRef.current) {
       hasShownIntroRef.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowIntroModal(true);
     }
   }, [privateClues.length]);

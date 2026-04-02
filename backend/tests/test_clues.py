@@ -8,7 +8,6 @@ from app.dm import check_clue_unlock_active, check_clue_unlock_passive
 from app.models import GameSession, Puzzle
 from app.puzzle_loader import load_all_puzzles, load_puzzle
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -30,7 +29,6 @@ def _session(puzzle: Puzzle, **kwargs) -> GameSession:
 
 
 class TestPassiveClueDelivery:
-
     def test_delivers_first_hint_as_clue_card(self, soup_puzzle: Puzzle) -> None:
         session = _session(soup_puzzle)
         clue = check_clue_unlock_passive(session)
@@ -89,7 +87,6 @@ class TestPassiveClueDelivery:
 
 
 class TestActiveClueUnlock:
-
     def test_keyword_match_returns_correct_clue(self, soup_puzzle: Puzzle) -> None:
         # clue_shipwreck has keywords ["海难", "船", "遇难", "大海", "漂流"]
         unlocked: set[str] = set()
@@ -152,13 +149,8 @@ class TestActiveClueUnlock:
         for clue in soup_puzzle.clues:
             keyword = clue.unlock_keywords[0]
             result = check_clue_unlock_active(keyword, soup_puzzle, unlocked)
-            assert result is not None, (
-                f"Clue {clue.id!r} is unreachable — "
-                f"keyword {keyword!r} returned None (unlocked so far: {unlocked})"
-            )
-            assert clue.id in unlocked, (
-                f"Clue {clue.id!r} not added to unlocked set after keyword match"
-            )
+            assert result is not None, f"Clue {clue.id!r} is unreachable — keyword {keyword!r} returned None (unlocked so far: {unlocked})"
+            assert clue.id in unlocked, f"Clue {clue.id!r} not added to unlocked set after keyword match"
 
     def test_all_clues_unlockable_across_all_puzzles(self) -> None:
         """Every clue in every puzzle must be reachable via at least one of its keywords."""
@@ -167,10 +159,7 @@ class TestActiveClueUnlock:
             for clue in puzzle.clues:
                 keyword = clue.unlock_keywords[0]
                 result = check_clue_unlock_active(keyword, puzzle, unlocked)
-                assert result is not None, (
-                    f"Puzzle {puzzle.id!r}: clue {clue.id!r} unreachable "
-                    f"via keyword {keyword!r}"
-                )
+                assert result is not None, f"Puzzle {puzzle.id!r}: clue {clue.id!r} unreachable via keyword {keyword!r}"
                 assert clue.id in unlocked
 
 
@@ -180,47 +169,29 @@ class TestActiveClueUnlock:
 
 
 class TestClueContentSafety:
-
-    def test_clue_content_not_in_system_prompt_before_unlock(
-        self, soup_puzzle: Puzzle
-    ) -> None:
+    def test_clue_content_not_in_system_prompt_before_unlock(self, soup_puzzle: Puzzle) -> None:
         """Locked clue content must never appear in the assembled system prompt."""
         from app.dm import assemble_prompt
 
         # No clues unlocked yet
         prompt = assemble_prompt(soup_puzzle, unlocked_clue_ids=set())
         for clue in soup_puzzle.clues:
-            assert clue.content not in prompt, (
-                f"Locked clue {clue.id!r} content leaked into system prompt!\n"
-                f"Content: {clue.content!r}"
-            )
+            assert clue.content not in prompt, f"Locked clue {clue.id!r} content leaked into system prompt!\nContent: {clue.content!r}"
 
-    def test_unlocked_clue_content_appears_in_system_prompt(
-        self, soup_puzzle: Puzzle
-    ) -> None:
+    def test_unlocked_clue_content_appears_in_system_prompt(self, soup_puzzle: Puzzle) -> None:
         """After a clue is unlocked it should be visible in the assembled prompt
         so the DM can reference it."""
         from app.dm import assemble_prompt
 
         first_clue = soup_puzzle.clues[0]
-        prompt = assemble_prompt(
-            soup_puzzle, unlocked_clue_ids={first_clue.id}
-        )
-        assert first_clue.content in prompt, (
-            f"Unlocked clue {first_clue.id!r} content missing from system prompt"
-        )
+        prompt = assemble_prompt(soup_puzzle, unlocked_clue_ids={first_clue.id})
+        assert first_clue.content in prompt, f"Unlocked clue {first_clue.id!r} content missing from system prompt"
 
-    def test_other_clues_still_locked_after_partial_unlock(
-        self, soup_puzzle: Puzzle
-    ) -> None:
+    def test_other_clues_still_locked_after_partial_unlock(self, soup_puzzle: Puzzle) -> None:
         """Unlocking one clue must not expose other clues' content in the prompt."""
         from app.dm import assemble_prompt
 
         first_clue = soup_puzzle.clues[0]
-        prompt = assemble_prompt(
-            soup_puzzle, unlocked_clue_ids={first_clue.id}
-        )
+        prompt = assemble_prompt(soup_puzzle, unlocked_clue_ids={first_clue.id})
         for clue in soup_puzzle.clues[1:]:
-            assert clue.content not in prompt, (
-                f"Still-locked clue {clue.id!r} content appeared after partial unlock"
-            )
+            assert clue.content not in prompt, f"Still-locked clue {clue.id!r} content appeared after partial unlock"

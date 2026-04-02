@@ -18,7 +18,6 @@ from app.dm import (
 from app.llm import strip_think
 from app.models import DMOutput, GameSession, Puzzle
 
-
 # ===========================================================================
 # Helpers
 # ===========================================================================
@@ -285,18 +284,14 @@ class TestHintLogic:
 
 
 class TestDMTurn:
-    async def test_history_updated_with_user_and_assistant_messages(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_history_updated_with_user_and_assistant_messages(self, sample_puzzle: Puzzle, mock_llm) -> None:
         session = _fresh_session(sample_puzzle)
         await dm_turn(session, "男人是故意去餐厅的吗？")
         assert len(session.history) == 2
         assert session.history[0] == {"role": "user", "content": "男人是故意去餐厅的吗？"}
         assert session.history[1]["role"] == "assistant"
 
-    async def test_raw_response_stored_in_history(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_raw_response_stored_in_history(self, sample_puzzle: Puzzle, mock_llm) -> None:
         """History must preserve the raw (think-tagged) response for multi-turn quality."""
         raw = f"<think>推理</think>{_valid_dm_json(judgment='是')}"
         mock_llm.set_response(raw)
@@ -305,58 +300,44 @@ class TestDMTurn:
         stored = session.history[1]["content"]
         assert "<think>" in stored  # raw, not stripped
 
-    async def test_judgment_returned_correctly(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_judgment_returned_correctly(self, sample_puzzle: Puzzle, mock_llm) -> None:
         mock_llm.set_response(_valid_dm_json(judgment="是", truth_progress=0.3))
         session = _fresh_session(sample_puzzle)
         result = await dm_turn(session, "男人遭遇过海难吗？")
         assert result.judgment == "是"
         assert result.truth_progress == pytest.approx(0.3)
 
-    async def test_truth_progress_capped_at_1(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_truth_progress_capped_at_1(self, sample_puzzle: Puzzle, mock_llm) -> None:
         mock_llm.set_response(_valid_dm_json(judgment="是", truth_progress=1.5))
         session = _fresh_session(sample_puzzle)
         result = await dm_turn(session, "测试")
         assert result.truth_progress <= 1.0
 
-    async def test_consecutive_misses_incremented_on_wuguan(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_consecutive_misses_incremented_on_wuguan(self, sample_puzzle: Puzzle, mock_llm) -> None:
         mock_llm.set_response(_valid_dm_json(judgment="无关"))
         session = _fresh_session(sample_puzzle)
         await dm_turn(session, "男人喜欢打篮球吗？")
         assert session.consecutive_misses == 1
 
-    async def test_consecutive_misses_incremented_on_bushi(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_consecutive_misses_incremented_on_bushi(self, sample_puzzle: Puzzle, mock_llm) -> None:
         mock_llm.set_response(_valid_dm_json(judgment="不是"))
         session = _fresh_session(sample_puzzle)
         await dm_turn(session, "男人是外国人吗？")
         assert session.consecutive_misses == 1
 
-    async def test_consecutive_misses_reset_on_shi(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_consecutive_misses_reset_on_shi(self, sample_puzzle: Puzzle, mock_llm) -> None:
         mock_llm.set_response(_valid_dm_json(judgment="是", truth_progress=0.2))
         session = _fresh_session(sample_puzzle, consecutive_misses=4)
         await dm_turn(session, "男人曾经遭遇危险？")
         assert session.consecutive_misses == 0
 
-    async def test_consecutive_misses_reset_on_partial(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_consecutive_misses_reset_on_partial(self, sample_puzzle: Puzzle, mock_llm) -> None:
         mock_llm.set_response(_valid_dm_json(judgment="部分正确", truth_progress=0.2))
         session = _fresh_session(sample_puzzle, consecutive_misses=3)
         await dm_turn(session, "男人的妻子死了？")
         assert session.consecutive_misses == 0
 
-    async def test_hint_given_after_miss_threshold(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_hint_given_after_miss_threshold(self, sample_puzzle: Puzzle, mock_llm) -> None:
         """After MISS_THRESHOLD consecutive misses, the DM must provide a clue card."""
         mock_llm.set_response(_valid_dm_json(judgment="无关"))
         # One away from threshold
@@ -366,18 +347,14 @@ class TestDMTurn:
         assert result.clue_unlocked is not None
         assert result.should_hint is True
 
-    async def test_hint_given_when_llm_requests_it(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_hint_given_when_llm_requests_it(self, sample_puzzle: Puzzle, mock_llm) -> None:
         mock_llm.set_response(_valid_dm_json(should_hint=True))
         session = _fresh_session(sample_puzzle)
         result = await dm_turn(session, "某个问题")
         # Hints are now delivered as pseudo-clue cards via clue_unlocked
         assert result.clue_unlocked is not None
 
-    async def test_no_hint_when_hints_exhausted(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_no_hint_when_hints_exhausted(self, sample_puzzle: Puzzle, mock_llm) -> None:
         mock_llm.set_response(_valid_dm_json(judgment="无关", should_hint=True))
         session = _fresh_session(
             sample_puzzle,
@@ -387,27 +364,21 @@ class TestDMTurn:
         assert result.hint is None
         assert result.should_hint is False
 
-    async def test_game_finishes_when_progress_reaches_1(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_game_finishes_when_progress_reaches_1(self, sample_puzzle: Puzzle, mock_llm) -> None:
         mock_llm.set_response(_valid_dm_json(judgment="是", truth_progress=1.0))
         session = _fresh_session(sample_puzzle)
         result = await dm_turn(session, "男人喝了妻子的肉？")
         assert session.finished is True
         assert result.truth == sample_puzzle.truth
 
-    async def test_truth_not_revealed_below_1(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_truth_not_revealed_below_1(self, sample_puzzle: Puzzle, mock_llm) -> None:
         mock_llm.set_response(_valid_dm_json(judgment="是", truth_progress=0.99))
         session = _fresh_session(sample_puzzle)
         result = await dm_turn(session, "接近了但没到")
         assert session.finished is False
         assert result.truth is None
 
-    async def test_prompt_sent_to_llm_contains_surface_and_truth(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_prompt_sent_to_llm_contains_surface_and_truth(self, sample_puzzle: Puzzle, mock_llm) -> None:
         """Verify the assembled prompt sent to the LLM has the right content."""
         session = _fresh_session(sample_puzzle)
         await dm_turn(session, "测试问题")
@@ -415,39 +386,29 @@ class TestDMTurn:
         assert sample_puzzle.surface in system_prompt
         assert sample_puzzle.truth in system_prompt
 
-    async def test_prompt_sent_exactly_once_per_turn(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_prompt_sent_exactly_once_per_turn(self, sample_puzzle: Puzzle, mock_llm) -> None:
         session = _fresh_session(sample_puzzle)
         await dm_turn(session, "第一个问题")
         await dm_turn(session, "第二个问题")
         assert mock_llm.call_count == 2
 
-    async def test_history_grows_across_turns(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_history_grows_across_turns(self, sample_puzzle: Puzzle, mock_llm) -> None:
         session = _fresh_session(sample_puzzle)
         await dm_turn(session, "第一个问题")
         await dm_turn(session, "第二个问题")
         # 2 turns × (user + assistant) = 4 messages
         assert len(session.history) == 4
 
-    async def test_spoiler_replaced_when_leak_detected(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_spoiler_replaced_when_leak_detected(self, sample_puzzle: Puzzle, mock_llm) -> None:
         """If the LLM somehow leaks a key_fact, dm_turn must replace the response."""
         leaky_response = f"是的，{sample_puzzle.key_facts[0]}就是真相。"
-        mock_llm.set_response(
-            _valid_dm_json(judgment="是", response=leaky_response, truth_progress=0.5)
-        )
+        mock_llm.set_response(_valid_dm_json(judgment="是", response=leaky_response, truth_progress=0.5))
         session = _fresh_session(sample_puzzle)
         result = await dm_turn(session, "泄露测试")
         assert result.response != leaky_response
         assert not check_spoiler_leak(result.response, sample_puzzle)
 
-    async def test_fallback_response_on_malformed_llm_output(
-        self, sample_puzzle: Puzzle, mock_llm
-    ) -> None:
+    async def test_fallback_response_on_malformed_llm_output(self, sample_puzzle: Puzzle, mock_llm) -> None:
         """Malformed LLM output must not crash dm_turn."""
         mock_llm.set_response("这不是JSON，纯文本乱码")
         session = _fresh_session(sample_puzzle)
@@ -464,9 +425,7 @@ class TestDMTurn:
 
 @pytest.mark.slow
 class TestDMIntegration:
-    async def test_classic_puzzle_multi_turn_progress(
-        self, sample_puzzle: Puzzle, real_llm
-    ) -> None:
+    async def test_classic_puzzle_multi_turn_progress(self, sample_puzzle: Puzzle, real_llm) -> None:
         """Walk through several known-correct deductions and confirm progress rises."""
         session = _fresh_session(sample_puzzle)
 

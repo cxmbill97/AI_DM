@@ -21,7 +21,13 @@ from app.models import (
     StartRequest,
     StartResponse,
 )
-from app.puzzle_loader import load_all_puzzles, load_puzzle, load_script, load_scripts, random_puzzle
+from app.puzzle_loader import (
+    load_all_puzzles,
+    load_puzzle,
+    load_script,
+    load_scripts,
+    random_puzzle,
+)
 from app.room import room_manager
 from app.ws import websocket_endpoint
 
@@ -35,6 +41,7 @@ async def openai_api_error_handler(_: Request, exc: APIError) -> JSONResponse:
         status_code=502,
         content={"detail": f"LLM API error: {exc.message}"},
     )
+
 
 # ---------------------------------------------------------------------------
 # CORS — allow all origins for LAN dev access (not for production)
@@ -144,10 +151,10 @@ async def chat_endpoint(body: ChatRequest) -> ChatResponse:
 
 
 class CreateRoomRequest(BaseModel):
-    game_type: str = "turtle_soup"   # "turtle_soup" | "murder_mystery"
-    puzzle_id: str | None = None     # turtle_soup: None → random puzzle
-    script_id: str | None = None     # murder_mystery: required
-    language: str = "zh"             # "zh" | "en"
+    game_type: str = "turtle_soup"  # "turtle_soup" | "murder_mystery"
+    puzzle_id: str | None = None  # turtle_soup: None → random puzzle
+    script_id: str | None = None  # murder_mystery: required
+    language: str = "zh"  # "zh" | "en"
 
 
 @app.post("/api/rooms")
@@ -186,11 +193,7 @@ async def list_scripts(lang: str = "zh") -> list[dict]:
 
     Query param: lang=zh (default) | lang=en
     """
-    return [
-        {"id": s.id, "title": s.title, "difficulty": s.metadata.difficulty,
-         "player_count": s.metadata.player_count}
-        for s in load_scripts(lang)
-    ]
+    return [{"id": s.id, "title": s.title, "difficulty": s.metadata.difficulty, "player_count": s.metadata.player_count} for s in load_scripts(lang)]
 
 
 @app.get("/api/rooms/{room_id}", response_model=RoomState)
@@ -200,10 +203,7 @@ async def get_room(room_id: str) -> RoomState:
     if room is None:
         raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
 
-    players = [
-        Player(id=pid, name=p["name"], connected=p["connected"])
-        for pid, p in room.players.items()
-    ]
+    players = [Player(id=pid, name=p["name"], connected=p["connected"]) for pid, p in room.players.items()]
     if room.game_type == "murder_mystery":
         assert room.script is not None
         return RoomState(

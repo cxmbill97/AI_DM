@@ -18,6 +18,7 @@ from app.models import GameSession, Puzzle, Script
 
 if TYPE_CHECKING:
     from fastapi import WebSocket
+
     from app.agents.orchestrator import AgentOrchestrator
     from app.state_machine import GameStateMachine
     from app.voting import VotingModule
@@ -99,8 +100,8 @@ class Room:
             )
 
         if script is not None:
-            from app.state_machine import GameStateMachine
             from app.agents.orchestrator import AgentOrchestrator
+            from app.state_machine import GameStateMachine
 
             self.state_machine = GameStateMachine(script.phases)
             self.orchestrator = AgentOrchestrator(
@@ -117,11 +118,7 @@ class Room:
     def _active_player_count(self) -> int:
         """Count players that are connected OR within the reconnect window."""
         now = time.time()
-        return sum(
-            1
-            for p in self.players.values()
-            if p["connected"] or (now - p["last_seen"]) < RECONNECT_WINDOW_SECS
-        )
+        return sum(1 for p in self.players.values() if p["connected"] or (now - p["last_seen"]) < RECONNECT_WINDOW_SECS)
 
     def is_full(self) -> bool:
         return self._active_player_count() >= MAX_PLAYERS
@@ -162,7 +159,7 @@ class Room:
                 return char.id
         return None  # all characters already assigned
 
-    def add_player(self, player_id: str, name: str, websocket: "WebSocket") -> None:
+    def add_player(self, player_id: str, name: str, websocket: WebSocket) -> None:
         self.players[player_id] = {
             "name": name,
             "websocket": websocket,
@@ -175,7 +172,7 @@ class Room:
         else:
             self._assign_character(player_id)
 
-    def reconnect_player(self, player_id: str, websocket: "WebSocket") -> None:
+    def reconnect_player(self, player_id: str, websocket: WebSocket) -> None:
         slot = self.players[player_id]
         slot["websocket"] = websocket
         slot["connected"] = True
@@ -208,9 +205,7 @@ class Room:
 
     async def broadcast(self, message: dict[str, Any]) -> None:
         """Send *message* as JSON to every currently-connected player."""
-        await asyncio.gather(
-            *(self._send_to_slot(slot, message) for slot in self.players.values())
-        )
+        await asyncio.gather(*(self._send_to_slot(slot, message) for slot in self.players.values()))
 
     async def send_to(self, player_id: str, message: dict[str, Any]) -> None:
         """Send *message* to a single player only."""

@@ -38,8 +38,8 @@ PRICING_USD_PER_MTOK: dict[str, float] = {
 class TraceStep:
     """A single agent invocation within the pipeline."""
 
-    agent: str           # "router" | "judge" | "narrator" | "safety" | "npc"
-    input_summary: str   # sanitised — no secret content
+    agent: str  # "router" | "judge" | "narrator" | "safety" | "npc"
+    input_summary: str  # sanitised — no secret content
     output_summary: str  # sanitised output description
     latency_ms: float
     tokens_in: int = 0
@@ -73,10 +73,7 @@ class AgentTrace:
     def total_cost_usd(self) -> float:
         tokens_in = sum(s.tokens_in for s in self.steps)
         tokens_out = sum(s.tokens_out for s in self.steps)
-        return (
-            tokens_in * PRICING_USD_PER_MTOK["input"]
-            + tokens_out * PRICING_USD_PER_MTOK["output"]
-        ) / 1_000_000
+        return (tokens_in * PRICING_USD_PER_MTOK["input"] + tokens_out * PRICING_USD_PER_MTOK["output"]) / 1_000_000
 
     def to_dict(self) -> dict:
         """Serialise to a plain dict suitable for JSON broadcast."""

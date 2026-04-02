@@ -3,6 +3,7 @@ logs/
 
 # Secrets — never commit
 .env
+.mcp.json
 *.env
 .env.local
 .env.*.local

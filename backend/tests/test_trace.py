@@ -11,12 +11,11 @@ Coverage:
 from __future__ import annotations
 
 import json
-from typing import Any
 
 import pytest
 
 from app.agents.orchestrator import AgentOrchestrator
-from app.agents.trace import PRICING_USD_PER_MTOK, AgentTrace
+from app.agents.trace import PRICING_USD_PER_MTOK
 from app.llm import Usage, _usage_accumulator
 from app.models import (
     NPC,
@@ -42,7 +41,7 @@ KEY_FACTS = [
 TRUTH_TEXT = "凶手是沈清，动机是私生女身份，手法是投药后推倒"
 
 CHARACTER_SECRETS = {
-    "char_su":   "与死者有秘密子女关系",
+    "char_su": "与死者有秘密子女关系",
     "char_shen": "是死者私生女，在威士忌中投入安眠药",
 }
 
@@ -58,36 +57,49 @@ _FAKE_TOKENS_OUT = 60
 
 def _make_script() -> Script:
     phases = [
-        Phase(id="opening", type="narration", next="investigation_1",
-              duration_seconds=120, allowed_actions={"listen"},
-              dm_script="欢迎来到雨夜迷踪"),
-        Phase(id="investigation_1", type="investigation", next="discussion",
-              duration_seconds=600, allowed_actions={"ask_dm", "search", "private_chat"},
-              available_clues=["clue_001"]),
+        Phase(id="opening", type="narration", next="investigation_1", duration_seconds=120, allowed_actions={"listen"}, dm_script="欢迎来到雨夜迷踪"),
+        Phase(
+            id="investigation_1",
+            type="investigation",
+            next="discussion",
+            duration_seconds=600,
+            allowed_actions={"ask_dm", "search", "private_chat"},
+            available_clues=["clue_001"],
+        ),
     ]
     characters = [
-        Character(id="char_su", name="苏雅", public_bio="演员",
-                  secret_bio=CHARACTER_SECRETS["char_su"], is_culprit=False),
-        Character(id="char_shen", name="沈清", public_bio="管理人",
-                  secret_bio=CHARACTER_SECRETS["char_shen"], is_culprit=True),
+        Character(id="char_su", name="苏雅", public_bio="演员", secret_bio=CHARACTER_SECRETS["char_su"], is_culprit=False),
+        Character(id="char_shen", name="沈清", public_bio="管理人", secret_bio=CHARACTER_SECRETS["char_shen"], is_culprit=True),
     ]
     clues = [
-        ScriptClue(id="clue_001", title="毒理报告", content="威士忌含安眠药",
-                   phase_available="investigation_1", visibility="public",
-                   unlock_keywords=["毒", "药", "威士忌"]),
+        ScriptClue(
+            id="clue_001",
+            title="毒理报告",
+            content="威士忌含安眠药",
+            phase_available="investigation_1",
+            visibility="public",
+            unlock_keywords=["毒", "药", "威士忌"],
+        ),
     ]
     npcs = [
-        NPC(id="npc_butler", name="管家老周", persona="沉稳老管家",
-            knowledge=["clue_001"], speech_style="formal_elderly"),
+        NPC(id="npc_butler", name="管家老周", persona="沉稳老管家", knowledge=["clue_001"], speech_style="formal_elderly"),
     ]
     truth = ScriptTruth(
-        culprit="char_shen", motive="私生女动机", method="投药后推倒",
-        timeline="22:00投药，22:20推倒", key_facts=KEY_FACTS,
+        culprit="char_shen",
+        motive="私生女动机",
+        method="投药后推倒",
+        timeline="22:00投药，22:20推倒",
+        key_facts=KEY_FACTS,
     )
     return Script(
-        id="test_001", title="测试剧本",
+        id="test_001",
+        title="测试剧本",
         metadata=ScriptMetadata(player_count=2, duration_minutes=20, difficulty="beginner"),
-        characters=characters, phases=phases, clues=clues, npcs=npcs, truth=truth,
+        characters=characters,
+        phases=phases,
+        clues=clues,
+        npcs=npcs,
+        truth=truth,
     )
 
 
@@ -104,8 +116,7 @@ def orchestrator_with_trace(monkeypatch: pytest.MonkeyPatch):
         player_char_map={"p1": "char_su"},
     )
 
-    _judge_resp = json.dumps({"result": "是", "confidence": 0.85,
-                               "relevant_fact_ids": ["fact_0"]})
+    _judge_resp = json.dumps({"result": "是", "confidence": 0.85, "relevant_fact_ids": ["fact_0"]})
     _narrator_resp = "这是一个很有意思的线索。"
     _safety_resp = json.dumps({"safe": True, "leaked_content": None})
 
@@ -113,10 +124,12 @@ def orchestrator_with_trace(monkeypatch: pytest.MonkeyPatch):
         # Populate the usage accumulator exactly as the real chat() does
         acc = _usage_accumulator.get(None)
         if acc is not None:
-            acc.append(Usage(
-                prompt_tokens=_FAKE_TOKENS_IN,
-                completion_tokens=_FAKE_TOKENS_OUT,
-            ))
+            acc.append(
+                Usage(
+                    prompt_tokens=_FAKE_TOKENS_IN,
+                    completion_tokens=_FAKE_TOKENS_OUT,
+                )
+            )
         if "判断引擎" in system or "truth judgment" in system.lower():
             return _judge_resp
         if "安全" in system or "safe" in system.lower():
@@ -125,7 +138,6 @@ def orchestrator_with_trace(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr("app.agents.judge.chat", fake_chat)
     monkeypatch.setattr("app.agents.narrator.chat", fake_chat)
-    monkeypatch.setattr("app.agents.safety.chat", fake_chat)
 
     return orch
 
@@ -156,9 +168,7 @@ async def test_trace_step_order(orchestrator_with_trace: AgentOrchestrator) -> N
     judge_idx = agent_order.index("judge")
     narrator_idx = agent_order.index("narrator")
     safety_idx = agent_order.index("safety")
-    assert judge_idx < narrator_idx < safety_idx, (
-        "Pipeline order violated: expected judge < narrator < safety"
-    )
+    assert judge_idx < narrator_idx < safety_idx, "Pipeline order violated: expected judge < narrator < safety"
 
 
 async def test_trace_meta_only_router(orchestrator_with_trace: AgentOrchestrator) -> None:
@@ -238,9 +248,7 @@ async def test_trace_input_sanitized_judge(orchestrator_with_trace: AgentOrchest
     for fact in KEY_FACTS:
         # We check for the first 10 chars of each fact — a shorter substring
         # catches partial leaks too
-        assert fact[:10] not in judge_step.input_summary, (
-            f"Judge input_summary leaked key_fact: {fact[:20]!r}"
-        )
+        assert fact[:10] not in judge_step.input_summary, f"Judge input_summary leaked key_fact: {fact[:20]!r}"
 
 
 async def test_trace_input_sanitized_narrator(orchestrator_with_trace: AgentOrchestrator) -> None:
@@ -261,9 +269,7 @@ async def test_trace_input_sanitized_safety(orchestrator_with_trace: AgentOrches
 
     safety_step = next(s for s in trace.steps if s.agent == "safety")
     for fact in KEY_FACTS:
-        assert fact[:10] not in safety_step.input_summary, (
-            f"Safety input_summary leaked key_fact fragment: {fact[:20]!r}"
-        )
+        assert fact[:10] not in safety_step.input_summary, f"Safety input_summary leaked key_fact fragment: {fact[:20]!r}"
     # Should describe the text in terms of length / counts
     assert "text_len" in safety_step.input_summary or "key_facts" in safety_step.input_summary
 
@@ -281,26 +287,25 @@ async def test_trace_cost_calculated(orchestrator_with_trace: AgentOrchestrator)
 
     tokens_in = sum(s.tokens_in for s in trace.steps)
     tokens_out = sum(s.tokens_out for s in trace.steps)
-    expected_usd = (
-        tokens_in * PRICING_USD_PER_MTOK["input"]
-        + tokens_out * PRICING_USD_PER_MTOK["output"]
-    ) / 1_000_000
+    expected_usd = (tokens_in * PRICING_USD_PER_MTOK["input"] + tokens_out * PRICING_USD_PER_MTOK["output"]) / 1_000_000
     assert trace.total_cost_usd == pytest.approx(expected_usd, rel=1e-6)
 
 
 async def test_trace_cost_zero_when_no_tokens() -> None:
     """A trace with no LLM calls (only router) should have zero cost."""
-    from app.agents.trace import new_trace, TraceStep
+    from app.agents.trace import TraceStep, new_trace
 
     trace = new_trace("p1", "rules")
-    trace.steps.append(TraceStep(
-        agent="router",
-        input_summary="message='rules', phase=opening",
-        output_summary="intent=meta",
-        latency_ms=0.5,
-        tokens_in=0,
-        tokens_out=0,
-    ))
+    trace.steps.append(
+        TraceStep(
+            agent="router",
+            input_summary="message='rules', phase=opening",
+            output_summary="intent=meta",
+            latency_ms=0.5,
+            tokens_in=0,
+            tokens_out=0,
+        )
+    )
     assert trace.total_cost_usd == 0.0
 
 
@@ -321,14 +326,12 @@ async def test_trace_to_dict_structure(orchestrator_with_trace: AgentOrchestrato
     assert len(json_str) > 0
 
     # Required top-level keys
-    for key in ("message_id", "player_id", "player_message", "timestamp",
-                "total_latency_ms", "total_tokens", "total_cost_usd", "steps"):
+    for key in ("message_id", "player_id", "player_message", "timestamp", "total_latency_ms", "total_tokens", "total_cost_usd", "steps"):
         assert key in d, f"Missing key in trace dict: {key!r}"
 
     # Steps must be a list of dicts with required fields
     assert isinstance(d["steps"], list)
     assert len(d["steps"]) > 0
     for step in d["steps"]:
-        for field in ("agent", "input_summary", "output_summary",
-                      "latency_ms", "tokens_in", "tokens_out"):
+        for field in ("agent", "input_summary", "output_summary", "latency_ms", "tokens_in", "tokens_out"):
             assert field in step, f"Missing step field: {field!r}"

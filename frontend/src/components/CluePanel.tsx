@@ -17,6 +17,7 @@ export function CluePanel({ clues, panelRef }: CluePanelProps) {
   useEffect(() => {
     if (clues.length > prevLenRef.current) {
       const newest = clues[clues.length - 1];
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNewClueId(newest.id);
       const t = setTimeout(() => setNewClueId(null), 2200);
       prevLenRef.current = clues.length;

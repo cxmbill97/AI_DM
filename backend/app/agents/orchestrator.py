@@ -30,33 +30,33 @@ Response and the WebSocket handler decides what to broadcast.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
+import re
 import time
-from dataclasses import dataclass, field
+from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from typing import Any
 
-import re
-
-from app.agents.judge import JudgeAgent, Judgment, _FALLBACK_JUDGMENT
+from app.agents.judge import JudgeAgent, Judgment
 from app.agents.narrator import (
-    NarratorAgent,
     _FALLBACK_RESPONSE_ZH,
-    _FALLBACK_RESPONSE_EN,
-    _REGENERATION_FALLBACK_ZH,
     _REGENERATION_FALLBACK_EN,
+    _REGENERATION_FALLBACK_ZH,
+    NarratorAgent,
 )
 
 # Keep old names as aliases for code that imports them directly
 _FALLBACK_RESPONSE = _FALLBACK_RESPONSE_ZH
 _REGENERATION_FALLBACK = _REGENERATION_FALLBACK_ZH
-from app.agents.npc import NPCAgent
-from app.agents.router import RouterAgent
-from app.agents.safety import SafetyAgent
-from app.agents.trace import AgentTrace, TraceStep, new_trace
-from app.llm import drain_usage, reset_usage_accumulator
-from app.models import Script, ScriptClue
-from app.state_machine import GameStateMachine
-from app.visibility import VisibleContext
+from app.agents.npc import NPCAgent  # noqa: E402
+from app.agents.router import RouterAgent  # noqa: E402
+from app.agents.safety import SafetyAgent  # noqa: E402
+from app.agents.trace import AgentTrace, TraceStep, new_trace  # noqa: E402
+from app.llm import drain_usage, reset_usage_accumulator  # noqa: E402
+from app.models import Script, ScriptClue  # noqa: E402
+from app.state_machine import GameStateMachine  # noqa: E402
+from app.visibility import VisibleContext  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ RESP_DM = "dm_response"
 RESP_ERROR = "error"
 RESP_PHASE_BLOCKED = "phase_blocked"
 RESP_CLUE_FOUND = "clue_found"
-RESP_NO_RESPONSE = "no_response"   # chat intent — no DM reply
+RESP_NO_RESPONSE = "no_response"  # chat intent — no DM reply
 RESP_META = "meta_response"
 
 
@@ -76,9 +76,9 @@ RESP_META = "meta_response"
 class OrchestratorResponse:
     """What the orchestrator returns to the WebSocket handler for broadcasting."""
 
-    type: str          # one of RESP_* constants
+    type: str  # one of RESP_* constants
     text: str | None = None
-    clue: dict | None = None   # populated for RESP_CLUE_FOUND
+    clue: dict | None = None  # populated for RESP_CLUE_FOUND
 
 
 # ---------------------------------------------------------------------------
@@ -88,11 +88,11 @@ class OrchestratorResponse:
 # Maps router intent to the state machine action string that must be permitted.
 _INTENT_TO_ACTION: dict[str, str] = {
     "question": "ask_dm",
-    "accuse":   "ask_dm",
-    "search":   "search",
-    "vote":     "cast_vote",
-    "npc":      "ask_dm",
-    "chat":     "public_chat",
+    "accuse": "ask_dm",
+    "search": "search",
+    "vote": "cast_vote",
+    "npc": "ask_dm",
+    "chat": "public_chat",
     # meta is always permitted (no state machine guard)
 }
 
@@ -101,13 +101,8 @@ _INTENT_TO_ACTION: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 _META_RESPONSES_ZH: dict[str, str] = {
-    "规则": (
-        "游戏规则：各阶段请按提示行事。调查阶段可向DM提问、搜查线索、询问NPC；"
-        "讨论阶段可与其他玩家交流；投票阶段请选出你认为的凶手。"
-    ),
-    "default": (
-        "当前阶段请继续推理。如有疑问，可以提问、搜查，或询问NPC。祝大家好运！"
-    ),
+    "规则": ("游戏规则：各阶段请按提示行事。调查阶段可向DM提问、搜查线索、询问NPC；讨论阶段可与其他玩家交流；投票阶段请选出你认为的凶手。"),
+    "default": ("当前阶段请继续推理。如有疑问，可以提问、搜查，或询问NPC。祝大家好运！"),
 }
 
 _META_RESPONSES_EN: dict[str, str] = {
@@ -116,9 +111,7 @@ _META_RESPONSES_EN: dict[str, str] = {
         "search for clues, or interrogate NPCs. During discussion share your deductions. "
         "During voting, name the suspect you believe is the culprit."
     ),
-    "default": (
-        "Keep reasoning through the case. You may ask questions, search for clues, or interrogate NPCs. Good luck!"
-    ),
+    "default": ("Keep reasoning through the case. You may ask questions, search for clues, or interrogate NPCs. Good luck!"),
 }
 
 # Keep old name for backward compatibility
@@ -177,9 +170,7 @@ class AgentOrchestrator:
         )
 
         # NPC agents — one per NPC, keyed by npc.id
-        self._npc_agents: dict[str, NPCAgent] = {
-            npc.id: NPCAgent(npc, self._clues_by_id) for npc in script.npcs
-        }
+        self._npc_agents: dict[str, NPCAgent] = {npc.id: NPCAgent(npc, self._clues_by_id) for npc in script.npcs}
         # NPC name → npc.id for intent dispatch
         self._npc_by_name: dict[str, str] = {npc.name: npc.id for npc in script.npcs}
 
@@ -211,19 +202,24 @@ class AgentOrchestrator:
         router_latency = (time.time() - t0) * 1000
         intent = classification.intent
 
-        trace.steps.append(TraceStep(
-            agent="router",
-            input_summary=f"message={message[:80]!r}, phase={phase}",
-            output_summary=f"intent={intent}, rule={classification.matched_rule}",
-            latency_ms=router_latency,
-            tokens_in=0,
-            tokens_out=0,
-            metadata={"intent": intent, "matched_rule": classification.matched_rule},
-        ))
+        trace.steps.append(
+            TraceStep(
+                agent="router",
+                input_summary=f"message={message[:80]!r}, phase={phase}",
+                output_summary=f"intent={intent}, rule={classification.matched_rule}",
+                latency_ms=router_latency,
+                tokens_in=0,
+                tokens_out=0,
+                metadata={"intent": intent, "matched_rule": classification.matched_rule},
+            )
+        )
 
         logger.debug(
             "Orchestrator: player=%s phase=%s intent=%s rule=%s",
-            player_id, phase, intent, classification.matched_rule,
+            player_id,
+            phase,
+            intent,
+            classification.matched_rule,
         )
 
         # b) Meta and chat are always allowed — skip state machine guard
@@ -264,13 +260,226 @@ class AgentOrchestrator:
         # Unreachable — all intents handled above
         return None, trace
 
+    async def handle_message_stream(
+        self,
+        player_id: str,
+        message: str,
+    ) -> AsyncGenerator[dict, None]:
+        """Streaming variant of handle_message for murder mystery.
+
+        Yields WebSocket-ready dicts:
+          {type: "dm_stream_start", judgment: str, confidence: float}
+          {type: "dm_stream_chunk", text: str}
+          {type: "dm_stream_end", clue: dict|None, trace: dict}
+          OR on safety fail:
+          {type: "dm_stream_end", replace: str, clue: None, trace: dict}
+        """
+        return self._stream_generator(player_id, message)
+
+    async def _stream_generator(self, player_id: str, message: str) -> AsyncGenerator[dict, None]:
+        trace = new_trace(player_id, message)
+        phase = self._sm.current_phase
+        logger.info("[ORCH] stream_generator: player=%s phase=%s message=%r", player_id, phase, message[:80])
+
+        # Route (rules-only)
+        t0 = time.time()
+        classification = self.router.classify(message, phase)
+        router_latency = (time.time() - t0) * 1000
+        intent = classification.intent
+        logger.info("[ORCH] router: intent=%s rule=%s latency=%.1fms", intent, classification.matched_rule, router_latency)
+
+        trace.steps.append(
+            TraceStep(
+                agent="router",
+                input_summary=f"message={message[:80]!r}, phase={phase}",
+                output_summary=f"intent={intent}, rule={classification.matched_rule}",
+                latency_ms=router_latency,
+                tokens_in=0,
+                tokens_out=0,
+                metadata={"intent": intent},
+            )
+        )
+
+        # Non-streaming intents — fall through to non-streaming handler
+        if intent in ("meta", "chat", "vote"):
+            logger.info("[ORCH] intent=%s → no DM response (non-streaming path)", intent)
+            resp, _ = await self.handle_message(player_id, message)
+            if resp is not None:
+                logger.debug("[ORCH] non-streaming response: type=%s", resp.type)
+                yield {"type": resp.type, "text": resp.text, "clue": resp.clue}
+            return
+
+        # State machine guard
+        required_action = _INTENT_TO_ACTION.get(intent)
+        if required_action and not self._sm.can_act(required_action):
+            logger.info("[ORCH] phase_blocked: intent=%s required=%s phase=%s", intent, required_action, phase)
+            blocked = (
+                f"This action is not available in the current phase ({phase})." if self._language == "en" else f"当前阶段（{phase}）不能执行此操作。"
+            )
+            yield {"type": RESP_PHASE_BLOCKED, "text": blocked}
+            return
+
+        if intent == "npc":
+            resp, _ = await self.handle_message(player_id, message)
+            if resp is not None:
+                yield {"type": resp.type, "text": resp.text, "clue": resp.clue}
+            return
+
+        # --- Streaming path: question / accuse / search ---
+        visible = self._build_visible_context(player_id)
+        viewer_char_id = self._player_char_map.get(player_id)
+        player_visible_facts = [c["content"] for c in visible.public_clues]
+
+        clue_dict: dict | None = None
+
+        if intent == "search":
+            # Try clue unlock first (rules-based)
+            phase_obj = self._sm.current()
+            available = set(phase_obj.available_clues or [])
+            clue_found = None
+            for clue_id in available:
+                if clue_id in self._unlocked_clue_ids:
+                    continue
+                clue = self._clues_by_id.get(clue_id)
+                if clue and any(kw in message for kw in clue.unlock_keywords):
+                    self._unlocked_clue_ids.add(clue_id)
+                    clue_found = clue
+                    break
+            if clue_found:
+                clue_dict = {"id": clue_found.id, "title": clue_found.title, "content": clue_found.content}
+                visible.public_clues.append(clue_dict)
+            judgment: Judgment = (
+                {
+                    "result": "Yes" if self._language == "en" else "是",
+                    "confidence": 1.0,
+                    "relevant_fact_ids": [],
+                }
+                if clue_found
+                else {
+                    "result": "Irrelevant" if self._language == "en" else "无关",
+                    "confidence": 0.5,
+                    "relevant_fact_ids": [],
+                }
+            )
+        else:
+            # Judge
+            logger.info("[ORCH] calling Judge: key_facts=%d, visible_facts=%d", len(self.judge._key_facts), len(player_visible_facts))
+            reset_usage_accumulator()
+            t0 = time.time()
+            judgment = await self.judge.judge(message, player_visible_facts)
+            judge_latency = (time.time() - t0) * 1000
+            judge_usages = drain_usage()
+            logger.info(
+                "[ORCH] Judge done: result=%s confidence=%.0f%% latency=%.0fms tokens_in=%d tokens_out=%d",
+                judgment["result"],
+                judgment["confidence"] * 100,
+                judge_latency,
+                sum(u.prompt_tokens for u in judge_usages),
+                sum(u.completion_tokens for u in judge_usages),
+            )
+            trace.steps.append(
+                TraceStep(
+                    agent="judge",
+                    input_summary=f"key_facts: {len(self.judge._key_facts)} items",
+                    output_summary=f"result={judgment['result']}, confidence={judgment['confidence']:.0%}",
+                    latency_ms=judge_latency,
+                    tokens_in=sum(u.prompt_tokens for u in judge_usages),
+                    tokens_out=sum(u.completion_tokens for u in judge_usages),
+                    metadata={"judgment": judgment["result"]},
+                )
+            )
+
+        # Broadcast judgment immediately — player sees result before narrator finishes
+        logger.info("[ORCH] yielding dm_stream_start: judgment=%s", judgment["result"])
+        yield {
+            "type": "dm_stream_start",
+            "judgment": judgment["result"],
+            "confidence": judgment["confidence"],
+        }
+
+        # Stream narrator
+        phase_val = self._sm.current_phase
+        truth_for_reveal = self._build_truth_reveal_text() if phase_val == "reveal" else None
+
+        logger.info("[ORCH] starting Narrator stream: phase=%s", phase_val)
+        reset_usage_accumulator()
+        t0 = time.time()
+        accumulated = ""
+        chunk_count = 0
+        try:
+            stream_gen = await self.narrator.narrate_stream(
+                judgment=judgment,
+                player_message=message,
+                visible_context=visible,
+                phase=phase_val,
+                truth_for_reveal=truth_for_reveal,
+                language=self._language,
+            )
+            async for chunk in stream_gen:
+                accumulated += chunk
+                chunk_count += 1
+                if chunk_count == 1:
+                    logger.info("[ORCH] Narrator first chunk arrived: TTFT=%.0fms", (time.time() - t0) * 1000)
+                yield {"type": "dm_stream_chunk", "text": chunk}
+        except Exception as exc:
+            logger.exception("[ORCH] Narrator stream failed: %s", exc)
+            fallback = _REGENERATION_FALLBACK_EN if self._language == "en" else _REGENERATION_FALLBACK_ZH
+            accumulated = fallback
+            yield {"type": "dm_stream_chunk", "text": fallback}
+
+        narrator_usages = drain_usage()
+        narrator_latency = (time.time() - t0) * 1000
+        logger.info(
+            "[ORCH] Narrator stream done: chars=%d chunks=%d total_latency=%.0fms tokens_in=%d tokens_out=%d",
+            len(accumulated),
+            chunk_count,
+            narrator_latency,
+            sum(u.prompt_tokens for u in narrator_usages),
+            sum(u.completion_tokens for u in narrator_usages),
+        )
+        trace.steps.append(
+            TraceStep(
+                agent="narrator",
+                input_summary=f"judgment={judgment['result']}, phase={phase_val}",
+                output_summary=f"response_len={len(accumulated)} chars",
+                latency_ms=narrator_latency,
+                tokens_in=sum(u.prompt_tokens for u in narrator_usages),
+                tokens_out=sum(u.completion_tokens for u in narrator_usages),
+                metadata={"phase": phase_val},
+            )
+        )
+
+        # Verbatim safety check on complete text
+        logger.debug("[ORCH] running safety check on accumulated text: len=%d", len(accumulated))
+        result = await self.safety.check(
+            text=accumulated,
+            audience_player_id=player_id,
+            viewer_char_id=viewer_char_id,
+        )
+        fallback_text = _REGENERATION_FALLBACK_EN if self._language == "en" else _REGENERATION_FALLBACK_ZH
+
+        trace_dict = dataclasses.asdict(trace)
+        if result["safe"]:
+            logger.info("[ORCH] safety pass → dm_stream_end (safe)")
+            yield {
+                "type": "dm_stream_end",
+                "clue": clue_dict,
+                "trace": trace_dict,
+            }
+        else:
+            logger.warning("[ORCH] safety BLOCKED narrator output → replacing with fallback")
+            yield {
+                "type": "dm_stream_end",
+                "replace": fallback_text,
+                "clue": None,
+                "trace": trace_dict,
+            }
+
     # ------------------------------------------------------------------
     # Intent handlers
     # ------------------------------------------------------------------
 
-    async def _handle_question(
-        self, player_id: str, message: str, trace: AgentTrace
-    ) -> OrchestratorResponse:
+    async def _handle_question(self, player_id: str, message: str, trace: AgentTrace) -> OrchestratorResponse:
         """Judge → Narrator → Safety pipeline."""
         visible = self._build_visible_context(player_id)
         viewer_char_id = self._player_char_map.get(player_id)
@@ -281,22 +490,21 @@ class AgentOrchestrator:
         t0 = time.time()
         judgment = await self.judge.judge(message, player_visible_facts)
         judge_usages = drain_usage()
-        trace.steps.append(TraceStep(
-            agent="judge",
-            input_summary=(
-                f"key_facts: {len(self.judge._key_facts)} items; "
-                f"visible_facts: {len(player_visible_facts)} items"
-            ),
-            output_summary=(
-                f"result={judgment['result']}, "
-                f"confidence={judgment['confidence']:.0%}, "
-                f"relevant_facts: {len(judgment['relevant_fact_ids'])} items"
-            ),
-            latency_ms=(time.time() - t0) * 1000,
-            tokens_in=sum(u.prompt_tokens for u in judge_usages),
-            tokens_out=sum(u.completion_tokens for u in judge_usages),
-            metadata={"judgment": judgment["result"]},
-        ))
+        trace.steps.append(
+            TraceStep(
+                agent="judge",
+                input_summary=(f"key_facts: {len(self.judge._key_facts)} items; visible_facts: {len(player_visible_facts)} items"),
+                output_summary=(
+                    f"result={judgment['result']}, "
+                    f"confidence={judgment['confidence']:.0%}, "
+                    f"relevant_facts: {len(judgment['relevant_fact_ids'])} items"
+                ),
+                latency_ms=(time.time() - t0) * 1000,
+                tokens_in=sum(u.prompt_tokens for u in judge_usages),
+                tokens_out=sum(u.completion_tokens for u in judge_usages),
+                metadata={"judgment": judgment["result"]},
+            )
+        )
 
         # Narrator + Safety (with retry)
         text = await self._narrate_with_safety(
@@ -309,9 +517,7 @@ class AgentOrchestrator:
         )
         return OrchestratorResponse(type=RESP_DM, text=text)
 
-    async def _handle_search(
-        self, player_id: str, message: str, trace: AgentTrace
-    ) -> OrchestratorResponse:
+    async def _handle_search(self, player_id: str, message: str, trace: AgentTrace) -> OrchestratorResponse:
         """Try to unlock a clue, then narrate the finding."""
         phase_obj = self._sm.current()
         available = set(phase_obj.available_clues or [])
@@ -375,32 +581,27 @@ class AgentOrchestrator:
         )
         return OrchestratorResponse(type=RESP_DM, text=text)
 
-    async def _handle_npc(
-        self, player_id: str, message: str, trace: AgentTrace
-    ) -> OrchestratorResponse:
+    async def _handle_npc(self, player_id: str, message: str, trace: AgentTrace) -> OrchestratorResponse:
         """Dispatch to the appropriate NPC agent."""
         npc_id = self._detect_npc_id(message)
         if npc_id and npc_id in self._npc_agents:
             npc_agent = self._npc_agents[npc_id]
-            npc_name = next(
-                (n.name for n in self._script.npcs if n.id == npc_id), npc_id
-            )
+            npc_name = next((n.name for n in self._script.npcs if n.id == npc_id), npc_id)
             reset_usage_accumulator()
             t0 = time.time()
             text = await npc_agent.respond(message)
             npc_usages = drain_usage()
-            trace.steps.append(TraceStep(
-                agent="npc",
-                input_summary=(
-                    f"npc={npc_name!r}, "
-                    f"knowledge: {len(npc_agent._knowledge_clues)} items"
-                ),
-                output_summary=f"response_len={len(text)} chars",
-                latency_ms=(time.time() - t0) * 1000,
-                tokens_in=sum(u.prompt_tokens for u in npc_usages),
-                tokens_out=sum(u.completion_tokens for u in npc_usages),
-                metadata={"npc_id": npc_id, "npc_name": npc_name},
-            ))
+            trace.steps.append(
+                TraceStep(
+                    agent="npc",
+                    input_summary=(f"npc={npc_name!r}, knowledge: {len(npc_agent._knowledge_clues)} items"),
+                    output_summary=f"response_len={len(text)} chars",
+                    latency_ms=(time.time() - t0) * 1000,
+                    tokens_in=sum(u.prompt_tokens for u in npc_usages),
+                    tokens_out=sum(u.completion_tokens for u in npc_usages),
+                    metadata={"npc_id": npc_id, "npc_name": npc_name},
+                )
+            )
             return OrchestratorResponse(type=RESP_DM, text=text)
         # Could not identify which NPC — fall back to question handler
         return await self._handle_question(player_id, message, trace)
@@ -465,19 +666,17 @@ class AgentOrchestrator:
             )
             narrator_usages = drain_usage()
             if trace is not None:
-                trace.steps.append(TraceStep(
-                    agent="narrator",
-                    input_summary=(
-                        f"judgment={judgment['result']}, "
-                        f"public_clues: {len(visible.public_clues)} items, "
-                        f"phase={phase}"
-                    ),
-                    output_summary=f"response_len={len(text)} chars",
-                    latency_ms=(time.time() - t0) * 1000,
-                    tokens_in=sum(u.prompt_tokens for u in narrator_usages),
-                    tokens_out=sum(u.completion_tokens for u in narrator_usages),
-                    metadata={"attempt": attempt + 1, "phase": phase},
-                ))
+                trace.steps.append(
+                    TraceStep(
+                        agent="narrator",
+                        input_summary=(f"judgment={judgment['result']}, public_clues: {len(visible.public_clues)} items, phase={phase}"),
+                        output_summary=f"response_len={len(text)} chars",
+                        latency_ms=(time.time() - t0) * 1000,
+                        tokens_in=sum(u.prompt_tokens for u in narrator_usages),
+                        tokens_out=sum(u.completion_tokens for u in narrator_usages),
+                        metadata={"attempt": attempt + 1, "phase": phase},
+                    )
+                )
 
             # Safety
             reset_usage_accumulator()
@@ -490,34 +689,32 @@ class AgentOrchestrator:
             safety_usages = drain_usage()
             if trace is not None:
                 leaked = result.get("leaked_content") or ""
-                trace.steps.append(TraceStep(
-                    agent="safety",
-                    input_summary=(
-                        f"text_len={len(text)} chars, "
-                        f"key_facts: {len(self.safety._key_facts)} items"
-                    ),
-                    output_summary=(
-                        f"safe={result['safe']}"
-                        + (f", leaked={leaked[:30]!r}" if not result["safe"] else "")
-                    ),
-                    latency_ms=(time.time() - t0) * 1000,
-                    tokens_in=sum(u.prompt_tokens for u in safety_usages),
-                    tokens_out=sum(u.completion_tokens for u in safety_usages),
-                    metadata={"safe": result["safe"], "attempt": attempt + 1},
-                ))
+                trace.steps.append(
+                    TraceStep(
+                        agent="safety",
+                        input_summary=(f"text_len={len(text)} chars, key_facts: {len(self.safety._key_facts)} items"),
+                        output_summary=(f"safe={result['safe']}" + (f", leaked={leaked[:30]!r}" if not result["safe"] else "")),
+                        latency_ms=(time.time() - t0) * 1000,
+                        tokens_in=sum(u.prompt_tokens for u in safety_usages),
+                        tokens_out=sum(u.completion_tokens for u in safety_usages),
+                        metadata={"safe": result["safe"], "attempt": attempt + 1},
+                    )
+                )
 
             if result["safe"]:
                 return text
             logger.warning(
                 "SafetyAgent blocked narrator output (attempt %d/%d): %r",
-                attempt + 1, _MAX_SAFETY_RETRIES + 1,
+                attempt + 1,
+                _MAX_SAFETY_RETRIES + 1,
                 result.get("leaked_content", "")[:40],
             )
 
         # All retries exhausted — fall back to safe generic response
         logger.error(
             "Orchestrator: all %d safety retries failed for player %s — using fallback",
-            _MAX_SAFETY_RETRIES + 1, player_id,
+            _MAX_SAFETY_RETRIES + 1,
+            player_id,
         )
         return regen_fallback
 
@@ -537,11 +734,7 @@ class AgentOrchestrator:
         surface = (opening_phase.dm_script or "") if opening_phase else ""
 
         # Public unlocked clues (all players see these)
-        public_clues = [
-            {"id": c.id, "title": c.title, "content": c.content}
-            for c in self._script.clues
-            if c.id in self._unlocked_clue_ids
-        ]
+        public_clues = [{"id": c.id, "title": c.title, "content": c.content} for c in self._script.clues if c.id in self._unlocked_clue_ids]
 
         char_id = self._player_char_map.get(player_id, "")
         return VisibleContext(
@@ -555,20 +748,8 @@ class AgentOrchestrator:
     def _build_truth_reveal_text(self) -> str:
         """Build the reveal text from the script truth (only used in reveal phase)."""
         truth = self._script.truth
-        culprit_char = next(
-            (c for c in self._script.characters if c.id == truth.culprit), None
-        )
+        culprit_char = next((c for c in self._script.characters if c.id == truth.culprit), None)
         culprit_name = culprit_char.name if culprit_char else truth.culprit
         if self._language == "en":
-            return (
-                f"Culprit: {culprit_name}\n"
-                f"Motive: {truth.motive}\n"
-                f"Method: {truth.method}\n"
-                f"Timeline: {truth.timeline}"
-            )
-        return (
-            f"凶手：{culprit_name}\n"
-            f"动机：{truth.motive}\n"
-            f"手法：{truth.method}\n"
-            f"时间线：{truth.timeline}"
-        )
+            return f"Culprit: {culprit_name}\nMotive: {truth.motive}\nMethod: {truth.method}\nTimeline: {truth.timeline}"
+        return f"凶手：{culprit_name}\n动机：{truth.motive}\n手法：{truth.method}\n时间线：{truth.timeline}"

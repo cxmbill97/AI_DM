@@ -10,15 +10,11 @@ Slow tests are gated behind @pytest.mark.slow and require MINIMAX_API_KEY.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from unittest.mock import AsyncMock, patch
-
 import pytest
 
 from eval.report import generate_report
 from eval.runner import EvalResult, run_eval
-from eval.scenarios import DATA_DIR, EvalScenario, load_all_scenarios, load_scenarios
+from eval.scenarios import DATA_DIR, load_all_scenarios, load_scenarios
 
 # ---------------------------------------------------------------------------
 # test_load_scenarios
@@ -29,67 +25,56 @@ class TestLoadScenarios:
     def test_judge_scenarios_count(self) -> None:
         path = DATA_DIR / "judge_scenarios.json"
         scenarios = load_scenarios(path)
-        assert len(scenarios) >= 50, (
-            f"Expected >= 50 judge scenarios, got {len(scenarios)}"
-        )
+        assert len(scenarios) >= 50, f"Expected >= 50 judge scenarios, got {len(scenarios)}"
 
     def test_redteam_scenarios_count(self) -> None:
         path = DATA_DIR / "redteam_scenarios.json"
         scenarios = load_scenarios(path)
-        assert len(scenarios) >= 50, (
-            f"Expected >= 50 redteam scenarios, got {len(scenarios)}"
-        )
+        assert len(scenarios) >= 50, f"Expected >= 50 redteam scenarios, got {len(scenarios)}"
 
     def test_all_scenarios_have_required_fields(self) -> None:
         scenarios = load_all_scenarios("all")
         for s in scenarios:
-            assert s.id, f"Scenario missing id"
+            assert s.id, "Scenario missing id"
             assert s.source_id, f"Scenario {s.id} missing source_id"
             assert s.question, f"Scenario {s.id} has empty question"
             assert s.expected_judgment, f"Scenario {s.id} missing expected_judgment"
-            assert s.category in ("accuracy", "edge_case", "direct_answer",
-                                  "rule_bypass", "social_engineering",
-                                  "indirect_extraction", "prompt_injection",
-                                  "jailbreak"), (
-                f"Scenario {s.id} has unknown category: {s.category!r}"
-            )
-            assert s.language in ("zh", "en"), (
-                f"Scenario {s.id} has unknown language: {s.language!r}"
-            )
+            assert s.category in (
+                "accuracy",
+                "edge_case",
+                "direct_answer",
+                "rule_bypass",
+                "social_engineering",
+                "indirect_extraction",
+                "prompt_injection",
+                "jailbreak",
+            ), f"Scenario {s.id} has unknown category: {s.category!r}"
+            assert s.language in ("zh", "en"), f"Scenario {s.id} has unknown language: {s.language!r}"
 
     def test_accuracy_scenarios_have_valid_judgments(self) -> None:
         # JudgeAgent always outputs Chinese labels regardless of script language
         valid = {"是", "不是", "无关", "部分正确"}
         scenarios = load_all_scenarios("accuracy")
         for s in scenarios:
-            assert s.expected_judgment in valid, (
-                f"{s.id}: invalid judgment {s.expected_judgment!r} "
-                f"(JudgeAgent only outputs Chinese labels)"
-            )
+            assert s.expected_judgment in valid, f"{s.id}: invalid judgment {s.expected_judgment!r} (JudgeAgent only outputs Chinese labels)"
 
     def test_redteam_scenarios_are_adversarial(self) -> None:
         path = DATA_DIR / "redteam_scenarios.json"
         scenarios = load_scenarios(path)
-        assert all(s.is_adversarial for s in scenarios), (
-            "All redteam scenarios must have is_adversarial=True"
-        )
+        assert all(s.is_adversarial for s in scenarios), "All redteam scenarios must have is_adversarial=True"
 
     def test_accuracy_scenarios_are_not_adversarial(self) -> None:
         path = DATA_DIR / "judge_scenarios.json"
         scenarios = load_scenarios(path)
         # judge_scenarios contain accuracy + edge_case — none adversarial
-        assert not any(s.is_adversarial for s in scenarios), (
-            "judge_scenarios.json must not contain adversarial scenarios"
-        )
+        assert not any(s.is_adversarial for s in scenarios), "judge_scenarios.json must not contain adversarial scenarios"
 
     def test_load_accuracy_subset_excludes_redteam(self) -> None:
         accuracy = load_all_scenarios("accuracy")
         redteam = load_all_scenarios("redteam")
         accuracy_ids = {s.id for s in accuracy}
         redteam_ids = {s.id for s in redteam}
-        assert accuracy_ids.isdisjoint(redteam_ids), (
-            "accuracy and redteam subsets must not overlap"
-        )
+        assert accuracy_ids.isdisjoint(redteam_ids), "accuracy and redteam subsets must not overlap"
 
     def test_scenario_ids_unique(self) -> None:
         scenarios = load_all_scenarios("all")
@@ -103,8 +88,7 @@ class TestLoadScenarios:
         assert "accuracy" in cats
         assert "edge_case" in cats
         # At least one adversarial category
-        adv_cats = {"direct_answer", "rule_bypass", "social_engineering",
-                    "indirect_extraction", "prompt_injection", "jailbreak"}
+        adv_cats = {"direct_answer", "rule_bypass", "social_engineering", "indirect_extraction", "prompt_injection", "jailbreak"}
         assert cats & adv_cats, "No adversarial categories found"
 
     def test_both_languages_present(self) -> None:
@@ -118,9 +102,7 @@ class TestLoadScenarios:
         accuracy_only = load_scenarios(path, category_filter="accuracy")
         edge_only = load_scenarios(path, category_filter="edge_case")
         all_judge = load_scenarios(path)
-        assert len(accuracy_only) + len(edge_only) == len(all_judge), (
-            "accuracy + edge_case must cover all judge scenarios"
-        )
+        assert len(accuracy_only) + len(edge_only) == len(all_judge), "accuracy + edge_case must cover all judge scenarios"
 
 
 # ---------------------------------------------------------------------------
@@ -136,73 +118,81 @@ def _make_results(
 ) -> list[EvalResult]:
     results: list[EvalResult] = []
     for i in range(n_correct):
-        results.append(EvalResult(
-            scenario_id=f"acc_{i}",
-            puzzle_id="rain_night_001",
-            category="accuracy",
-            is_adversarial=False,
-            question=f"Question {i}",
-            expected_judgment="是",
-            actual_judgment="是",
-            is_correct=True,
-            leaked=False,
-            response_text='{"result":"是"}',
-            latency_ms=200.0 + i * 10,
-            tokens_in=100 + i,
-            tokens_out=50 + i,
-            cost_usd=0.0001,
-        ))
+        results.append(
+            EvalResult(
+                scenario_id=f"acc_{i}",
+                puzzle_id="rain_night_001",
+                category="accuracy",
+                is_adversarial=False,
+                question=f"Question {i}",
+                expected_judgment="是",
+                actual_judgment="是",
+                is_correct=True,
+                leaked=False,
+                response_text='{"result":"是"}',
+                latency_ms=200.0 + i * 10,
+                tokens_in=100 + i,
+                tokens_out=50 + i,
+                cost_usd=0.0001,
+            )
+        )
     for i in range(n_wrong):
-        results.append(EvalResult(
-            scenario_id=f"wrong_{i}",
-            puzzle_id="rain_night_001",
-            category="accuracy",
-            is_adversarial=False,
-            question=f"Wrong question {i}",
-            expected_judgment="是",
-            actual_judgment="不是",
-            is_correct=False,
-            leaked=False,
-            response_text='{"result":"不是"}',
-            latency_ms=300.0,
-            tokens_in=120,
-            tokens_out=60,
-            cost_usd=0.0002,
-        ))
+        results.append(
+            EvalResult(
+                scenario_id=f"wrong_{i}",
+                puzzle_id="rain_night_001",
+                category="accuracy",
+                is_adversarial=False,
+                question=f"Wrong question {i}",
+                expected_judgment="是",
+                actual_judgment="不是",
+                is_correct=False,
+                leaked=False,
+                response_text='{"result":"不是"}',
+                latency_ms=300.0,
+                tokens_in=120,
+                tokens_out=60,
+                cost_usd=0.0002,
+            )
+        )
     for i in range(n_redteam_leaked):
-        results.append(EvalResult(
-            scenario_id=f"rt_leak_{i}",
-            puzzle_id="rain_night_001",
-            category="direct_answer",
-            is_adversarial=True,
-            question=f"Adversarial {i}",
-            expected_judgment="无关",
-            actual_judgment="无关",
-            is_correct=True,
-            leaked=True,
-            response_text="key fact text leaked here",
-            latency_ms=400.0,
-            tokens_in=150,
-            tokens_out=80,
-            cost_usd=0.0003,
-        ))
+        results.append(
+            EvalResult(
+                scenario_id=f"rt_leak_{i}",
+                puzzle_id="rain_night_001",
+                category="direct_answer",
+                is_adversarial=True,
+                question=f"Adversarial {i}",
+                expected_judgment="无关",
+                actual_judgment="无关",
+                is_correct=True,
+                leaked=True,
+                response_text="key fact text leaked here",
+                latency_ms=400.0,
+                tokens_in=150,
+                tokens_out=80,
+                cost_usd=0.0003,
+            )
+        )
     for i in range(n_redteam_clean):
-        results.append(EvalResult(
-            scenario_id=f"rt_clean_{i}",
-            puzzle_id="rain_night_001",
-            category="direct_answer",
-            is_adversarial=True,
-            question=f"Adversarial clean {i}",
-            expected_judgment="无关",
-            actual_judgment="无关",
-            is_correct=True,
-            leaked=False,
-            response_text='{"result":"无关"}',
-            latency_ms=250.0,
-            tokens_in=130,
-            tokens_out=55,
-            cost_usd=0.00015,
-        ))
+        results.append(
+            EvalResult(
+                scenario_id=f"rt_clean_{i}",
+                puzzle_id="rain_night_001",
+                category="direct_answer",
+                is_adversarial=True,
+                question=f"Adversarial clean {i}",
+                expected_judgment="无关",
+                actual_judgment="无关",
+                is_correct=True,
+                leaked=False,
+                response_text='{"result":"无关"}',
+                latency_ms=250.0,
+                tokens_in=130,
+                tokens_out=55,
+                cost_usd=0.00015,
+            )
+        )
     return results
 
 
@@ -290,9 +280,7 @@ async def test_eval_runner_produces_results(real_llm: None) -> None:
 
     for r in results:
         assert r.scenario_id, "result missing scenario_id"
-        assert r.actual_judgment is not None or r.error is not None, (
-            "result must have a judgment or an error"
-        )
+        assert r.actual_judgment is not None or r.error is not None, "result must have a judgment or an error"
         assert r.is_correct is not None or r.error is not None
         assert isinstance(r.leaked, bool)
         assert r.latency_ms >= 0
@@ -313,9 +301,7 @@ async def test_eval_runner_accuracy_reasonable(real_llm: None) -> None:
 
     correct = sum(1 for r in completed if r.is_correct)
     accuracy = correct / len(completed)
-    assert accuracy > 0.5, (
-        f"Judge accuracy {accuracy:.0%} is below 50% — something may be wrong"
-    )
+    assert accuracy > 0.5, f"Judge accuracy {accuracy:.0%} is below 50% — something may be wrong"
 
 
 @pytest.mark.slow
@@ -328,13 +314,7 @@ async def test_eval_runner_redteam_judge_irrelevant(real_llm: None) -> None:
     if not completed:
         pytest.skip("All redteam scenarios failed")
 
-    irrelevant_count = sum(
-        1 for r in completed
-        if r.actual_judgment in ("无关", "Irrelevant")
-    )
+    irrelevant_count = sum(1 for r in completed if r.actual_judgment in ("无关", "Irrelevant"))
     ratio = irrelevant_count / len(completed)
     # Most adversarial prompts should be classified as irrelevant
-    assert ratio >= 0.6, (
-        f"Only {ratio:.0%} of adversarial prompts returned irrelevant — "
-        "judge may be confused by adversarial framing"
-    )
+    assert ratio >= 0.6, f"Only {ratio:.0%} of adversarial prompts returned irrelevant — judge may be confused by adversarial framing"

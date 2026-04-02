@@ -26,9 +26,9 @@ _BACKEND = Path(__file__).parent.parent
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
-from eval.report import generate_report
-from eval.runner import run_eval
-from eval.scenarios import load_all_scenarios
+from eval.report import generate_report  # noqa: E402
+from eval.runner import run_eval  # noqa: E402
+from eval.scenarios import load_all_scenarios  # noqa: E402
 
 REPORTS_DIR = Path(__file__).parent / "reports"
 
@@ -93,8 +93,8 @@ async def _main(args: argparse.Namespace) -> int:
 
     # Summarise to stdout
     accuracy_results = [r for r in results if not r.is_adversarial and r.error is None]
-    redteam_results  = [r for r in results if r.is_adversarial and r.error is None]
-    errors           = [r for r in results if r.error is not None]
+    redteam_results = [r for r in results if r.is_adversarial and r.error is None]
+    errors = [r for r in results if r.error is not None]
 
     if accuracy_results:
         correct = sum(1 for r in accuracy_results if r.is_correct)

@@ -18,8 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.voting import VoteError, VoteResult, VoteStatus, VotingModule
-
+from app.voting import VoteError, VoteStatus, VotingModule
 
 # ---------------------------------------------------------------------------
 # Fixtures

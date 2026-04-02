@@ -21,12 +21,12 @@ CategoryLabel = Literal["accuracy", "edge_case", "redteam"]
 @dataclass(frozen=True)
 class EvalScenario:
     id: str
-    source_id: str          # script ID (e.g. "rain_night_001") or puzzle ID
-    source_type: str        # "script" | "puzzle"
-    language: str           # "zh" | "en"
+    source_id: str  # script ID (e.g. "rain_night_001") or puzzle ID
+    source_type: str  # "script" | "puzzle"
+    language: str  # "zh" | "en"
     question: str
     expected_judgment: str  # JudgmentLabel
-    category: str           # CategoryLabel
+    category: str  # CategoryLabel
     is_adversarial: bool
 
 

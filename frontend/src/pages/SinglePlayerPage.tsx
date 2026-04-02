@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { startGame } from '../api';
-import type { Clue, PuzzleSummary, StartResponse } from '../api';
+import type { Clue, StartResponse } from '../api';
 import { ChatPanel } from '../components/ChatPanel';
 import { CluePanel } from '../components/CluePanel';
 import { HintBar } from '../components/HintBar';

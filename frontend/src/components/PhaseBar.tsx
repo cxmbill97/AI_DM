@@ -31,6 +31,7 @@ export function PhaseBar({ phase, timeRemaining, skipVotes, hasSkipVoted, onSkip
 
   // Sync when server pushes a new timeRemaining (phase change event)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocalTime(timeRemaining);
   }, [timeRemaining, phase]);
 

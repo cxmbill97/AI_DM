@@ -18,7 +18,6 @@ import pytest
 from app.models import Phase
 from app.state_machine import GameStateMachine
 
-
 # ---------------------------------------------------------------------------
 # Helpers / Fixtures
 # ---------------------------------------------------------------------------
@@ -29,50 +28,52 @@ def make_phases(specs: list[dict]) -> list[Phase]:
     return [Phase(**s) for s in specs]
 
 
-FULL_PHASES = make_phases([
-    {
-        "id": "opening",
-        "type": "narration",
-        "next": "reading",
-        "duration_seconds": 120,
-        "allowed_actions": {"listen"},
-    },
-    {
-        "id": "reading",
-        "type": "reading",
-        "next": "investigation_1",
-        "duration_seconds": 300,
-        "allowed_actions": {"read_script"},
-    },
-    {
-        "id": "investigation_1",
-        "type": "investigation",
-        "next": "discussion",
-        "duration_seconds": 600,
-        "allowed_actions": {"ask_dm", "search", "private_chat"},
-    },
-    {
-        "id": "discussion",
-        "type": "discussion",
-        "next": "voting",
-        "duration_seconds": 600,
-        "allowed_actions": {"public_chat", "private_chat"},
-    },
-    {
-        "id": "voting",
-        "type": "voting",
-        "next": "reveal",
-        "duration_seconds": 120,
-        "allowed_actions": {"cast_vote"},
-    },
-    {
-        "id": "reveal",
-        "type": "reveal",
-        "next": None,
-        "duration_seconds": None,
-        "allowed_actions": {"listen"},
-    },
-])
+FULL_PHASES = make_phases(
+    [
+        {
+            "id": "opening",
+            "type": "narration",
+            "next": "reading",
+            "duration_seconds": 120,
+            "allowed_actions": {"listen"},
+        },
+        {
+            "id": "reading",
+            "type": "reading",
+            "next": "investigation_1",
+            "duration_seconds": 300,
+            "allowed_actions": {"read_script"},
+        },
+        {
+            "id": "investigation_1",
+            "type": "investigation",
+            "next": "discussion",
+            "duration_seconds": 600,
+            "allowed_actions": {"ask_dm", "search", "private_chat"},
+        },
+        {
+            "id": "discussion",
+            "type": "discussion",
+            "next": "voting",
+            "duration_seconds": 600,
+            "allowed_actions": {"public_chat", "private_chat"},
+        },
+        {
+            "id": "voting",
+            "type": "voting",
+            "next": "reveal",
+            "duration_seconds": 120,
+            "allowed_actions": {"cast_vote"},
+        },
+        {
+            "id": "reveal",
+            "type": "reveal",
+            "next": None,
+            "duration_seconds": None,
+            "allowed_actions": {"listen"},
+        },
+    ]
+)
 
 
 @pytest.fixture
@@ -90,9 +91,7 @@ class TestInitialState:
         assert sm.current_phase == "opening"
 
     def test_all_phases_indexed(self, sm: GameStateMachine) -> None:
-        assert set(sm.phases.keys()) == {
-            "opening", "reading", "investigation_1", "discussion", "voting", "reveal"
-        }
+        assert set(sm.phases.keys()) == {"opening", "reading", "investigation_1", "discussion", "voting", "reveal"}
 
     def test_started_at_is_recent(self, sm: GameStateMachine) -> None:
         assert abs(sm.started_at - time.time()) < 2.0
@@ -192,9 +191,11 @@ class TestAdvance:
         assert sm.started_at > before
 
     def test_advance_to_missing_phase_raises(self) -> None:
-        phases = make_phases([
-            {"id": "a", "type": "narration", "next": "b", "allowed_actions": set()},
-        ])
+        phases = make_phases(
+            [
+                {"id": "a", "type": "narration", "next": "b", "allowed_actions": set()},
+            ]
+        )
         sm = GameStateMachine(phases)
         with pytest.raises(KeyError):
             sm.advance()
@@ -290,22 +291,24 @@ def test_allowed_actions() -> None:
 def test_timeout_auto_advance() -> None:
     """Phase with duration_seconds=1 is marked timed-out after 1 second elapses;
     calling advance() then moves to the next phase (simulating ws.py auto-advance)."""
-    phases = make_phases([
-        {
-            "id": "quick",
-            "type": "narration",
-            "next": "after_quick",
-            "duration_seconds": 1,
-            "allowed_actions": set(),
-        },
-        {
-            "id": "after_quick",
-            "type": "narration",
-            "next": None,
-            "duration_seconds": None,
-            "allowed_actions": set(),
-        },
-    ])
+    phases = make_phases(
+        [
+            {
+                "id": "quick",
+                "type": "narration",
+                "next": "after_quick",
+                "duration_seconds": 1,
+                "allowed_actions": set(),
+            },
+            {
+                "id": "after_quick",
+                "type": "narration",
+                "next": None,
+                "duration_seconds": None,
+                "allowed_actions": set(),
+            },
+        ]
+    )
     sm = GameStateMachine(phases)
     assert sm.is_timed_out() is False, "should not be timed out immediately"
 
@@ -331,15 +334,17 @@ def test_cannot_advance_past_reveal() -> None:
 
 def test_phase_duration_tracking() -> None:
     """time_remaining() decreases as time passes and matches elapsed seconds."""
-    phases = make_phases([
-        {
-            "id": "timed",
-            "type": "narration",
-            "next": None,
-            "duration_seconds": 60,
-            "allowed_actions": set(),
-        },
-    ])
+    phases = make_phases(
+        [
+            {
+                "id": "timed",
+                "type": "narration",
+                "next": None,
+                "duration_seconds": 60,
+                "allowed_actions": set(),
+            },
+        ]
+    )
     sm = GameStateMachine(phases)
     r1 = sm.time_remaining()
     assert r1 <= 60

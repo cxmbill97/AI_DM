@@ -42,6 +42,9 @@ export interface DmResponseMsg {
   clue?: { id: string; title: string; content: string } | null;
   trace?: AgentTrace | null;
   timestamp: number;
+  // Streaming state (murder mystery)
+  streaming?: boolean;
+  streamId?: string;
 }
 
 export interface InterventionMsg {
@@ -212,6 +215,8 @@ export function useRoom(roomId: string, playerName: string) {
   const wsRef = useRef<WebSocket | null>(null);
   const retriesRef = useRef(0);
   const mountedRef = useRef(true);
+  // Tracks the streamId of the currently-streaming DM message
+  const streamingIdRef = useRef<string | null>(null);
 
   // Countdown timer: decrement mmTimeRemaining every second
   useEffect(() => {
@@ -503,6 +508,75 @@ export function useRoom(roomId: string, playerName: string) {
         return;
       }
 
+      // ---- Server-controlled typing indicator (explicit override) ----
+      if (type === 'dm_typing') {
+        setDmTyping(data.typing as boolean);
+        return;
+      }
+
+      // ---- Murder mystery streaming: judgment arrives first ----
+      if (type === 'dm_stream_start') {
+        setDmTyping(false); // streaming bubble replaces the typing dots
+        const streamId = crypto.randomUUID();
+        streamingIdRef.current = streamId;
+        // Insert a placeholder DM message with judgment badge, no text yet
+        const placeholder: DmResponseMsg = {
+          type: 'dm_response',
+          player_name: data.player_name as string | undefined,
+          judgment: data.judgment as string | undefined,
+          text: '',
+          streaming: true,
+          streamId,
+          timestamp: (data.timestamp as number) ?? Date.now() / 1000,
+        };
+        appendMessage(placeholder);
+        return;
+      }
+
+      // ---- Murder mystery streaming: append token chunk ----
+      if (type === 'dm_stream_chunk') {
+        const sid = streamingIdRef.current;
+        if (sid) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.type === 'dm_response' && (m as DmResponseMsg).streamId === sid
+                ? { ...m, text: ((m as DmResponseMsg).text ?? '') + (data.text as string) }
+                : m,
+            ),
+          );
+        }
+        return;
+      }
+
+      // ---- Murder mystery streaming: finalize ----
+      if (type === 'dm_stream_end') {
+        const sid = streamingIdRef.current;
+        streamingIdRef.current = null;
+        setDmTyping(false);
+        if (sid) {
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.type !== 'dm_response') return m;
+              const dm = m as DmResponseMsg;
+              if (dm.streamId !== sid) return m;
+              // If backend flagged a safety replace, swap the accumulated text
+              const finalText = (data.replace as string | undefined) ?? dm.text ?? '';
+              return {
+                ...dm,
+                text: finalText,
+                streaming: false,
+                clue: (data.clue as DmResponseMsg['clue']) ?? null,
+                trace: (data.trace as AgentTrace | null | undefined) ?? null,
+              };
+            }),
+          );
+          // Add clue to sidebar if found
+          const clueData = data.clue as { id: string; title: string; content: string } | null;
+          if (clueData) addClue(clueData);
+        }
+        return;
+      }
+
       // ---- phase_blocked: show as error in chat ----
       if (type === 'phase_blocked') {
         setDmTyping(false);
@@ -524,6 +598,7 @@ export function useRoom(roomId: string, playerName: string) {
 
       if (retriesRef.current < MAX_RETRIES) {
         retriesRef.current += 1;
+        // eslint-disable-next-line react-hooks/immutability
         setTimeout(connect, RETRY_DELAY_MS);
       } else {
         setError(t('room.disconnect_error'));

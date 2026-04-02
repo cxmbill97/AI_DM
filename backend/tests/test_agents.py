@@ -17,23 +17,20 @@ from typing import Any
 
 import pytest
 
-from app.agents.judge import JudgeAgent, _FALLBACK_JUDGMENT
-from app.agents.narrator import NarratorAgent, _FALLBACK_RESPONSE, _REGENERATION_FALLBACK
+from app.agents.judge import _FALLBACK_JUDGMENT, JudgeAgent
+from app.agents.narrator import _FALLBACK_RESPONSE, _REGENERATION_FALLBACK, NarratorAgent
 from app.agents.orchestrator import (
     RESP_CLUE_FOUND,
     RESP_DM,
     RESP_META,
-    RESP_NO_RESPONSE,
     RESP_PHASE_BLOCKED,
     AgentOrchestrator,
 )
 from app.agents.router import RouterAgent
 from app.agents.safety import SafetyAgent
-from app.models import NPC, Phase, Script, ScriptClue, ScriptMetadata, ScriptTruth
-from app.models import Character
+from app.models import NPC, Character, Phase, Script, ScriptClue, ScriptMetadata, ScriptTruth
 from app.state_machine import GameStateMachine
 from app.visibility import VisibleContext
-
 
 # ---------------------------------------------------------------------------
 # Shared test data
@@ -46,9 +43,9 @@ KEY_FACTS = [
 ]
 
 CHARACTER_SECRETS = {
-    "char_su":   "与死者有秘密子女关系",
-    "char_chen": "欠死者三百万债务",
-    "char_shen": "是死者私生女，在威士忌中投入安眠药",
+    "char_su": "与死者存在长达十年的秘密婚外情，并育有一名未对外公开的孩子，案发当晚曾单独与死者见面",
+    "char_chen": "欠死者三百万债务，曾多次恳求宽限还款期限但均遭死者拒绝，案发前一天再次被催款",
+    "char_shen": "是死者私生女，案发当晚在死者威士忌中秘密投入安眠药后趁其昏迷推倒致死",
 }
 
 
@@ -239,11 +236,13 @@ class TestJudgeAgent:
             self.mock_calls.append((system, messages))
             return self._response
 
-        self._response = json.dumps({
-            "result": "是",
-            "confidence": 0.9,
-            "relevant_fact_ids": ["fact_0"],
-        })
+        self._response = json.dumps(
+            {
+                "result": "是",
+                "confidence": 0.9,
+                "relevant_fact_ids": ["fact_0"],
+            }
+        )
         monkeypatch.setattr("app.agents.judge.chat", fake_chat)
 
     async def test_judge_returns_correct_result(self) -> None:
@@ -277,9 +276,7 @@ class TestJudgeAgent:
         judgment = await self.judge.judge("test")
         assert judgment["result"] == "不是"
 
-    async def test_judge_invalid_result_normalised_to_wuguan(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_judge_invalid_result_normalised_to_wuguan(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def bad_chat(*_: Any) -> str:
             return json.dumps({"result": "UNKNOWN", "confidence": 0.5, "relevant_fact_ids": []})
 
@@ -326,7 +323,7 @@ class TestNarratorAgent:
 
     async def test_narrator_without_truth(self) -> None:
         judgment = {"result": "无关", "confidence": 0.3, "relevant_fact_ids": []}
-        text = await self.narrator.narrate(
+        await self.narrator.narrate(
             judgment=judgment,
             player_message="随便问问",
             visible_context=_make_visible(),
@@ -351,9 +348,7 @@ class TestNarratorAgent:
         assert "真相揭晓" in system_prompt
         assert "沈清" in system_prompt
 
-    async def test_narrator_fallback_on_empty_response(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_narrator_fallback_on_empty_response(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def empty_chat(*_: Any) -> str:
             return ""
 
@@ -367,9 +362,7 @@ class TestNarratorAgent:
         )
         assert text == _FALLBACK_RESPONSE
 
-    async def test_narrator_fallback_on_llm_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_narrator_fallback_on_llm_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def failing_chat(*_: Any) -> str:
             raise RuntimeError("timeout")
 
@@ -391,16 +384,11 @@ class TestNarratorAgent:
 
 class TestSafetyAgent:
     @pytest.fixture(autouse=True)
-    def setup(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def setup(self) -> None:
         self.safety = SafetyAgent(
             key_facts=KEY_FACTS,
             character_secrets=CHARACTER_SECRETS,
         )
-
-        async def safe_chat(*_: Any) -> str:
-            return json.dumps({"safe": True, "leaked_content": None})
-
-        monkeypatch.setattr("app.agents.safety.chat", safe_chat)
 
     async def test_safe_text_passes(self) -> None:
         result = await self.safety.check(
@@ -430,8 +418,8 @@ class TestSafetyAgent:
         assert result["safe"] is True
 
     async def test_other_player_secret_blocked(self) -> None:
-        # char_su viewing, but text contains char_chen's secret verbatim
-        secret_snippet = CHARACTER_SECRETS["char_chen"]  # 9 chars, > _MIN_SNIPPET_LEN
+        # char_su viewing, but text contains char_chen's secret verbatim (30+ chars)
+        secret_snippet = CHARACTER_SECRETS["char_chen"]  # 30+ chars, > _MIN_SECRET_SNIPPET_LEN
         text = f"陈博的情况：{secret_snippet}"
         result = await self.safety.check(
             text=text,
@@ -440,29 +428,17 @@ class TestSafetyAgent:
         )
         assert result["safe"] is False
 
-    async def test_short_text_skips_llm(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        llm_called = []
-
-        async def tracking_chat(*_: Any) -> str:
-            llm_called.append(True)
-            return json.dumps({"safe": True, "leaked_content": None})
-
-        monkeypatch.setattr("app.agents.safety.chat", tracking_chat)
-
-        # < 30 chars — should skip LLM check
+    async def test_short_safe_text(self) -> None:
+        # Short text with no forbidden content
         result = await self.safety.check(
             text="ok",
             audience_player_id="p1",
         )
         assert result["safe"] is True
-        assert len(llm_called) == 0
 
-    async def test_llm_failure_defaults_to_safe(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def failing_chat(*_: Any) -> str:
-            raise RuntimeError("down")
-
-        monkeypatch.setattr("app.agents.safety.chat", failing_chat)
-        long_text = "这是一段足够长的文本，用于触发LLM安全检查，没有任何违禁内容在其中。"
+    async def test_long_safe_text_no_llm(self) -> None:
+        # Verbatim-clean long text should pass without needing LLM (LLM removed)
+        long_text = "这是一段足够长的文本，没有任何违禁内容在其中。探案中，每位玩家都在努力寻找真相。"
         result = await self.safety.check(text=long_text, audience_player_id="p1")
         assert result["safe"] is True
 
@@ -485,11 +461,13 @@ class TestOrchestratorPipeline:
             player_char_map={"p1": "char_su", "p2": "char_shen"},
         )
         # Patch chat to return safe narrator text + safe safety result
-        self._judge_response = json.dumps({
-            "result": "是",
-            "confidence": 0.85,
-            "relevant_fact_ids": ["fact_0"],
-        })
+        self._judge_response = json.dumps(
+            {
+                "result": "是",
+                "confidence": 0.85,
+                "relevant_fact_ids": ["fact_0"],
+            }
+        )
         self._narrator_response = "这是一个很重要的发现，值得深入探讨。"
         self._safety_response = json.dumps({"safe": True, "leaked_content": None})
         self._call_count = 0
@@ -505,7 +483,6 @@ class TestOrchestratorPipeline:
 
         monkeypatch.setattr("app.agents.judge.chat", fake_chat)
         monkeypatch.setattr("app.agents.narrator.chat", fake_chat)
-        monkeypatch.setattr("app.agents.safety.chat", fake_chat)
 
     async def test_question_intent_returns_dm_response(self) -> None:
         response, trace = await self.orchestrator.handle_message("p1", "威士忌杯有毒吗")
@@ -570,9 +547,7 @@ class TestOrchestratorPipeline:
         assert response is not None
         assert response.type == RESP_META
 
-    async def test_safety_retry_uses_fallback_after_max_retries(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_safety_retry_uses_fallback_after_max_retries(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Make safety.check always return unsafe by patching the method directly
         from app.agents.safety import SafetyResult
 
@@ -599,6 +574,7 @@ class TestNPCAgent:
     @pytest.fixture(autouse=True)
     def setup(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from app.agents.npc import NPCAgent as _NPCAgent
+
         self._NPCAgent = _NPCAgent
         self._clues_by_id = {
             "clue_001": ScriptClue(

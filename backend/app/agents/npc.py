@@ -24,13 +24,9 @@ _NPC_FALLBACK = "这个……我不太清楚，恕我无法回答。"
 
 # Speech style descriptions injected into the system prompt
 _SPEECH_STYLES: dict[str, str] = {
-    "formal_elderly": (
-        "你说话语气礼貌、沉稳，偶尔带着老一辈人的措辞习惯，"
-        "不轻易主动透露信息，但被直接追问时会如实作答。"
-    ),
+    "formal_elderly": ("你说话语气礼貌、沉稳，偶尔带着老一辈人的措辞习惯，不轻易主动透露信息，但被直接追问时会如实作答。"),
     "curt_official": (
-        "你说话简洁直接，具有刑警的职业风格，不喜欢绕弯子，"
-        "对合理的推断会给出明确的肯定或否定，对尚未查明的事项会说「等待进一步核查」。"
+        "你说话简洁直接，具有刑警的职业风格，不喜欢绕弯子，对合理的推断会给出明确的肯定或否定，对尚未查明的事项会说「等待进一步核查」。"
     ),
 }
 
@@ -50,9 +46,7 @@ class NPCAgent:
 
     def __init__(self, npc: NPC, clues_by_id: dict[str, ScriptClue]) -> None:
         self._npc = npc
-        self._knowledge_clues: list[ScriptClue] = [
-            clues_by_id[cid] for cid in npc.knowledge if cid in clues_by_id
-        ]
+        self._knowledge_clues: list[ScriptClue] = [clues_by_id[cid] for cid in npc.knowledge if cid in clues_by_id]
         self._system_prompt = self._build_system_prompt()
 
     # ------------------------------------------------------------------
@@ -78,9 +72,7 @@ class NPCAgent:
         style_desc = _SPEECH_STYLES.get(self._npc.speech_style, _DEFAULT_STYLE)
 
         if self._knowledge_clues:
-            clue_lines = "\n".join(
-                f"- 【{c.title}】{c.content}" for c in self._knowledge_clues
-            )
+            clue_lines = "\n".join(f"- 【{c.title}】{c.content}" for c in self._knowledge_clues)
             knowledge_block = f"\n## 你掌握的案件信息\n{clue_lines}"
         else:
             knowledge_block = "\n## 你掌握的案件信息\n（你对案件细节所知甚少）"
