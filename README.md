@@ -1,11 +1,54 @@
 # AI DM — 海龟汤 & 剧本杀
 
-AI-hosted deduction game platform supporting two game modes in **Chinese and English**:
-
-- **海龟汤 / Turtle Soup** — players ask yes/no questions to deduce a hidden truth. Single-player or multiplayer (2–4 players via WebSocket rooms).
-- **剧本杀 / Murder Mystery** — structured multi-phase investigation. Each player is assigned a character with a public bio and a private secret. An AI DM hosts the entire session: opening narration → character reading → investigation → discussion → voting → reveal.
+> **AI-powered game master for Chinese social deduction games, built with a multi-agent LLM pipeline, real-time WebSocket multiplayer, and a React frontend. Supports bilingual (zh/en) gameplay with streaming DM responses, per-player secret isolation, and an automated evaluation harness.**
 
 ---
+
+## Project Overview
+
+AI DM is a full-stack multiplayer game platform that uses large language models to host two classic Chinese deduction games entirely autonomously — no human game master needed. Players connect from any device on the same network (or remotely via ngrok/Cloudflare) and interact with an AI DM in real time.
+
+### What it does
+
+**海龟汤 / Turtle Soup** — A lateral-thinking puzzle game. The DM holds a hidden story; players ask yes/no questions to piece together the truth. The AI judges each question against a decomposed fact set, generates atmospheric responses, and escalates hints when players go quiet.
+
+**剧本杀 / Murder Mystery** — A structured whodunit. 2–4 players are each assigned a character with a public backstory and a private secret. The AI DM hosts a six-phase session (opening → reading → investigation → discussion → voting → reveal), answers investigation questions, voices NPC characters, enforces phase rules, and narrates the dramatic reveal — all without ever leaking the solution early.
+
+### Technical highlights
+
+**Multi-agent pipeline with minimum-privilege design**
+Each player message flows through a four-agent chain: a rules-based Router classifies intent in <1ms (no LLM), a Judge evaluates truth alignment against decomposed key facts, a Narrator generates atmospheric responses without access to the solution, and a Safety agent blocks any accidental leaks before broadcast. Agents only receive the information they strictly need — the culprit identity and character secrets never appear in any prompt before the reveal phase.
+
+**Real-time streaming**
+DM responses stream token-by-token to all players simultaneously using server-sent WebSocket chunks. The frontend renders a typewriter effect with judgment shown immediately (before the full response arrives), so players get feedback in under a second even on slow connections.
+
+**Deterministic game state**
+All game rules — phase transitions, allowed actions, vote tallying, skip voting — are enforced by a pure Python state machine with no LLM involvement. The LLM can only respond to what the state machine permits; it cannot advance phases or reveal secrets on its own.
+
+**Observability**
+Every LLM call is logged to stdout (real-time) and to a daily JSONL file (full prompt + response for tuning). Every player message produces a structured `AgentTrace` (per-agent latency, token counts, cost) that can be toggled visible in the UI. An offline eval harness runs 58 judge accuracy scenarios and 56 adversarial red-team prompts against the live API, producing a markdown report with P50/P95 latency and projected cost.
+
+**Proactive DM intervention**
+The DM does not only react — it monitors the room and speaks up on its own. A background task ticks every 5 seconds and tracks silence per player. When a phase goes quiet, the engine escalates through three levels: a cheap canned encouragement at 45 seconds (no LLM cost), an LLM-generated nudge at 90 seconds, and a contextual hint at 180 seconds that references what the players have already discovered without giving away the answer. Thresholds double after each nudge to avoid spamming, and a global 15-second cooldown prevents two DM messages from overlapping. The intervention engine is phase-aware — it stays silent during opening and reading phases, switches to a vote reminder during voting, and runs the full backoff ladder only during investigation and discussion. This design keeps players engaged without feeling hand-held, and keeps LLM costs near zero for rooms that are actively playing.
+
+**MCP server**
+The game engine is exposed as MCP tools over stdio, making it playable from Claude Desktop, Cursor, or any MCP-compatible client without a browser.
+
+### Tech stack
+
+| Layer | Technologies |
+|-------|-------------|
+| Backend | Python 3.12, FastAPI, WebSocket, asyncio |
+| LLM | MiniMax M2.5 via OpenAI-compatible SDK; streaming + non-streaming |
+| Frontend | React 19, TypeScript, Vite, React Router |
+| Real-time | Native WebSocket (auto ws/wss for LAN and tunnel access) |
+| Testing | pytest, pytest-asyncio, 400+ test cases including red-team suite |
+| CI | GitHub Actions (pytest + ruff + tsc + vite build) |
+| Packaging | uv (Python), pnpm (Node); one-command startup via `./start.sh` |
+
+---
+
+## Quick Start
 
 ## Quick Start
 
