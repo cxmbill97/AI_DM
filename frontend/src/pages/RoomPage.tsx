@@ -537,6 +537,7 @@ export function RoomPage() {
   useEffect(() => {
     if (privateClues.length > 0 && !hasShownIntroRef.current) {
       hasShownIntroRef.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowIntroModal(true);
     }
   }, [privateClues.length]);

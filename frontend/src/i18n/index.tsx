@@ -31,6 +31,7 @@ function lookup(obj: unknown, parts: string[]): string | undefined {
   return typeof cur === 'string' ? cur : undefined;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function makeT(lang: Lang) {
   return function t(key: string, params?: Record<string, string | number>): string {
     const parts = key.split('.');
@@ -62,12 +63,14 @@ interface LanguageContextValue {
   t: ReturnType<typeof makeT>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const LanguageContext = createContext<LanguageContextValue>({
   lang: 'zh',
   setLang: () => {},
   t: makeT('zh'),
 });
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useT() {
   return useContext(LanguageContext);
 }

@@ -22,7 +22,7 @@ export function useTraceSetting() {
       const next = !prev;
       try {
         localStorage.setItem(STORAGE_KEY, String(next));
-      } catch {}
+      } catch { /* ignore localStorage errors */ }
       return next;
     });
   }

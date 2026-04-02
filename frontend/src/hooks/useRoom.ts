@@ -598,6 +598,7 @@ export function useRoom(roomId: string, playerName: string) {
 
       if (retriesRef.current < MAX_RETRIES) {
         retriesRef.current += 1;
+        // eslint-disable-next-line react-hooks/immutability
         setTimeout(connect, RETRY_DELAY_MS);
       } else {
         setError(t('room.disconnect_error'));
