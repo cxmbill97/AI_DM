@@ -145,6 +145,7 @@
     "investigation_1": "Investigation",
     "discussion": "Discussion",
     "voting": "Voting",
+    "reconstruction": "Reconstruction",
     "reveal": "Reveal"
   },
   "phase_desc": {
@@ -153,6 +154,7 @@
     "investigation_1": "Search for clues, ask NPCs, question the DM",
     "discussion": "Share your deductions with other players",
     "voting": "Vote for who you think is the culprit",
+    "reconstruction": "Cooperatively answer questions to rebuild the truth",
     "reveal": "The truth of the case is revealed"
   },
   "voting": {

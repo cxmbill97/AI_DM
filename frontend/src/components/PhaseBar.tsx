@@ -51,7 +51,7 @@ export function PhaseBar({ phase, timeRemaining, skipVotes, hasSkipVoted, onSkip
   // Client-side countdown
   useEffect(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    if (localTime === null || localTime <= 0) return;
+    if (timeRemaining === null || timeRemaining <= 0) return;
 
     intervalRef.current = setInterval(() => {
       setLocalTime((t) => {

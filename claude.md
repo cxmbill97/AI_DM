@@ -5,7 +5,7 @@
 ```bash
 cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0   # API (port 8000)
 cd backend && uv run pytest tests/ -x -v                             # all tests
-cd backend && uv run python -m eval.run --scenarios 50               # eval harness
+cd backend && uv run python -m eval --scenarios all                  # eval harness
 cd backend && uv run python -m mcp_server                            # MCP server (stdio)
 cd frontend && pnpm dev --host 0.0.0.0                               # UI (port 5173)
 ./start.sh                                                            # one-command startup
@@ -24,14 +24,10 @@ minimum-privilege context isolation.
 - Phase 3: VisibilityRegistry + per-player private clues
 - Phase 4: 剧本杀 + multi-agent pipeline + voting + NPC
 - Phase 5: Bilingual (zh/en) + LAN access
-- Phase 6: Remote access (ngrok/cloudflare) + demo packaging
+- Phase 6: Remote access (ngrok/cloudflare) + demo packaging + 3-player reconstruction mode
+- Phase 7: Agent Trace + Eval Harness (114 scenarios) + MCP Server
 
-**Next: Phase 7 — Observability, Evaluation, MCP**
-Three additions that make the agent system inspectable, measurable, and interoperable:
-
-1. Agent Trace: per-message decision trace visible in frontend
-1. Eval Harness: automated scoring with markdown report output
-1. MCP Server: expose game engine as MCP tools for any compatible client
+**All phases complete. No active next phase.**
 
 **Core principle: Deterministic State > LLM Output.**
 
@@ -57,45 +53,48 @@ backend/
 │   │   ├── judge.py
 │   │   ├── narrator.py
 │   │   ├── safety.py
-│   │   └── trace.py            # [Phase 7] TraceStep, AgentTrace dataclasses
+│   │   └── trace.py            # TraceStep, AgentTrace dataclasses
 │   └── dm.py
-├── eval/                        # [Phase 7] Evaluation harness
-│   ├── __main__.py              # CLI entry: python -m eval.run
+├── eval/                        # Evaluation harness
+│   ├── __main__.py              # CLI entry: python -m eval
 │   ├── scenarios.py             # EvalScenario dataclass + loader
 │   ├── runner.py                # Run scenarios against agents, collect results
 │   ├── report.py                # Generate markdown report from results
 │   ├── data/
-│   │   ├── judge_scenarios.json     # 50+ (question, expected_judgment) pairs
-│   │   └── redteam_scenarios.json   # 50+ adversarial prompts
+│   │   ├── judge_scenarios.json     # 58 scenarios (48 accuracy + 10 edge_case)
+│   │   └── redteam_scenarios.json   # 56 adversarial prompts
 │   └── reports/                 # Generated reports (gitignored except examples)
 │       └── .gitkeep
-├── mcp_server/                  # [Phase 7] MCP Server
+├── mcp_server/                  # MCP Server
 │   ├── __main__.py              # Entry: python -m mcp_server
 │   └── server.py                # FastMCP server with game tools
 ├── data/
 │   ├── puzzles/{zh,en}/
 │   └── scripts/{zh,en}/
 ├── tests/
-│   ├── ...existing tests...
-│   ├── test_trace.py            # [Phase 7] Trace collection tests
-│   ├── test_eval.py             # [Phase 7] Eval harness tests
-│   └── test_mcp.py              # [Phase 7] MCP server tool tests
+│   ├── test_agents.py           # Judge, narrator, safety, router agents
+│   ├── test_room.py             # Multiplayer game flow
+│   ├── test_state_machine.py    # Phase transitions
+│   ├── test_redteam.py          # Safety agent redteam prompts
+│   ├── test_trace.py            # Trace collection, sanitization, cost
+│   ├── test_eval.py             # Eval harness (slow: requires MINIMAX_API_KEY)
+│   ├── test_mcp.py              # MCP server tool tests
+│   ├── sim_two_players.py       # Live two-player murder mystery simulation
+│   └── sim_three_recon.py       # Live three-player reconstruction simulation
 └── pyproject.toml
 
 frontend/
 ├── src/
 │   ├── components/
 │   │   ├── ...existing components...
-│   │   └── TracePanel.tsx       # [Phase 7] Expandable agent decision trace
+│   │   └── TracePanel.tsx       # Expandable agent decision trace
 │   └── ...
 └── ...
 ```
 
 ## Key Concepts
 
-1-9: Same as v8. All implemented and tested.
-
-1. **[Phase 7] Agent Trace:**
+1. **Agent Trace:**
    Each player message produces an AgentTrace — a list of TraceSteps recording
    every agent’s input, output, latency, and token usage. Traces are:
 - Returned in WebSocket/REST responses (optional field, hidden by default)
@@ -127,7 +126,7 @@ frontend/
    IMPORTANT: TraceStep.input_summary for Judge must NOT include raw key_facts
    or truth. Show only: “key_facts: 5 items” or similar. The trace is visible
    to players in debug mode — it must not leak secrets.
-1. **[Phase 7] Eval Harness:**
+1. **Eval Harness:**
    Offline batch evaluation. Loads scenarios from JSON, runs them through agents,
    computes metrics, outputs markdown report.
    
@@ -141,22 +140,21 @@ frontend/
    
    CLI: `python -m eval.run --scenarios 50 --provider minimax`
    Output: `eval/reports/{provider}_{date}.md`
-1. **[Phase 7] MCP Server:**
+1. **MCP Server:**
    Exposes the game engine as MCP tools via stdio transport. Any MCP-compatible
    client (Claude Desktop, Cursor, custom agent) can play the game.
    
    Tools:
-- list_puzzles(language) → [{id, title}]
-- list_scripts(language) → [{id, title}]
-- start_game(puzzle_id | script_id, language, player_name) → {session_id, surface}
-- ask_question(session_id, question) → {judgment, response, clue_unlocked, trace}
-- get_status(session_id) → {phase, progress, unlocked_clues, players}
-- cast_vote(session_id, target_character_id) → {result}
+- list_puzzles(language) → [{id, title, difficulty, tags}]
+- list_scripts(language) → [{id, title, player_count, difficulty, duration}]
+- start_game(puzzle_id, language, player_name) → {session_id, title, surface, instructions}
+- ask_question(session_id, question) → {judgment, response, progress, trace}
+- get_game_status(session_id) → {progress, hints, unlocked_clues, finished}
    
    Uses FastMCP library. Single-player mode only (no WebSocket multiplayer via MCP).
    The MCP server is a thin wrapper around existing game logic — no new game code.
 
-## Things That Will Bite You (Phase 7 additions)
+## Things That Will Bite You
 
 - **Trace input_summary must be sanitized.** Players can toggle trace view in the
   frontend. If Judge’s input_summary contains key_facts text, you’ve leaked secrets
@@ -171,9 +169,7 @@ frontend/
 - **FastMCP requires Python 3.10+.** Should be fine (we’re on 3.12).
 - **All previous caveats still apply.**
 
-## Design Decisions Log (updated)
-
-All previous decisions still apply, plus:
+## Design Decisions Log
 
 - **Trace as dataclass, not OpenTelemetry:** Our trace is game-specific (agent steps,
   not HTTP spans). OTel adds dependency weight and conceptual overhead. A simple

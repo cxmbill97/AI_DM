@@ -934,10 +934,48 @@ async def websocket_endpoint(
 
     # ----------------------------------------------------------------
     # Deliver join-specific private info (new joins only)
+    # For reconnects: re-send character_secret and current reconstruction
+    # question so the player's UI is fully restored.
     # ----------------------------------------------------------------
     if not is_reconnect:
         if room.game_type == "murder_mystery":
             await _send_mm_character_info(room, player_id, player_name)
+    elif room.game_type == "murder_mystery":
+        # Re-send character secret so the character panel is restored
+        char_id = room._char_assignments.get(player_id)
+        if char_id and room.script is not None:
+            char = next((c for c in room.script.characters if c.id == char_id), None)
+            if char:
+                phase_reading = room.state_machine.phases.get("reading") if room.state_machine else None
+                per_player_content: str | None = None
+                if phase_reading and phase_reading.per_player_content:
+                    per_player_content = phase_reading.per_player_content.get(char_id)
+                await room.send_to(player_id, {
+                    "type": "character_secret",
+                    "char_id": char.id,
+                    "char_name": char.name,
+                    "secret_bio": char.secret_bio,
+                    "personal_script": per_player_content,
+                })
+        # Re-send the current reconstruction question if in reconstruction phase
+        if (
+            room.state_machine is not None
+            and room.state_machine.current_phase == "reconstruction"
+            and room.script is not None
+        ):
+            phase_obj = room.state_machine.current()
+            questions = phase_obj.reconstruction_questions
+            q_index = room._reconstruction_q_index
+            if questions and q_index < len(questions):
+                current_q = questions[q_index]
+                await room.send_to(player_id, {
+                    "type": "reconstruction_question",
+                    "index": q_index,
+                    "total": len(questions),
+                    "question_id": current_q.id,
+                    "question": current_q.question,
+                    "timestamp": time.time(),
+                })
         else:
             # Turtle soup: deliver private clues
             assert room.game_session is not None
@@ -1023,10 +1061,10 @@ async def websocket_endpoint(
                         continue
                     room._skip_votes.add(player_id)
                     connected_ids = [pid for pid, p in room.players.items() if p["connected"]]
-                    needed = len(connected_ids)  # all players must agree to skip
+                    needed = (len(connected_ids) // 2) + 1  # simple majority
                     voted = len(room._skip_votes & set(connected_ids))
                     if voted >= needed:
-                        # Majority reached — advance immediately
+                        # Simple majority reached — advance immediately
                         room._skip_votes.clear()
                         await _advance_mm_phase(room)
                     else:

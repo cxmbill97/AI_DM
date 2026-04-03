@@ -145,6 +145,7 @@
     "investigation_1": "调查阶段",
     "discussion": "讨论阶段",
     "voting": "投票阶段",
+    "reconstruction": "还原阶段",
     "reveal": "真相揭晓"
   },
   "phase_desc": {
@@ -153,6 +154,7 @@
     "investigation_1": "搜查线索，询问NPC，向DM提问",
     "discussion": "与其他玩家分享推理",
     "voting": "选出你认为的凶手",
+    "reconstruction": "合力回答还原问题，重建事件真相",
     "reveal": "案件真相大白"
   },
   "voting": {
