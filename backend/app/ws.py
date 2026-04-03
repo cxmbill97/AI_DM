@@ -254,12 +254,18 @@ async def _do_mm_reveal(room: Room) -> None:
     if game_mode == "reconstruction":
         # Reconstruction mode: reveal full story, no culprit
         if lang == "en":
-            truth_text = f"Full Story:\n{truth.full_story}\n\nTimeline: {truth.timeline}" if truth.full_story else f"Motive: {truth.motive}\nMethod: {truth.method}\nTimeline: {truth.timeline}"
+            if truth.full_story:
+                truth_text = f"Full Story:\n{truth.full_story}\n\nTimeline: {truth.timeline}"
+            else:
+                truth_text = f"Motive: {truth.motive}\nMethod: {truth.method}\nTimeline: {truth.timeline}"
             reveal_player_msg = "The full truth is revealed"
             canned_fallback = f"Truth revealed! {truth_text}"
             error_fallback = f"The full truth:\n{truth_text}"
         else:
-            truth_text = f"完整真相：\n{truth.full_story}\n\n时间线：{truth.timeline}" if truth.full_story else f"动机：{truth.motive}\n手法：{truth.method}\n时间线：{truth.timeline}"
+            if truth.full_story:
+                truth_text = f"完整真相：\n{truth.full_story}\n\n时间线：{truth.timeline}"
+            else:
+                truth_text = f"动机：{truth.motive}\n手法：{truth.method}\n时间线：{truth.timeline}"
             reveal_player_msg = "完整真相揭晓"
             canned_fallback = f"真相揭晓！{truth_text}"
             error_fallback = f"完整真相：\n{truth_text}"
@@ -333,10 +339,8 @@ async def _start_reconstruction_phase(room: Room) -> None:
 
     if lang == "en":
         intro_text = f"Reconstruction phase begins! Answer {total} questions together to rebuild the truth."
-        q_text = f"Question 1/{total}: {first_q.question}"
     else:
         intro_text = f"还原阶段开始！请合力回答以下 {total} 个问题，共同还原事件真相。"
-        q_text = f"第 1/{total} 题：{first_q.question}"
 
     intro_msg: dict[str, Any] = {
         "type": "dm_response",
@@ -404,13 +408,15 @@ async def _handle_reconstruction_answer(room: Room, player_id: str, player_name:
 
     score = 2 if result == "correct" else (1 if result == "partial" else 0)
     room._reconstruction_score += score
-    room._reconstruction_answers.append({
-        "q_id": current_q.id,
-        "player_name": player_name,
-        "answer": player_answer,
-        "result": result,
-        "score": score,
-    })
+    room._reconstruction_answers.append(
+        {
+            "q_id": current_q.id,
+            "player_name": player_name,
+            "answer": player_answer,
+            "result": result,
+            "score": score,
+        }
+    )
 
     # Build result text
     if result == "correct":
@@ -448,11 +454,6 @@ async def _handle_reconstruction_answer(room: Room, player_id: str, player_name:
 
     if next_index < len(questions):
         next_q = questions[next_index]
-        if lang == "en":
-            q_text_label = f"Question {next_index + 1}/{total}: {next_q.question}"
-        else:
-            q_text_label = f"第 {next_index + 1}/{total} 题：{next_q.question}"
-
         next_q_msg: dict[str, Any] = {
             "type": "reconstruction_question",
             "index": next_index,
@@ -463,7 +464,6 @@ async def _handle_reconstruction_answer(room: Room, player_id: str, player_name:
         }
         room.message_history.append(next_q_msg)
         await room.broadcast(next_q_msg)
-        _ = q_text_label  # used in text already
     else:
         # All questions answered — compute final score and advance to reveal
         max_score = total * 2

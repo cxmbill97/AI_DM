@@ -60,7 +60,10 @@ _PHASE_INSTRUCTIONS_EN: dict[str, str] = {
     "discussion": "Discussion. Encourage sharing deductions. Pose questions, summarise key points.",
     "voting": "Voting phase. Guide players to final judgment; don't answer new investigation questions.",
     "reveal": "Reveal phase. Fully disclose culprit, motive, method — dramatic layered storytelling.",
-    "reconstruction": "Reconstruction phase. Players are cooperatively answering reconstruction questions. Encourage discussion gently; do not reveal answers or interfere with the Q&A flow.",
+    "reconstruction": (
+        "Reconstruction phase. Players are cooperatively answering reconstruction questions. "
+        "Encourage discussion gently; do not reveal answers or interfere with the Q&A flow."
+    ),
 }
 
 _DEFAULT_PHASE_INSTRUCTION_ZH = "引导玩家继续推理，维持紧张悬疑的氛围。"
