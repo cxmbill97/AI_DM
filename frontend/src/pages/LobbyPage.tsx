@@ -33,6 +33,9 @@ export function LobbyPage() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [puzzleUploadModalOpen, setPuzzleUploadModalOpen] = useState(false);
 
+  // Turtle soup search (client-side filter)
+  const [puzzleSearch, setPuzzleSearch] = useState('');
+
   // Community scripts + search
   const [communityScripts, setCommunityScripts] = useState<CommunityScript[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -221,6 +224,13 @@ export function LobbyPage() {
       {mode === 'turtle_soup' && (
         <>
           <div className="lobby-section-header">
+            <input
+              className="lobby-input lobby-search"
+              type="text"
+              placeholder={t('lobby.search_placeholder')}
+              value={puzzleSearch}
+              onChange={(e) => setPuzzleSearch(e.target.value)}
+            />
             <button className="btn btn-outline btn-sm" onClick={() => setPuzzleUploadModalOpen(true)}>
               {t('upload.puzzle_btn')}
             </button>
@@ -230,7 +240,11 @@ export function LobbyPage() {
 
           {!loadingPuzzles && !puzzleError && (
             <div className="puzzle-list">
-              {puzzles.map((p) => (
+              {puzzles.filter((p) => {
+                if (!puzzleSearch.trim()) return true;
+                const q = puzzleSearch.toLowerCase();
+                return p.title.toLowerCase().includes(q) || p.tags.some((tag) => tag.toLowerCase().includes(q));
+              }).map((p) => (
                 <div key={p.id} className="puzzle-list-item">
                   <div className="puzzle-list-item-body">
                     <h3 className="puzzle-item-title">{p.title}</h3>
