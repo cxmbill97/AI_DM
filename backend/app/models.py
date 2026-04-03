@@ -400,3 +400,15 @@ class ScriptUploadResponse(BaseModel):
     phase_count: int
     clue_count: int
     warning: str | None = None  # e.g. "text truncated to 24000 chars"
+
+
+class PuzzleUploadResponse(BaseModel):
+    """Returned by POST /api/puzzles/upload on success."""
+
+    puzzle_id: str
+    title: str
+    difficulty: str
+    tags: list[str]
+    clue_count: int
+    key_fact_count: int
+    warning: str | None = None

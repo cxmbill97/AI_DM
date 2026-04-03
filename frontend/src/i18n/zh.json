@@ -205,6 +205,10 @@
     "warning_truncated": "⚠ 文档过长，已截断至 24000 字符",
     "error_title": "解析失败",
     "raw_output": "查看原始输出",
-    "success": "剧本《{title}》已添加！"
+    "success": "剧本《{title}》已添加！",
+    "show_raw": "查看原始输出",
+    "puzzle_title": "上传汤面汤底谜题",
+    "puzzle_success": "谜题《{title}》已添加！",
+    "puzzle_btn": "上传谜题"
   }
 }

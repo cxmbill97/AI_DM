@@ -5,6 +5,7 @@ import type { CommunityScript, PuzzleSummary, ScriptSummary } from '../api';
 import { useT } from '../i18n';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { ScriptUploadModal } from '../components/ScriptUploadModal';
+import { PuzzleUploadModal } from '../components/PuzzleUploadModal';
 
 function difficultyClass(d: string) {
   if (d === '简单' || d === 'beginner') return 'easy';
@@ -30,6 +31,7 @@ export function LobbyPage() {
   const [loadingScripts, setLoadingScripts] = useState(false);
   const [scriptError, setScriptError] = useState('');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [puzzleUploadModalOpen, setPuzzleUploadModalOpen] = useState(false);
 
   // Community scripts + search
   const [communityScripts, setCommunityScripts] = useState<CommunityScript[]>([]);
@@ -48,12 +50,18 @@ export function LobbyPage() {
     if (playerName) localStorage.setItem(PLAYER_NAME_KEY, playerName);
   }, [playerName]);
 
-  useEffect(() => {
+  function refreshPuzzles() {
+    setLoadingPuzzles(true);
+    setPuzzleError('');
     listPuzzles(lang)
       .then(setPuzzles)
       .catch((e: Error) => setPuzzleError(e.message))
       .finally(() => setLoadingPuzzles(false));
-  }, [lang]);
+  }
+
+  useEffect(() => {
+    refreshPuzzles();
+  }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function refreshScripts() {
     setLoadingScripts(true);
@@ -212,6 +220,11 @@ export function LobbyPage() {
       {/* Turtle soup puzzle list */}
       {mode === 'turtle_soup' && (
         <>
+          <div className="lobby-section-header">
+            <button className="btn btn-outline btn-sm" onClick={() => setPuzzleUploadModalOpen(true)}>
+              {t('upload.puzzle_btn')}
+            </button>
+          </div>
           {loadingPuzzles && <p className="loading-text">{t('lobby.loading_puzzles')}</p>}
           {puzzleError && <p className="error-text">{t('lobby.load_error', { msg: puzzleError })}</p>}
 
@@ -357,6 +370,18 @@ export function LobbyPage() {
             </>
           )}
         </>
+      )}
+      {puzzleUploadModalOpen && (
+        <PuzzleUploadModal
+          lang={lang}
+          onClose={() => setPuzzleUploadModalOpen(false)}
+          onSuccess={(_puzzleId, title) => {
+            setPuzzleUploadModalOpen(false);
+            refreshPuzzles();
+            setFormError(t('upload.puzzle_success', { title }));
+            setTimeout(() => setFormError(''), 3000);
+          }}
+        />
       )}
       {uploadModalOpen && (
         <ScriptUploadModal

@@ -105,6 +105,27 @@ def save_script(script: Script, lang: str = "zh") -> Path:
     return path
 
 
+def save_puzzle(puzzle: Puzzle, lang: str = "zh") -> Path:
+    """Persist *puzzle* as JSON in data/puzzles/{lang}/{puzzle.id}.json.
+
+    Creates the language subdirectory if it does not exist.
+    Returns the path written.
+    """
+    lang_dir = PUZZLES_DIR / lang
+    lang_dir.mkdir(parents=True, exist_ok=True)
+    path = lang_dir / f"{puzzle.id}.json"
+    path.write_text(puzzle.model_dump_json(indent=2), encoding="utf-8")
+    return path
+
+
+def invalidate_puzzle_cache(lang: str | None = None) -> None:
+    """Evict the puzzle cache for *lang* (or all languages if None)."""
+    if lang is None:
+        _cache.clear()
+    else:
+        _cache.pop(lang, None)
+
+
 def invalidate_script_cache(lang: str | None = None) -> None:
     """Evict the script cache for *lang* (or all languages if None).
 

@@ -179,6 +179,23 @@ export function getRoom(roomId: string): Promise<RoomState> {
 // Script ingestion
 // ---------------------------------------------------------------------------
 
+export interface PuzzleUploadResponse {
+  puzzle_id: string;
+  title: string;
+  difficulty: string;
+  tags: string[];
+  clue_count: number;
+  key_fact_count: number;
+  warning?: string;
+}
+
+export function uploadPuzzle(file: File, lang: string): Promise<PuzzleUploadResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('lang', lang);
+  return apiFetch('/api/puzzles/upload', { method: 'POST', body: form });
+}
+
 export interface ScriptUploadResponse {
   script_id: string;
   title: string;

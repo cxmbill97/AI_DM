@@ -18,18 +18,21 @@ from app.models import (
     GameSession,
     Player,
     PuzzleSummary,
+    PuzzleUploadResponse,
     RoomState,
     ScriptUploadResponse,
     StartRequest,
     StartResponse,
 )
 from app.puzzle_loader import (
+    invalidate_puzzle_cache,
     invalidate_script_cache,
     load_all_puzzles,
     load_puzzle,
     load_script,
     load_scripts,
     random_puzzle,
+    save_puzzle,
     save_script,
 )
 from app.room import room_manager
@@ -105,6 +108,59 @@ async def list_puzzles(lang: str = "zh") -> list[PuzzleSummary]:
         )
         for p in load_all_puzzles(lang)
     ]
+
+
+@app.post("/api/puzzles/upload", response_model=PuzzleUploadResponse)
+async def upload_puzzle(
+    file: UploadFile = File(...),
+    lang: str = Form("zh"),
+) -> PuzzleUploadResponse:
+    """Upload a PDF, DOCX, or TXT turtle soup puzzle and parse it with AI.
+
+    The parsed puzzle is saved to data/puzzles/{lang}/ and becomes immediately
+    available for game creation via GET /api/puzzles.
+    """
+    from app.agents.puzzle_parser import PuzzleParseError, PuzzleParserAgent  # noqa: PLC0415
+    from app.doc_extractor import ExtractionError, UnsupportedFormatError, extract_text  # noqa: PLC0415
+
+    lang = lang if lang in ("zh", "en") else "zh"
+    content = await file.read()
+
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
+
+    try:
+        raw_text = extract_text(file.filename or "upload.txt", content)
+    except UnsupportedFormatError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except ExtractionError as exc:
+        raise HTTPException(status_code=422, detail=f"File extraction failed: {exc}") from exc
+
+    was_truncated = len(raw_text) > 24_000
+    warning = "Document was truncated to 24,000 characters for AI processing." if was_truncated else None
+
+    puzzle_id = f"upload_{lang}_{uuid.uuid4().hex[:8]}"
+    agent = PuzzleParserAgent(language=lang)
+    try:
+        puzzle = await agent.parse(raw_text, puzzle_id)
+    except PuzzleParseError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": f"Puzzle parsing failed: {exc}", "last_json": exc.last_json or ""},
+        ) from exc
+
+    save_puzzle(puzzle, lang)
+    invalidate_puzzle_cache(lang)
+
+    return PuzzleUploadResponse(
+        puzzle_id=puzzle.id,
+        title=puzzle.title,
+        difficulty=puzzle.difficulty,
+        tags=puzzle.tags,
+        clue_count=len(puzzle.clues),
+        key_fact_count=len(puzzle.key_facts),
+        warning=warning,
+    )
 
 
 @app.post("/api/start", response_model=StartResponse)

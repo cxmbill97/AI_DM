@@ -205,6 +205,10 @@
     "warning_truncated": "⚠ Document truncated to 24,000 characters",
     "error_title": "Parse Failed",
     "raw_output": "View raw output",
-    "success": "Script \"{title}\" added!"
+    "success": "Script \"{title}\" added!",
+    "show_raw": "View raw output",
+    "puzzle_title": "Upload Turtle Soup Puzzle",
+    "puzzle_success": "Puzzle \"{title}\" added!",
+    "puzzle_btn": "Upload Puzzle"
   }
 }
