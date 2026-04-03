@@ -6,6 +6,7 @@ import { PuzzleCard } from '../components/PuzzleCard';
 import { HintBar } from '../components/HintBar';
 import { PrivateCluePanel } from '../components/PrivateCluePanel';
 import { PhaseBar } from '../components/PhaseBar';
+import { ReconstructionPanel } from '../components/ReconstructionPanel';
 import { ScriptCard } from '../components/ScriptCard';
 import { TracePanel } from '../components/TracePanel';
 import { VotePanel } from '../components/VotePanel';
@@ -403,9 +404,9 @@ function ShareBar({ roomId }: { roomId: string }) {
 // Waiting banner
 // ---------------------------------------------------------------------------
 
-function WaitingBanner({ connectedCount }: { connectedCount: number }) {
+function WaitingBanner({ connectedCount, requiredPlayers = 2 }: { connectedCount: number; requiredPlayers?: number }) {
   const { t } = useT();
-  if (connectedCount >= 2) return null;
+  if (connectedCount >= requiredPlayers) return null;
   return (
     <div className="room-waiting-banner">
       {t('room.waiting_banner', { n: connectedCount })}
@@ -516,6 +517,8 @@ export function RoomPage() {
     gameType, mmPhase, mmTimeRemaining, characters, myChar,
     voteCandidates, voteCount, voteResult, hasVoted, sendVote,
     skipVotes, hasSkipVoted, sendSkipVote,
+    mmRequiredPlayers, mmGameMode,
+    reconstructionQuestion, reconstructionResults, reconstructionComplete, sendReconstructionAnswer,
   } = useRoom(roomId, playerName);
 
   const { t } = useT();
@@ -593,6 +596,7 @@ export function RoomPage() {
     const activePhase = mmPhase ?? 'opening';
     const isVoting = activePhase === 'voting';
     const isReveal = activePhase === 'reveal';
+    const isReconstruction = activePhase === 'reconstruction';
     const isListenOnly = activePhase === 'opening' || activePhase === 'reading';
 
     // Build vote candidate list from characters
@@ -626,6 +630,7 @@ export function RoomPage() {
               skipVotes={skipVotes}
               hasSkipVoted={hasSkipVoted}
               onSkip={sendSkipVote}
+              gameMode={mmGameMode}
             />
             <div className="mm-conn-area">
               <LanguageToggle />
@@ -669,7 +674,7 @@ export function RoomPage() {
 
           {/* Center: chat */}
           <div className="mm-center">
-            <WaitingBanner connectedCount={connectedCount} />
+            <WaitingBanner connectedCount={connectedCount} requiredPlayers={mmRequiredPlayers} />
             <div className="room-chat mm-chat">
               <MessageList msgs={messages} playerName={playerName} dmTyping={dmTyping} showTraces={showTraces} />
               <div ref={chatEndRef} />
@@ -700,9 +705,14 @@ export function RoomPage() {
                 {t('game.send')}
               </button>
             </div>
+            {isReconstruction && (
+              <div style={{ padding: '6px 8px', fontSize: 12, color: 'var(--text-dim)', textAlign: 'center' }}>
+                {t('reconstruction.chat_hint')}
+              </div>
+            )}
           </div>
 
-          {/* Right: clues + vote */}
+          {/* Right: clues + vote/reconstruction */}
           <aside className="mm-right">
             <CluePanel clues={clues} panelRef={cluePanelRef} />
             <VotePanel
@@ -713,6 +723,14 @@ export function RoomPage() {
               onVote={sendVote}
               voteCount={voteCount?.count ?? 0}
               totalPlayers={players.length}
+            />
+            <ReconstructionPanel
+              phase={activePhase}
+              currentQuestion={reconstructionQuestion}
+              results={reconstructionResults}
+              complete={reconstructionComplete}
+              onSubmitAnswer={sendReconstructionAnswer}
+              connected={connected}
             />
             {isReveal && (
               <div style={{ textAlign: 'center', marginTop: 16 }}>

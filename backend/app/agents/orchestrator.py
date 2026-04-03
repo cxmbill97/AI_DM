@@ -748,8 +748,56 @@ class AgentOrchestrator:
     def _build_truth_reveal_text(self) -> str:
         """Build the reveal text from the script truth (only used in reveal phase)."""
         truth = self._script.truth
+        # Reconstruction mode: use full_story if available
+        if self._script.game_mode == "reconstruction" and truth.full_story:
+            if self._language == "en":
+                return f"Full Story:\n{truth.full_story}\n\nTimeline: {truth.timeline}"
+            return f"完整真相：\n{truth.full_story}\n\n时间线：{truth.timeline}"
         culprit_char = next((c for c in self._script.characters if c.id == truth.culprit), None)
         culprit_name = culprit_char.name if culprit_char else truth.culprit
         if self._language == "en":
             return f"Culprit: {culprit_name}\nMotive: {truth.motive}\nMethod: {truth.method}\nTimeline: {truth.timeline}"
         return f"凶手：{culprit_name}\n动机：{truth.motive}\n手法：{truth.method}\n时间线：{truth.timeline}"
+
+    async def score_reconstruction_answer(self, player_answer: str, expected_answer: str) -> str:
+        """Score a player's reconstruction answer against the expected answer.
+
+        Returns 'correct' (2 pts), 'partial' (1 pt), or 'wrong' (0 pts).
+        Uses a lightweight LLM call — no key_facts leakage risk since we
+        inject only the expected answer for this specific question.
+        """
+        from app.llm import chat, strip_think
+
+        if self._language == "en":
+            prompt = (
+                "You are a scorer. Compare the player's answer to the reference answer.\n"
+                f"Reference: {expected_answer}\n"
+                f"Player answer: {player_answer}\n\n"
+                "Rules:\n"
+                "- Reply 'correct' if the player's answer contains the core information.\n"
+                "- Reply 'partial' if the answer is partly right.\n"
+                "- Reply 'wrong' if the answer is incorrect or irrelevant.\n"
+                "Reply with exactly one word: correct, partial, or wrong."
+            )
+        else:
+            prompt = (
+                "你是评分官。判断玩家答案与标准答案的匹配程度。\n"
+                f"标准答案：{expected_answer}\n"
+                f"玩家答案：{player_answer}\n\n"
+                "规则：\n"
+                "- 如果玩家答案包含了标准答案的核心信息，回复：correct\n"
+                "- 如果玩家答案部分正确，回复：partial\n"
+                "- 如果玩家答案错误或无关，回复：wrong\n"
+                "只回复一个单词：correct、partial 或 wrong。"
+            )
+        try:
+            raw = await chat(prompt, [{"role": "user", "content": player_answer}])
+            result = strip_think(raw).strip().lower()
+            if "correct" in result:
+                return "correct"
+            if "partial" in result:
+                return "partial"
+            return "wrong"
+        except Exception:
+            logger.exception("score_reconstruction_answer failed")
+            return "wrong"

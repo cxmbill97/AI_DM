@@ -32,7 +32,6 @@ if TYPE_CHECKING:
 _GENTLE_MESSAGES_ZH = [
     "大家有什么想法吗？",
     "这个问题可以从另一个角度想想~",
-    "别忘了已经发现的线索哦",
     "有没有什么细节被忽略了？",
     "大家慢慢想，不着急~",
     "思路卡住了？换个方向试试",
@@ -41,7 +40,6 @@ _GENTLE_MESSAGES_ZH = [
 _GENTLE_MESSAGES_EN = [
     "Any thoughts, everyone?",
     "Try approaching this from a different angle.",
-    "Don't forget the clues you've already found.",
     "Could there be any details you're overlooking?",
     "Take your time — there's no rush.",
     "Feeling stuck? Try a different direction.",
@@ -106,10 +104,20 @@ class InterventionEngine:
 
     def __init__(self, room: Room) -> None:
         self.room = room
-        self.last_dm_time: float = 0.0
+        # Use current time so cooldown is satisfied only after global_cooldown seconds.
+        self.last_dm_time: float = time.time()
         self.silence_start: float = time.time()
         self.silence_nudge_count: int = 0
         self.global_cooldown: float = 15.0
+
+    def on_phase_change(self) -> None:
+        """Reset silence timer and nudge count when a new phase begins.
+
+        Call this from ws._advance_mm_phase so the new phase starts its own
+        45-second silence window rather than inheriting accumulated room time.
+        """
+        self.silence_start = time.time()
+        self.silence_nudge_count = 0
 
     # ------------------------------------------------------------------
     # Public interface called by ws.py
@@ -160,12 +168,16 @@ class InterventionEngine:
             self.silence_nudge_count += 1
 
     def random_gentle_message(self, phase: str | None = None, lang: str = "zh") -> str:
-        """Return a canned gentle message, phase-aware for murder mystery."""
+        """Return a canned gentle message, phase-aware for murder mystery.
+
+        Phase IDs like "investigation_1" all match the investigation pool.
+        """
+        is_investigation = phase is not None and phase.startswith("investigation")
         if lang == "en":
-            if phase == "investigation":
+            if is_investigation:
                 return random.choice(_INVESTIGATION_MESSAGES_EN)
             return random.choice(_GENTLE_MESSAGES_EN)
-        if phase == "investigation":
+        if is_investigation:
             return random.choice(_INVESTIGATION_MESSAGES_ZH)
         return random.choice(_GENTLE_MESSAGES_ZH)
 

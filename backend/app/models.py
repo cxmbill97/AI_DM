@@ -257,6 +257,14 @@ class Character(BaseModel):
     is_culprit: bool = False
 
 
+class ReconstructionQuestion(BaseModel):
+    """One question in a reconstruction-mode script."""
+
+    id: str
+    question: str
+    answer: str  # expected answer used for scoring
+
+
 class Phase(BaseModel):
     """One phase in the murder mystery flow.
 
@@ -265,16 +273,18 @@ class Phase(BaseModel):
     per_player_content: character_id → private script text shown only to that player.
     available_clues: clue IDs that can be unlocked during this phase.
     dm_script: canned DM narration text (used for opening/reveal phases).
+    reconstruction_questions: ordered Q&A for reconstruction-mode scripts.
     """
 
     id: str
-    type: str  # "narration" | "reading" | "investigation" | "discussion" | "voting" | "reveal"
+    type: str  # "narration" | "reading" | "investigation" | "discussion" | "voting" | "reveal" | "reconstruction"
     next: str | None  # id of the next phase, or None if this is the last
     duration_seconds: int | None = None
     allowed_actions: set[str] = set()
     dm_script: str | None = None
     available_clues: list[str] | None = None
     per_player_content: dict[str, str] | None = None  # char_id → text
+    reconstruction_questions: list[ReconstructionQuestion] = []
 
 
 class ScriptClue(BaseModel):
@@ -308,17 +318,20 @@ class NPC(BaseModel):
 
 
 class ScriptTruth(BaseModel):
-    """The ground truth for a murder mystery.
+    """The ground truth for a murder mystery or reconstruction script.
 
     CRITICAL: culprit field NEVER enters any LLM prompt before reveal phase.
     Judge Agent receives decomposed key_facts, not this object.
+    For reconstruction mode, culprit is empty string and full_story is set.
     """
 
-    culprit: str  # character id of the killer
+    culprit: str = ""  # character id of the killer; empty for reconstruction mode
     motive: str
     method: str
     timeline: str
     key_facts: list[str] = []  # decomposed facts for Judge Agent (no culprit identity)
+    full_story: str = ""  # complete story for reconstruction mode reveal
+    cause_of_death: str = ""  # optional detail for reconstruction mode
 
 
 class ScriptMetadata(BaseModel):
@@ -333,10 +346,12 @@ class Script(BaseModel):
 
     Phases are stored as a list (preserving order) and indexed by id for
     the state machine.  The state machine takes script.phases directly.
+    game_mode: "whodunit" | "reconstruction"
     """
 
     id: str
     title: str
+    game_mode: str = "whodunit"  # "whodunit" | "reconstruction"
     metadata: ScriptMetadata
     characters: list[Character]
     phases: list[Phase]
