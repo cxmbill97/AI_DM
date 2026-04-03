@@ -3,6 +3,7 @@ Two-player murder mystery simulation.
 Each player has a dedicated reader task feeding into an asyncio.Queue.
 Run: uv run python tests/sim_two_players.py
 """
+
 import asyncio
 import json
 import time
@@ -16,8 +17,10 @@ BASE = "ws://localhost:8000"
 
 BUGS: list[dict] = []
 
+
 def log(msg: str):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+
 
 def bug(title: str, detail: str):
     BUGS.append({"title": title, "detail": detail})
@@ -27,11 +30,14 @@ def bug(title: str, detail: str):
 def http_post(path: str, body: dict) -> dict:
     data = json.dumps(body).encode()
     req = urllib.request.Request(
-        f"{HTTP}{path}", data=data,
-        headers={"Content-Type": "application/json"}, method="POST",
+        f"{HTTP}{path}",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
     )
     with urllib.request.urlopen(req) as r:
         return json.loads(r.read())
+
 
 def http_get(path: str) -> dict:
     with urllib.request.urlopen(f"{HTTP}{path}") as r:
@@ -76,7 +82,7 @@ class Player:
     async def recv(self, timeout=20) -> dict | None:
         try:
             return await asyncio.wait_for(self._q.get(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     async def drain(self, seconds=2.0) -> list[dict]:
@@ -89,7 +95,7 @@ class Player:
             try:
                 msg = await asyncio.wait_for(self._q.get(), timeout=remaining)
                 out.append(msg)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
         return out
 
@@ -131,6 +137,7 @@ class Player:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def wait_both_phase(alice: Player, bob: Player, phase: str, timeout=60) -> bool:
     t0 = time.time()
     while time.time() - t0 < timeout:
@@ -155,6 +162,7 @@ async def skip_to_phase(alice: Player, bob: Player, target: str, max_skips=6):
 # ---------------------------------------------------------------------------
 # Main simulation
 # ---------------------------------------------------------------------------
+
 
 async def run():
     log("=" * 60)
@@ -216,7 +224,7 @@ async def run():
         log("  Attempting manual skip...")
         await skip_to_phase(alice, bob, "investigation_1")
     else:
-        log(f"  Reached investigation_1 in {time.time()-t0:.0f}s — OK")
+        log(f"  Reached investigation_1 in {time.time() - t0:.0f}s — OK")
 
     # CHECK: both players see same phase_change events
     if alice.phase_history != bob.phase_history:
@@ -409,11 +417,7 @@ async def run():
             break
         await asyncio.sleep(0.5)
 
-    reveal_narrations = [
-        m for m in alice.all_msgs
-        if m.get("type") in ("dm_response", "dm_stream_end")
-        and alice.all_msgs.index(m) >= pre_dm_reveal
-    ]
+    reveal_narrations = [m for m in alice.all_msgs if m.get("type") in ("dm_response", "dm_stream_end") and alice.all_msgs.index(m) >= pre_dm_reveal]
     if not reveal_narrations:
         bug("No truth narration in reveal phase", "Expected DM to narrate the truth after voting")
     else:

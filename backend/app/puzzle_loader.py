@@ -90,3 +90,28 @@ def load_script(script_id: str, lang: str = "zh") -> Script:
         if script.id == script_id:
             return script
     raise KeyError(f"Script not found: {script_id!r}")
+
+
+def save_script(script: Script, lang: str = "zh") -> Path:
+    """Persist *script* as JSON in data/scripts/{lang}/{script.id}.json.
+
+    Creates the language subdirectory if it does not exist.
+    Returns the path written.
+    """
+    lang_dir = SCRIPTS_DIR / lang
+    lang_dir.mkdir(parents=True, exist_ok=True)
+    path = lang_dir / f"{script.id}.json"
+    path.write_text(script.model_dump_json(indent=2), encoding="utf-8")
+    return path
+
+
+def invalidate_script_cache(lang: str | None = None) -> None:
+    """Evict the script cache for *lang* (or all languages if None).
+
+    After calling this, the next load_scripts() call re-reads all JSON
+    files from disk, picking up newly uploaded scripts.
+    """
+    if lang is None:
+        _script_cache.clear()
+    else:
+        _script_cache.pop(lang, None)

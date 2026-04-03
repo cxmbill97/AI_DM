@@ -366,3 +366,22 @@ class VoteRecord(BaseModel):
     player_id: str
     target_character_id: str
     timestamp: float
+
+
+# ---------------------------------------------------------------------------
+# Script ingestion response
+# ---------------------------------------------------------------------------
+
+
+class ScriptUploadResponse(BaseModel):
+    """Returned by POST /api/scripts/upload on success."""
+
+    script_id: str
+    title: str
+    player_count: int
+    difficulty: str
+    game_mode: str
+    character_names: list[str]
+    phase_count: int
+    clue_count: int
+    warning: str | None = None  # e.g. "text truncated to 24000 chars"

@@ -185,5 +185,23 @@
     "score_label": "Score",
     "complete_label": "Complete",
     "chat_hint": "Discuss above, submit answers in the right panel"
+  },
+  "upload": {
+    "btn": "Upload Script",
+    "title": "Upload Script File",
+    "drop_hint": "Drag & drop or click to upload PDF, DOCX, TXT",
+    "size_hint": "Max 10 MB",
+    "parsing": "Parsing script…",
+    "step_extract": "Extract text",
+    "step_parse": "AI parse structure",
+    "step_validate": "Validate data",
+    "preview_title": "Parse Preview",
+    "confirm": "Add Script",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "warning_truncated": "⚠ Document truncated to 24,000 characters",
+    "error_title": "Parse Failed",
+    "raw_output": "View raw output",
+    "success": "Script \"{title}\" added!"
   }
 }

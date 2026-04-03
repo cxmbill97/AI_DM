@@ -4,6 +4,7 @@ import { createRoom, listPuzzles, listScripts } from '../api';
 import type { PuzzleSummary, ScriptSummary } from '../api';
 import { useT } from '../i18n';
 import { LanguageToggle } from '../components/LanguageToggle';
+import { ScriptUploadModal } from '../components/ScriptUploadModal';
 
 function difficultyClass(d: string) {
   if (d === '简单' || d === 'beginner') return 'easy';
@@ -26,6 +27,7 @@ export function LobbyPage() {
   const [scripts, setScripts] = useState<ScriptSummary[]>([]);
   const [loadingScripts, setLoadingScripts] = useState(false);
   const [scriptError, setScriptError] = useState('');
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   // Shared state
   const [joinCode, setJoinCode] = useState('');
@@ -40,14 +42,19 @@ export function LobbyPage() {
       .finally(() => setLoadingPuzzles(false));
   }, [lang]);
 
-  useEffect(() => {
-    if (mode !== 'murder_mystery') return;
+  function refreshScripts() {
     setLoadingScripts(true);
+    setScriptError('');
     listScripts(lang)
       .then(setScripts)
       .catch((e: Error) => setScriptError(e.message))
       .finally(() => setLoadingScripts(false));
-  }, [mode, lang]);
+  }
+
+  useEffect(() => {
+    if (mode !== 'murder_mystery') return;
+    refreshScripts();
+  }, [mode, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function validateName(): boolean {
     if (!playerName.trim()) {
@@ -224,6 +231,11 @@ export function LobbyPage() {
       {/* Murder mystery script list */}
       {mode === 'murder_mystery' && (
         <>
+          <div className="lobby-section-header">
+            <button className="btn btn-outline btn-sm" onClick={() => setUploadModalOpen(true)}>
+              {t('upload.btn')}
+            </button>
+          </div>
           {loadingScripts && <p className="loading-text">{t('lobby.loading_scripts')}</p>}
           {scriptError && <p className="error-text">{t('lobby.load_error', { msg: scriptError })}</p>}
 
@@ -258,6 +270,20 @@ export function LobbyPage() {
             </div>
           )}
         </>
+      )}
+      {uploadModalOpen && (
+        <ScriptUploadModal
+          lang={lang}
+          onClose={() => setUploadModalOpen(false)}
+          onSuccess={(_scriptId, title) => {
+            setUploadModalOpen(false);
+            refreshScripts();
+            setFormError('');
+            // Brief success hint via form error channel (non-critical)
+            setFormError(t('upload.success', { title }));
+            setTimeout(() => setFormError(''), 3000);
+          }}
+        />
       )}
     </div>
   );

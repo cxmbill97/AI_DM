@@ -85,7 +85,9 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(path, options);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`);
+    const detail = (body as { detail?: string | { message?: string } }).detail;
+    const msg = typeof detail === 'string' ? detail : detail?.message ?? `HTTP ${res.status}`;
+    throw new Error(msg);
   }
   return res.json() as Promise<T>;
 }
@@ -171,4 +173,28 @@ export function createRoom(
 
 export function getRoom(roomId: string): Promise<RoomState> {
   return apiFetch(`/api/rooms/${roomId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Script ingestion
+// ---------------------------------------------------------------------------
+
+export interface ScriptUploadResponse {
+  script_id: string;
+  title: string;
+  player_count: number;
+  difficulty: string;
+  game_mode: string;
+  character_names: string[];
+  phase_count: number;
+  clue_count: number;
+  warning?: string;
+}
+
+export function uploadScript(file: File, lang: string): Promise<ScriptUploadResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('lang', lang);
+  // Note: do NOT set Content-Type — the browser sets it with the multipart boundary
+  return apiFetch('/api/scripts/upload', { method: 'POST', body: form });
 }

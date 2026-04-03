@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import APIError
@@ -18,15 +18,18 @@ from app.models import (
     Player,
     PuzzleSummary,
     RoomState,
+    ScriptUploadResponse,
     StartRequest,
     StartResponse,
 )
 from app.puzzle_loader import (
+    invalidate_script_cache,
     load_all_puzzles,
     load_puzzle,
     load_script,
     load_scripts,
     random_puzzle,
+    save_script,
 )
 from app.room import room_manager
 from app.ws import websocket_endpoint
@@ -224,6 +227,78 @@ async def get_room(room_id: str) -> RoomState:
         players=players,
         phase=room.phase,
         game_type="turtle_soup",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Script ingestion — upload + AI parse
+# ---------------------------------------------------------------------------
+
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+@app.post("/api/scripts/upload", response_model=ScriptUploadResponse)
+async def upload_script(
+    file: UploadFile = File(...),
+    lang: str = Form("zh"),
+) -> ScriptUploadResponse:
+    """Upload a PDF, DOCX, or TXT murder mystery script and parse it with AI.
+
+    The parsed script is saved to data/scripts/{lang}/ and becomes immediately
+    available for room creation via GET /api/scripts.
+
+    Form fields:
+      file — the document (PDF, DOCX, or TXT)
+      lang — "zh" (default) or "en"
+    """
+    import uuid  # noqa: PLC0415
+
+    from app.agents.doc_parser import DocumentParserAgent, ScriptParseError  # noqa: E402
+    from app.doc_extractor import ExtractionError, UnsupportedFormatError, extract_text  # noqa: E402
+
+    lang = lang if lang in ("zh", "en") else "zh"
+    content = await file.read()
+
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
+
+    # Extract text
+    try:
+        raw_text = extract_text(file.filename or "upload.txt", content)
+    except UnsupportedFormatError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except ExtractionError as exc:
+        raise HTTPException(status_code=422, detail=f"File extraction failed: {exc}") from exc
+
+    # Detect truncation
+    was_truncated = len(raw_text) > 24_000
+    warning = "Document was truncated to 24,000 characters for AI processing." if was_truncated else None
+
+    # Parse with LLM
+    script_id = f"upload_{lang}_{uuid.uuid4().hex[:8]}"
+    agent = DocumentParserAgent(language=lang)
+    try:
+        script = await agent.parse(raw_text, script_id)
+    except ScriptParseError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": f"Script parsing failed: {exc}", "last_json": exc.last_json or ""},
+        ) from exc
+
+    # Persist and invalidate cache
+    save_script(script, lang)
+    invalidate_script_cache(lang)
+
+    return ScriptUploadResponse(
+        script_id=script.id,
+        title=script.title,
+        player_count=script.metadata.player_count,
+        difficulty=script.metadata.difficulty,
+        game_mode=script.game_mode,
+        character_names=[c.name for c in script.characters],
+        phase_count=len(script.phases),
+        clue_count=len(script.clues),
+        warning=warning,
     )
 
 
