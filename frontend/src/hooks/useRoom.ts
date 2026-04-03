@@ -194,6 +194,14 @@ export interface RoomPuzzleInfo {
   puzzle_id: string;
 }
 
+export interface ScriptTheme {
+  primary_color: string;
+  bg_tone: string;
+  era: string;
+  setting: string;
+  dm_persona: string;
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -236,6 +244,9 @@ export function useRoom(roomId: string, playerName: string) {
   const [hasVoted, setHasVoted] = useState(false);
   const [skipVotes, setSkipVotes] = useState<{ voted: number; needed: number } | null>(null);
   const [hasSkipVoted, setHasSkipVoted] = useState(false);
+  // Script theme (murder mystery only)
+  const [scriptTheme, setScriptTheme] = useState<ScriptTheme | null>(null);
+
   // Reconstruction mode state
   const [reconstructionQuestion, setReconstructionQuestion] = useState<ReconstructionQuestion | null>(null);
   const [reconstructionResults, setReconstructionResults] = useState<ReconstructionResult[]>([]);
@@ -316,6 +327,7 @@ export function useRoom(roomId: string, playerName: string) {
             surface: '',
             puzzle_id: data.script_id as string,
           });
+          if (data.theme) setScriptTheme(data.theme as ScriptTheme);
         } else {
           setPuzzle({
             title: data.title as string,
@@ -766,5 +778,7 @@ export function useRoom(roomId: string, playerName: string) {
     reconstructionResults,
     reconstructionComplete,
     sendReconstructionAnswer,
+    // Theme
+    scriptTheme,
   };
 }

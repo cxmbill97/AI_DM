@@ -191,10 +191,49 @@ export interface ScriptUploadResponse {
   warning?: string;
 }
 
-export function uploadScript(file: File, lang: string): Promise<ScriptUploadResponse> {
+export function uploadScript(file: File, lang: string, author = ''): Promise<ScriptUploadResponse> {
   const form = new FormData();
   form.append('file', file);
   form.append('lang', lang);
+  form.append('author', author);
   // Note: do NOT set Content-Type — the browser sets it with the multipart boundary
   return apiFetch('/api/scripts/upload', { method: 'POST', body: form });
+}
+
+// ---------------------------------------------------------------------------
+// Community library
+// ---------------------------------------------------------------------------
+
+export interface CommunityScript {
+  script_id: string;
+  title: string;
+  author: string;
+  difficulty: string;
+  player_count: number;
+  game_mode: string;
+  lang: string;
+  likes: number;
+  created_at: string;
+}
+
+export interface CommunityScriptFilters {
+  lang?: string;
+  search?: string;
+  difficulty?: string;
+  game_mode?: string;
+  limit?: number;
+}
+
+export function listCommunityScripts(filters: CommunityScriptFilters = {}): Promise<CommunityScript[]> {
+  const params = new URLSearchParams();
+  if (filters.lang) params.set('lang', filters.lang);
+  if (filters.search) params.set('search', filters.search);
+  if (filters.difficulty) params.set('difficulty', filters.difficulty);
+  if (filters.game_mode) params.set('game_mode', filters.game_mode);
+  if (filters.limit) params.set('limit', String(filters.limit));
+  return apiFetch(`/api/community/scripts?${params}`);
+}
+
+export function likeScript(scriptId: string): Promise<{ script_id: string; likes: number }> {
+  return apiFetch(`/api/community/scripts/${scriptId}/like`, { method: 'POST' });
 }

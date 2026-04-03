@@ -5,6 +5,7 @@ import { useT } from '../i18n';
 
 interface ScriptUploadModalProps {
   lang: string;
+  author?: string;
   onClose: () => void;
   onSuccess: (scriptId: string, title: string) => void;
 }
@@ -14,7 +15,7 @@ type Stage = 'idle' | 'uploading' | 'preview' | 'error';
 // Cosmetic progress steps shown during upload
 const UPLOAD_STEPS = ['step_extract', 'step_parse', 'step_validate'] as const;
 
-export function ScriptUploadModal({ lang, onClose, onSuccess }: ScriptUploadModalProps) {
+export function ScriptUploadModal({ lang, author = '', onClose, onSuccess }: ScriptUploadModalProps) {
   const { t } = useT();
   const [stage, setStage] = useState<Stage>('idle');
   const [dragOver, setDragOver] = useState(false);
@@ -51,7 +52,7 @@ export function ScriptUploadModal({ lang, onClose, onSuccess }: ScriptUploadModa
     setRawJson('');
     setShowRaw(false);
     try {
-      const result = await uploadScript(file, lang);
+      const result = await uploadScript(file, lang, author);
       setPreview(result);
       setStage('preview');
     } catch (err) {

@@ -22,7 +22,10 @@
     "players_count": "👥 {n}人",
     "language": "语言",
     "name_required": "请输入你的名字",
-    "room_code_required": "请输入房间号"
+    "room_code_required": "请输入房间号",
+    "search_placeholder": "搜索剧本…",
+    "community_scripts": "社区上传",
+    "like": "点赞"
   },
   "game": {
     "back": "← 返回",

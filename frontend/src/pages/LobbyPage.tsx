@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createRoom, listPuzzles, listScripts } from '../api';
-import type { PuzzleSummary, ScriptSummary } from '../api';
+import { createRoom, likeScript, listCommunityScripts, listPuzzles, listScripts } from '../api';
+import type { CommunityScript, PuzzleSummary, ScriptSummary } from '../api';
 import { useT } from '../i18n';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { ScriptUploadModal } from '../components/ScriptUploadModal';
@@ -11,6 +11,8 @@ function difficultyClass(d: string) {
   if (d === '困难' || d === 'hard') return 'hard';
   return 'medium';
 }
+
+const PLAYER_NAME_KEY = 'ai_dm_player_name';
 
 export function LobbyPage() {
   const navigate = useNavigate();
@@ -29,11 +31,22 @@ export function LobbyPage() {
   const [scriptError, setScriptError] = useState('');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
+  // Community scripts + search
+  const [communityScripts, setCommunityScripts] = useState<CommunityScript[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Shared state
   const [joinCode, setJoinCode] = useState('');
-  const [playerName, setPlayerName] = useState('');
+  const [playerName, setPlayerName] = useState(() => localStorage.getItem(PLAYER_NAME_KEY) ?? '');
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Persist player name to localStorage
+  useEffect(() => {
+    if (playerName) localStorage.setItem(PLAYER_NAME_KEY, playerName);
+  }, [playerName]);
 
   useEffect(() => {
     listPuzzles(lang)
@@ -51,10 +64,36 @@ export function LobbyPage() {
       .finally(() => setLoadingScripts(false));
   }
 
+  function loadCommunity(search = searchQuery) {
+    listCommunityScripts({ lang, search: search || undefined })
+      .then(setCommunityScripts)
+      .catch(() => setCommunityScripts([]));
+  }
+
   useEffect(() => {
     if (mode !== 'murder_mystery') return;
     refreshScripts();
+    loadCommunity('');
   }, [mode, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleSearchChange(value: string) {
+    setSearchQuery(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => loadCommunity(value), 400);
+  }
+
+  async function handleLike(scriptId: string) {
+    if (likedIds.has(scriptId)) return;
+    setLikedIds((prev) => new Set([...prev, scriptId]));
+    try {
+      const res = await likeScript(scriptId);
+      setCommunityScripts((prev) =>
+        prev.map((s) => s.script_id === scriptId ? { ...s, likes: res.likes } : s),
+      );
+    } catch {
+      setLikedIds((prev) => { const n = new Set(prev); n.delete(scriptId); return n; });
+    }
+  }
 
   function validateName(): boolean {
     if (!playerName.trim()) {
@@ -232,6 +271,13 @@ export function LobbyPage() {
       {mode === 'murder_mystery' && (
         <>
           <div className="lobby-section-header">
+            <input
+              className="lobby-input lobby-search"
+              type="text"
+              placeholder={t('lobby.search_placeholder')}
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+            />
             <button className="btn btn-outline btn-sm" onClick={() => setUploadModalOpen(true)}>
               {t('upload.btn')}
             </button>
@@ -239,10 +285,11 @@ export function LobbyPage() {
           {loadingScripts && <p className="loading-text">{t('lobby.loading_scripts')}</p>}
           {scriptError && <p className="error-text">{t('lobby.load_error', { msg: scriptError })}</p>}
 
-          {!loadingScripts && !scriptError && scripts.length === 0 && (
+          {!loadingScripts && !scriptError && scripts.length === 0 && communityScripts.length === 0 && (
             <p className="loading-text">{t('lobby.no_scripts')}</p>
           )}
 
+          {/* Built-in scripts */}
           {!loadingScripts && !scriptError && scripts.length > 0 && (
             <div className="puzzle-list">
               {scripts.map((s) => (
@@ -269,17 +316,57 @@ export function LobbyPage() {
               ))}
             </div>
           )}
+
+          {/* Community-uploaded scripts */}
+          {communityScripts.length > 0 && (
+            <>
+              <p className="lobby-section-label">{t('lobby.community_scripts')}</p>
+              <div className="puzzle-list">
+                {communityScripts.map((s) => (
+                  <div key={s.script_id} className="puzzle-list-item">
+                    <div className="puzzle-list-item-body">
+                      <h3 className="puzzle-item-title">{s.title}</h3>
+                      <div className="puzzle-item-meta">
+                        <span className={`difficulty-badge ${difficultyClass(s.difficulty)}`}>
+                          {s.difficulty}
+                        </span>
+                        <span className="tag-badge">{t('lobby.players_count', { n: s.player_count })}</span>
+                        {s.author && <span className="tag-badge tag-badge--author">{s.author}</span>}
+                      </div>
+                    </div>
+                    <div className="puzzle-item-actions">
+                      <button
+                        className={`btn btn-ghost like-btn${likedIds.has(s.script_id) ? ' like-btn--liked' : ''}`}
+                        onClick={() => handleLike(s.script_id)}
+                        title={t('lobby.like')}
+                        aria-label={t('lobby.like')}
+                      >
+                        ♥ {s.likes > 0 ? s.likes : ''}
+                      </button>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => handleCreateMMRoom(s.script_id)}
+                        disabled={busy}
+                      >
+                        {busy ? t('lobby.preparing') : t('lobby.create')}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
       {uploadModalOpen && (
         <ScriptUploadModal
           lang={lang}
+          author={playerName.trim()}
           onClose={() => setUploadModalOpen(false)}
           onSuccess={(_scriptId, title) => {
             setUploadModalOpen(false);
             refreshScripts();
-            setFormError('');
-            // Brief success hint via form error channel (non-critical)
+            loadCommunity('');
             setFormError(t('upload.success', { title }));
             setTimeout(() => setFormError(''), 3000);
           }}

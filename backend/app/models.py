@@ -341,6 +341,20 @@ class ScriptMetadata(BaseModel):
     age_rating: str = "12+"
 
 
+class ScriptTheme(BaseModel):
+    """Visual and narrative theme generated for each script.
+
+    Used by the frontend to apply per-script CSS colour variables and by
+    NarratorAgent to adopt a script-specific DM voice.
+    """
+
+    primary_color: str = "#c4a35a"  # hex colour for accent / primary UI
+    bg_tone: str = "dark"  # "dark" | "warm" | "eerie" | "cold" | "natural"
+    era: str = ""  # e.g. "modern", "Victorian", "ancient China", "sci-fi"
+    setting: str = ""  # e.g. "manor house", "spaceship", "countryside villa"
+    dm_persona: str = ""  # personality hint for NarratorAgent, e.g. "calm and clinical detective"
+
+
 class Script(BaseModel):
     """A complete murder mystery script loaded from data/scripts/.
 
@@ -358,6 +372,7 @@ class Script(BaseModel):
     clues: list[ScriptClue]
     npcs: list[NPC]
     truth: ScriptTruth
+    theme: ScriptTheme = Field(default_factory=ScriptTheme)
 
 
 class VoteRecord(BaseModel):

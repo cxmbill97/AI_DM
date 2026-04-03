@@ -100,6 +100,7 @@ def _mm_snapshot(room: Room, player_id: str) -> dict[str, Any]:
         "characters": [{"id": c.id, "name": c.name, "public_bio": c.public_bio} for c in room.script.characters],
         "game_mode": room.script.game_mode,
         "required_players": room.script.metadata.player_count,
+        "theme": room.script.theme.model_dump(),
     }
 
 

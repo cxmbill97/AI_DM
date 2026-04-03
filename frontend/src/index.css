@@ -2186,7 +2186,8 @@ button {
   flex-direction: column;
   height: 100svh;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--theme-bg, var(--bg));
+  --gold: var(--theme-primary, #c4a35a);
 }
 
 .mm-phase-strip {
@@ -2866,8 +2867,42 @@ button {
 /* Upload button in lobby section header */
 .lobby-section-header {
   display: flex;
+  align-items: center;
+  gap: 8px;
   justify-content: flex-end;
   margin-bottom: 8px;
+}
+
+.lobby-search {
+  flex: 1;
+  max-width: 220px;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
+.lobby-section-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 12px 0 4px;
+}
+
+.tag-badge--author {
+  background: rgba(100, 80, 180, 0.2);
+  color: #a78bfa;
+  border-color: rgba(100, 80, 180, 0.3);
+}
+
+.like-btn {
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--muted);
+  transition: color 0.15s;
+}
+
+.like-btn--liked {
+  color: #f472b6;
 }
 
 .btn-sm {

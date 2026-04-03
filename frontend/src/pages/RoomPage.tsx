@@ -519,6 +519,7 @@ export function RoomPage() {
     skipVotes, hasSkipVoted, sendSkipVote,
     mmRequiredPlayers, mmGameMode,
     reconstructionQuestion, reconstructionResults, reconstructionComplete, sendReconstructionAnswer,
+    scriptTheme,
   } = useRoom(roomId, playerName);
 
   const { t } = useT();
@@ -614,8 +615,15 @@ export function RoomPage() {
         }
       : null;
 
+    const themeStyle = scriptTheme
+      ? ({
+          '--theme-primary': scriptTheme.primary_color,
+          '--theme-bg': scriptTheme.bg_tone === 'warm' ? '#1a1208' : scriptTheme.bg_tone === 'eerie' ? '#0a0f0a' : scriptTheme.bg_tone === 'cold' ? '#080d14' : scriptTheme.bg_tone === 'natural' ? '#0d1208' : '#0e0c18',
+        } as React.CSSProperties)
+      : {};
+
     return (
-      <div className="mm-screen">
+      <div className="mm-screen" style={themeStyle}>
         {showIntroModal && <IntroModal onClose={() => setShowIntroModal(false)} />}
 
         {/* Top: phase bar */}

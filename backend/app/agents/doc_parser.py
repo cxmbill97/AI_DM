@@ -89,6 +89,13 @@ _SCHEMA_ZH = """
     ],
     "full_story": "",
     "cause_of_death": "<死因>"
+  },
+  "theme": {
+    "primary_color": "<主色调十六进制颜色，如 #8b1a1a（血红）、#1a3a5c（深海蓝）、#2d4a1e（深林绿）>",
+    "bg_tone": "<氛围基调，选择一个：dark | warm | eerie | cold | natural>",
+    "era": "<时代背景，如 modern、Victorian、ancient_china、sci-fi、民国>",
+    "setting": "<场景，如 manor、city_apartment、countryside、spaceship>",
+    "dm_persona": "<DM角色风格，10-20字中文描述，如「冷静克制的侦探」、「神秘古雅的说书人」>"
   }
 }"""
 
@@ -149,6 +156,13 @@ _SCHEMA_EN = """
     ],
     "full_story": "",
     "cause_of_death": "<cause of death>"
+  },
+  "theme": {
+    "primary_color": "<hex color for the script's dominant tone, e.g. #8b1a1a (crimson), #1a3a5c (deep blue)>",
+    "bg_tone": "<one of: dark | warm | eerie | cold | natural>",
+    "era": "<time period, e.g. modern, Victorian, ancient_china, sci-fi, 1930s>",
+    "setting": "<location type, e.g. manor, city_apartment, countryside, spaceship>",
+    "dm_persona": "<DM voice style in 5-10 words, e.g. 'calm and clinical detective', 'theatrical Victorian storyteller'>"
   }
 }"""
 
@@ -167,7 +181,8 @@ _SYSTEM_ZH = f"""你是剧本杀脚本解析引擎。将用户提供的剧本原
 3. 若原剧本无明确NPC角色，npcs 保持空数组 []。
 4. unlock_keywords 提供 2-4 个玩家可能用来询问该线索的中文关键词。
 5. 若剧本是还原/重建模式，game_mode 设为 "reconstruction"，culprit 为空字符串 ""，full_story 填写完整故事。
-6. phases 列表必须按游戏顺序排列，最后一个 phase 的 next 为 null。"""
+6. phases 列表必须按游戏顺序排列，最后一个 phase 的 next 为 null。
+7. theme.primary_color 选择与故事氛围最匹配的颜色；theme.dm_persona 用10字内的中文描述DM的叙事风格。"""
 
 _SYSTEM_EN = f"""You are a murder mystery script parsing engine. Convert the document text into a valid JSON object matching the schema below.
 Output ONLY the JSON object — no explanation, no markdown wrapper.
@@ -184,7 +199,8 @@ Output ONLY the JSON object — no explanation, no markdown wrapper.
 3. If the script has no explicit NPC characters, set npcs to an empty array [].
 4. unlock_keywords: provide 2-4 natural-language terms a player might use to ask about this clue.
 5. If the script is a reconstruction/timeline-rebuild type, set game_mode to "reconstruction", culprit to "", full_story to the complete story.
-6. The phases list must be in game order; the last phase's next must be null."""
+6. The phases list must be in game order; the last phase's next must be null.
+7. theme.primary_color should reflect the story's dominant mood; theme.dm_persona should be 5-10 words describing the DM narration style."""
 
 
 class DocumentParserAgent:

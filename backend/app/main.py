@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from openai import APIError
 from pydantic import BaseModel
 
+from app.community import init_db, like_script, list_community_scripts, upsert_script
 from app.dm import dm_turn
 from app.models import (
     ChatRequest,
@@ -35,6 +36,11 @@ from app.room import room_manager
 from app.ws import websocket_endpoint
 
 app = FastAPI(title="AI DM — 海龟汤")
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    init_db()
 
 
 @app.exception_handler(APIError)
@@ -241,6 +247,7 @@ _MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 async def upload_script(
     file: UploadFile = File(...),
     lang: str = Form("zh"),
+    author: str = Form(""),
 ) -> ScriptUploadResponse:
     """Upload a PDF, DOCX, or TXT murder mystery script and parse it with AI.
 
@@ -289,6 +296,17 @@ async def upload_script(
     save_script(script, lang)
     invalidate_script_cache(lang)
 
+    # Register in community metadata
+    upsert_script(
+        script_id=script.id,
+        title=script.title,
+        author=author.strip() or "匿名",
+        difficulty=script.metadata.difficulty,
+        player_count=script.metadata.player_count,
+        game_mode=script.game_mode,
+        lang=lang,
+    )
+
     return ScriptUploadResponse(
         script_id=script.id,
         title=script.title,
@@ -300,6 +318,36 @@ async def upload_script(
         clue_count=len(script.clues),
         warning=warning,
     )
+
+
+# ---------------------------------------------------------------------------
+# Community library endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/community/scripts")
+async def community_scripts(
+    lang: str = "zh",
+    search: str = "",
+    difficulty: str = "",
+    game_mode: str = "",
+    limit: int = 50,
+) -> list[dict]:
+    """List community-uploaded scripts with author, likes, and filter support."""
+    return list_community_scripts(
+        lang=lang or None,
+        search=search or None,
+        difficulty=difficulty or None,
+        game_mode=game_mode or None,
+        limit=limit,
+    )
+
+
+@app.post("/api/community/scripts/{script_id}/like")
+async def like_script_endpoint(script_id: str) -> dict:
+    """Increment like count for a script. Returns new count."""
+    new_count = like_script(script_id)
+    return {"script_id": script_id, "likes": new_count}
 
 
 # ---------------------------------------------------------------------------

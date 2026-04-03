@@ -22,7 +22,10 @@
     "players_count": "👥 {n} players",
     "language": "Language",
     "name_required": "Please enter your name",
-    "room_code_required": "Please enter a room code"
+    "room_code_required": "Please enter a room code",
+    "search_placeholder": "Search scripts…",
+    "community_scripts": "Community",
+    "like": "Like"
   },
   "game": {
     "back": "← Back",
