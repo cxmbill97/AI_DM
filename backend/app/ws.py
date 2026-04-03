@@ -42,6 +42,7 @@ _PHASE_DESCRIPTIONS_ZH: dict[str, str] = {
     "discussion": "讨论阶段 — 与其他玩家分享推理",
     "voting": "投票阶段 — 选出你认为的凶手",
     "reveal": "真相揭晓 — 案件真相大白",
+    "reconstruction": "还原阶段 — 合力回答还原问题，重建事件真相",
 }
 
 _PHASE_DESCRIPTIONS_EN: dict[str, str] = {
@@ -51,6 +52,7 @@ _PHASE_DESCRIPTIONS_EN: dict[str, str] = {
     "discussion": "Discussion — share your deductions with other players",
     "voting": "Voting — choose who you believe is the culprit",
     "reveal": "Reveal — the truth of the case is unveiled",
+    "reconstruction": "Reconstruction — cooperatively answer questions to rebuild the truth",
 }
 
 # Keep old name for backward compatibility
@@ -96,6 +98,8 @@ def _mm_snapshot(room: Room, player_id: str) -> dict[str, Any]:
         ],
         # Public character list — no secret_bio, no is_culprit
         "characters": [{"id": c.id, "name": c.name, "public_bio": c.public_bio} for c in room.script.characters],
+        "game_mode": room.script.game_mode,
+        "required_players": room.script.metadata.player_count,
     }
 
 
@@ -210,6 +214,9 @@ async def _advance_mm_phase(room: Room) -> None:
         # Reset intervention cooldown so reminder doesn't fire immediately
         room.intervention.record_dm_spoke()
 
+    elif new_phase_id == "reconstruction":
+        await _start_reconstruction_phase(room)
+
     elif new_phase_id == "reveal":
         await _do_mm_reveal(room)
 
@@ -242,18 +249,33 @@ async def _do_mm_reveal(room: Room) -> None:
 
     truth = room.script.truth
     lang = getattr(room, "language", "zh")
-    culprit_char = next((c for c in room.script.characters if c.id == truth.culprit), None)
-    culprit_name = culprit_char.name if culprit_char else truth.culprit
-    if lang == "en":
-        truth_text = f"Culprit: {culprit_name}\nMotive: {truth.motive}\nMethod: {truth.method}\nTimeline: {truth.timeline}"
-        reveal_player_msg = "The truth is revealed"
-        canned_fallback = f"The truth is out! {truth_text}"
-        error_fallback = f"The culprit is {culprit_name}.\n{truth_text}"
+    game_mode = getattr(room.script, "game_mode", "whodunit")
+
+    if game_mode == "reconstruction":
+        # Reconstruction mode: reveal full story, no culprit
+        if lang == "en":
+            truth_text = f"Full Story:\n{truth.full_story}\n\nTimeline: {truth.timeline}" if truth.full_story else f"Motive: {truth.motive}\nMethod: {truth.method}\nTimeline: {truth.timeline}"
+            reveal_player_msg = "The full truth is revealed"
+            canned_fallback = f"Truth revealed! {truth_text}"
+            error_fallback = f"The full truth:\n{truth_text}"
+        else:
+            truth_text = f"完整真相：\n{truth.full_story}\n\n时间线：{truth.timeline}" if truth.full_story else f"动机：{truth.motive}\n手法：{truth.method}\n时间线：{truth.timeline}"
+            reveal_player_msg = "完整真相揭晓"
+            canned_fallback = f"真相揭晓！{truth_text}"
+            error_fallback = f"完整真相：\n{truth_text}"
     else:
-        truth_text = f"凶手：{culprit_name}\n动机：{truth.motive}\n手法：{truth.method}\n时间线：{truth.timeline}"
-        reveal_player_msg = "真相揭晓"
-        canned_fallback = f"真相揭晓！{truth_text}"
-        error_fallback = f"真相大白！凶手是{culprit_name}。\n{truth_text}"
+        culprit_char = next((c for c in room.script.characters if c.id == truth.culprit), None)
+        culprit_name = culprit_char.name if culprit_char else truth.culprit
+        if lang == "en":
+            truth_text = f"Culprit: {culprit_name}\nMotive: {truth.motive}\nMethod: {truth.method}\nTimeline: {truth.timeline}"
+            reveal_player_msg = "The truth is revealed"
+            canned_fallback = f"The truth is out! {truth_text}"
+            error_fallback = f"The culprit is {culprit_name}.\n{truth_text}"
+        else:
+            truth_text = f"凶手：{culprit_name}\n动机：{truth.motive}\n手法：{truth.method}\n时间线：{truth.timeline}"
+            reveal_player_msg = "真相揭晓"
+            canned_fallback = f"真相揭晓！{truth_text}"
+            error_fallback = f"真相大白！凶手是{culprit_name}。\n{truth_text}"
 
     # Use the narrator directly with truth injected
     reveal_judgment: Any = {"result": "是", "confidence": 1.0, "relevant_fact_ids": []}
@@ -283,6 +305,188 @@ async def _do_mm_reveal(room: Room) -> None:
     }
     room.message_history.append(reveal_msg)
     await room.broadcast(reveal_msg)
+
+
+# ---------------------------------------------------------------------------
+# Reconstruction mode handlers
+# ---------------------------------------------------------------------------
+
+
+async def _start_reconstruction_phase(room: Room) -> None:
+    """Broadcast the first reconstruction question when the phase begins."""
+    assert room.script is not None
+    assert room.state_machine is not None
+
+    phase_obj = room.state_machine.current()
+    questions = phase_obj.reconstruction_questions
+    if not questions:
+        return
+
+    # Reset reconstruction state for this room
+    room._reconstruction_q_index = 0
+    room._reconstruction_score = 0
+    room._reconstruction_answers = []
+
+    lang = getattr(room, "language", "zh")
+    total = len(questions)
+    first_q = questions[0]
+
+    if lang == "en":
+        intro_text = f"Reconstruction phase begins! Answer {total} questions together to rebuild the truth."
+        q_text = f"Question 1/{total}: {first_q.question}"
+    else:
+        intro_text = f"还原阶段开始！请合力回答以下 {total} 个问题，共同还原事件真相。"
+        q_text = f"第 1/{total} 题：{first_q.question}"
+
+    intro_msg: dict[str, Any] = {
+        "type": "dm_response",
+        "text": intro_text,
+        "phase": "reconstruction",
+        "timestamp": time.time(),
+    }
+    room.message_history.append(intro_msg)
+    await room.broadcast(intro_msg)
+
+    q_msg: dict[str, Any] = {
+        "type": "reconstruction_question",
+        "index": 0,
+        "total": total,
+        "question_id": first_q.id,
+        "question": first_q.question,
+        "timestamp": time.time(),
+    }
+    room.message_history.append(q_msg)
+    await room.broadcast(q_msg)
+
+
+async def _handle_reconstruction_answer(room: Room, player_id: str, player_name: str, data: dict[str, Any]) -> None:
+    """Process a {type:'reconstruction_answer', answer:'...'} message."""
+    assert room.state_machine is not None
+    assert room.script is not None
+    assert room.orchestrator is not None
+
+    if room.state_machine.current_phase != "reconstruction":
+        lang = getattr(room, "language", "zh")
+        err = "Not in reconstruction phase." if lang == "en" else "当前不是还原阶段。"
+        await room.send_to(player_id, {"type": "error", "text": err})
+        return
+
+    phase_obj = room.state_machine.current()
+    questions = phase_obj.reconstruction_questions
+    if not questions:
+        return
+
+    q_index = room._reconstruction_q_index
+    if q_index >= len(questions):
+        return  # all questions already answered
+
+    current_q = questions[q_index]
+    player_answer = (data.get("answer") or "").strip()
+    if not player_answer:
+        return
+
+    lang = getattr(room, "language", "zh")
+    total = len(questions)
+
+    # Echo player's answer as a player_message
+    answer_echo: dict[str, Any] = {
+        "type": "player_message",
+        "player_name": player_name,
+        "text": player_answer,
+        "timestamp": time.time(),
+    }
+    room.message_history.append(answer_echo)
+    await room.broadcast(answer_echo)
+
+    # Score the answer
+    async with room._lock:
+        result = await room.orchestrator.score_reconstruction_answer(player_answer, current_q.answer)
+
+    score = 2 if result == "correct" else (1 if result == "partial" else 0)
+    room._reconstruction_score += score
+    room._reconstruction_answers.append({
+        "q_id": current_q.id,
+        "player_name": player_name,
+        "answer": player_answer,
+        "result": result,
+        "score": score,
+    })
+
+    # Build result text
+    if result == "correct":
+        if lang == "en":
+            result_text = f"✓ Correct! +2 points. Reference: {current_q.answer}"
+        else:
+            result_text = f"✓ 正确！+2分。参考答案：{current_q.answer}"
+    elif result == "partial":
+        if lang == "en":
+            result_text = f"△ Partially correct. +1 point. Reference: {current_q.answer}"
+        else:
+            result_text = f"△ 部分正确。+1分。参考答案：{current_q.answer}"
+    else:
+        if lang == "en":
+            result_text = f"✗ Not quite. +0 points. Reference: {current_q.answer}"
+        else:
+            result_text = f"✗ 还差一些。+0分。参考答案：{current_q.answer}"
+
+    result_msg: dict[str, Any] = {
+        "type": "reconstruction_result",
+        "question_id": current_q.id,
+        "index": q_index,
+        "result": result,
+        "score": score,
+        "total_score": room._reconstruction_score,
+        "text": result_text,
+        "timestamp": time.time(),
+    }
+    room.message_history.append(result_msg)
+    await room.broadcast(result_msg)
+
+    # Advance to next question or finish
+    next_index = q_index + 1
+    room._reconstruction_q_index = next_index
+
+    if next_index < len(questions):
+        next_q = questions[next_index]
+        if lang == "en":
+            q_text_label = f"Question {next_index + 1}/{total}: {next_q.question}"
+        else:
+            q_text_label = f"第 {next_index + 1}/{total} 题：{next_q.question}"
+
+        next_q_msg: dict[str, Any] = {
+            "type": "reconstruction_question",
+            "index": next_index,
+            "total": total,
+            "question_id": next_q.id,
+            "question": next_q.question,
+            "timestamp": time.time(),
+        }
+        room.message_history.append(next_q_msg)
+        await room.broadcast(next_q_msg)
+        _ = q_text_label  # used in text already
+    else:
+        # All questions answered — compute final score and advance to reveal
+        max_score = total * 2
+        pct = int(room._reconstruction_score / max_score * 100) if max_score > 0 else 0
+        if lang == "en":
+            done_text = f"All questions answered! Final score: {room._reconstruction_score}/{max_score} ({pct}%). Revealing the full truth now…"
+        else:
+            done_text = f"所有问题已回答完毕！最终得分：{room._reconstruction_score}/{max_score}（{pct}%）。即将揭晓完整真相……"
+
+        done_msg: dict[str, Any] = {
+            "type": "reconstruction_complete",
+            "total_score": room._reconstruction_score,
+            "max_score": max_score,
+            "pct": pct,
+            "text": done_text,
+            "timestamp": time.time(),
+        }
+        room.message_history.append(done_msg)
+        await room.broadcast(done_msg)
+
+        # Auto-advance to reveal after a brief pause
+        await asyncio.sleep(3)
+        await _advance_mm_phase(room)
 
 
 # ---------------------------------------------------------------------------
@@ -803,6 +1007,11 @@ async def websocket_endpoint(
                 # Vote message
                 if msg_type == "vote":
                     await _handle_mm_vote(room, player_id, player_name, data)
+                    continue
+
+                # Reconstruction answer
+                if msg_type == "reconstruction_answer":
+                    await _handle_reconstruction_answer(room, player_id, player_name, data)
                     continue
 
                 # Skip-phase vote

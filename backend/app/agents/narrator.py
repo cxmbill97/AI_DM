@@ -50,6 +50,7 @@ _PHASE_INSTRUCTIONS_ZH: dict[str, str] = {
     "discussion": "讨论阶段。鼓励分享推断、相互交流。提出思考性问题，适时总结关键点。",
     "voting": "投票阶段。引导玩家做最终判断，不再回答调查问题。",
     "reveal": "真相揭晓阶段。完整揭露凶手、动机、手法，叙事戏剧化有层次感。",
+    "reconstruction": "还原阶段。玩家正在协作回答还原问题，重建事件真相。对问题的讨论给予温和鼓励，不泄露答案，不主动干预还原流程。",
 }
 
 _PHASE_INSTRUCTIONS_EN: dict[str, str] = {
@@ -59,6 +60,7 @@ _PHASE_INSTRUCTIONS_EN: dict[str, str] = {
     "discussion": "Discussion. Encourage sharing deductions. Pose questions, summarise key points.",
     "voting": "Voting phase. Guide players to final judgment; don't answer new investigation questions.",
     "reveal": "Reveal phase. Fully disclose culprit, motive, method — dramatic layered storytelling.",
+    "reconstruction": "Reconstruction phase. Players are cooperatively answering reconstruction questions. Encourage discussion gently; do not reveal answers or interfere with the Q&A flow.",
 }
 
 _DEFAULT_PHASE_INSTRUCTION_ZH = "引导玩家继续推理，维持紧张悬疑的氛围。"

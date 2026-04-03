@@ -161,6 +161,29 @@ export interface VoteResultInfo {
   text: string;
 }
 
+export interface ReconstructionQuestion {
+  index: number;
+  total: number;
+  question_id: string;
+  question: string;
+}
+
+export interface ReconstructionResult {
+  question_id: string;
+  index: number;
+  result: 'correct' | 'partial' | 'wrong';
+  score: number;
+  total_score: number;
+  text: string;
+}
+
+export interface ReconstructionComplete {
+  total_score: number;
+  max_score: number;
+  pct: number;
+  text: string;
+}
+
 // ---------------------------------------------------------------------------
 // Puzzle/script info from room_snapshot
 // ---------------------------------------------------------------------------
@@ -203,6 +226,8 @@ export function useRoom(roomId: string, playerName: string) {
   const [gameType, setGameType] = useState<'turtle_soup' | 'murder_mystery'>('turtle_soup');
   const [mmPhase, setMmPhase] = useState<string | null>(null);
   const [mmTimeRemaining, setMmTimeRemaining] = useState<number | null>(null);
+  const [mmRequiredPlayers, setMmRequiredPlayers] = useState<number>(2);
+  const [mmGameMode, setMmGameMode] = useState<'whodunit' | 'reconstruction'>('whodunit');
   const [characters, setCharacters] = useState<MmCharInfo[]>([]);
   const [myChar, setMyChar] = useState<MyCharInfo | null>(null);
   const [voteCandidates, setVoteCandidates] = useState<MmCharInfo[] | null>(null);
@@ -211,6 +236,10 @@ export function useRoom(roomId: string, playerName: string) {
   const [hasVoted, setHasVoted] = useState(false);
   const [skipVotes, setSkipVotes] = useState<{ voted: number; needed: number } | null>(null);
   const [hasSkipVoted, setHasSkipVoted] = useState(false);
+  // Reconstruction mode state
+  const [reconstructionQuestion, setReconstructionQuestion] = useState<ReconstructionQuestion | null>(null);
+  const [reconstructionResults, setReconstructionResults] = useState<ReconstructionResult[]>([]);
+  const [reconstructionComplete, setReconstructionComplete] = useState<ReconstructionComplete | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const retriesRef = useRef(0);
@@ -218,14 +247,8 @@ export function useRoom(roomId: string, playerName: string) {
   // Tracks the streamId of the currently-streaming DM message
   const streamingIdRef = useRef<string | null>(null);
 
-  // Countdown timer: decrement mmTimeRemaining every second
-  useEffect(() => {
-    if (mmTimeRemaining === null || mmTimeRemaining <= 0) return;
-    const id = setInterval(() => {
-      setMmTimeRemaining((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [mmTimeRemaining]);
+  // Note: mmTimeRemaining is the server-authoritative initial value for the current phase.
+  // PhaseBar.tsx handles its own client-side countdown from this seed — no duplicate interval here.
 
   const appendMessage = useCallback((msg: RoomMessage) => {
     setMessages((prev) => [...prev, msg]);
@@ -284,6 +307,8 @@ export function useRoom(roomId: string, playerName: string) {
         if (gt === 'murder_mystery') {
           setMmPhase((data.current_phase as string) ?? null);
           setMmTimeRemaining((data.time_remaining as number | null) ?? null);
+          setMmRequiredPlayers((data.required_players as number) ?? 2);
+          setMmGameMode(((data.game_mode as string) ?? 'whodunit') as 'whodunit' | 'reconstruction');
           setCharacters((data.characters as MmCharInfo[]) ?? []);
           setPlayers(data.players as RoomPlayer[]);
           setPuzzle({
@@ -587,6 +612,54 @@ export function useRoom(roomId: string, playerName: string) {
         });
         return;
       }
+
+      // ---- Reconstruction: current question ----
+      if (type === 'reconstruction_question') {
+        setReconstructionQuestion({
+          index: data.index as number,
+          total: data.total as number,
+          question_id: data.question_id as string,
+          question: data.question as string,
+        });
+        return;
+      }
+
+      // ---- Reconstruction: answer scored ----
+      if (type === 'reconstruction_result') {
+        const res: ReconstructionResult = {
+          question_id: data.question_id as string,
+          index: data.index as number,
+          result: data.result as 'correct' | 'partial' | 'wrong',
+          score: data.score as number,
+          total_score: data.total_score as number,
+          text: data.text as string,
+        };
+        setReconstructionResults((prev) => [...prev, res]);
+        appendMessage({
+          type: 'system',
+          text: res.text,
+          timestamp: (data.timestamp as number) ?? Date.now() / 1000,
+        });
+        return;
+      }
+
+      // ---- Reconstruction: all questions done ----
+      if (type === 'reconstruction_complete') {
+        const complete: ReconstructionComplete = {
+          total_score: data.total_score as number,
+          max_score: data.max_score as number,
+          pct: data.pct as number,
+          text: data.text as string,
+        };
+        setReconstructionComplete(complete);
+        setReconstructionQuestion(null);
+        appendMessage({
+          type: 'system',
+          text: complete.text,
+          timestamp: (data.timestamp as number) ?? Date.now() / 1000,
+        });
+        return;
+      }
     };
 
     ws.onerror = () => {};
@@ -647,6 +720,12 @@ export function useRoom(roomId: string, playerName: string) {
     setHasSkipVoted(true);
   }, []);
 
+  const sendReconstructionAnswer = useCallback((answer: string) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'reconstruction_answer', answer }));
+  }, []);
+
   return {
     // Shared
     messages,
@@ -680,5 +759,12 @@ export function useRoom(roomId: string, playerName: string) {
     skipVotes,
     hasSkipVoted,
     sendSkipVote,
+    mmRequiredPlayers,
+    mmGameMode,
+    // Reconstruction
+    reconstructionQuestion,
+    reconstructionResults,
+    reconstructionComplete,
+    sendReconstructionAnswer,
   };
 }

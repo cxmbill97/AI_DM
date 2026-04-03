@@ -131,6 +131,7 @@
     "investigation_1": "Investigation",
     "discussion": "Discussion",
     "voting": "Voting",
+    "reconstruction": "Reconstruct",
     "reveal": "Reveal",
     "time_remaining": "{time} left",
     "phase_change": "Entering {phase} phase",
@@ -174,5 +175,15 @@
     "no": "❌ No",
     "irrelevant": "➖ Irrelevant",
     "partial": "〽️ Partially correct"
+  },
+  "reconstruction": {
+    "panel_title": "🔎 Reconstruction",
+    "question_counter": "Q {n}/{total}",
+    "answer_placeholder": "Enter your answer…",
+    "submit_btn": "Submit Answer",
+    "waiting_result": "Submitted, awaiting result…",
+    "score_label": "Score",
+    "complete_label": "Complete",
+    "chat_hint": "Discuss above, submit answers in the right panel"
   }
 }

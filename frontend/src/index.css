@@ -2556,3 +2556,130 @@ button {
   border-radius: 1px;
   animation: dm-cursor-blink 0.8s step-end infinite;
 }
+
+/* ---------------------------------------------------------------------------
+ * Reconstruction panel
+ * ---------------------------------------------------------------------------*/
+
+.reconstruction-panel {
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  margin-top: 12px;
+}
+
+.reconstruction-panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.reconstruction-score-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-3);
+  margin-bottom: 8px;
+}
+
+.reconstruction-score-value {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.reconstruction-question-box {
+  background: var(--surface-2, #1a1a2e);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.reconstruction-question-counter {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+
+.reconstruction-question-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.reconstruction-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.reconstruction-input {
+  flex: 1;
+  font-size: 12px;
+}
+
+.reconstruction-waiting {
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+  padding: 6px 0;
+}
+
+.reconstruction-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.reconstruction-result-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.reconstruction-result--correct {
+  background: rgba(74, 222, 128, 0.1);
+  color: #4ade80;
+}
+
+.reconstruction-result--partial {
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+}
+
+.reconstruction-result--wrong {
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+}
+
+.reconstruction-result-icon {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.reconstruction-result-score {
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.reconstruction-complete {
+  text-align: center;
+  padding: 12px 0;
+}
+
+.reconstruction-complete-pct {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.reconstruction-complete-label {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}

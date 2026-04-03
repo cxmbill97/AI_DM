@@ -7,14 +7,26 @@ interface PhaseBarProps {
   skipVotes?: { voted: number; needed: number } | null;
   hasSkipVoted?: boolean;
   onSkip?: () => void;
+  gameMode?: 'whodunit' | 'reconstruction';
 }
 
-const PHASE_ORDER = [
+// Whodunit order (default)
+const PHASE_ORDER_WHODUNIT = [
   'opening',
   'reading',
   'investigation_1',
   'discussion',
   'voting',
+  'reveal',
+];
+
+// Reconstruction order (no voting phase)
+const PHASE_ORDER_RECONSTRUCTION = [
+  'opening',
+  'reading',
+  'investigation_1',
+  'discussion',
+  'reconstruction',
   'reveal',
 ];
 
@@ -24,7 +36,8 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function PhaseBar({ phase, timeRemaining, skipVotes, hasSkipVoted, onSkip }: PhaseBarProps) {
+export function PhaseBar({ phase, timeRemaining, skipVotes, hasSkipVoted, onSkip, gameMode = 'whodunit' }: PhaseBarProps) {
+  const PHASE_ORDER = gameMode === 'reconstruction' ? PHASE_ORDER_RECONSTRUCTION : PHASE_ORDER_WHODUNIT;
   const { t } = useT();
   const [localTime, setLocalTime] = useState<number | null>(timeRemaining);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -57,7 +70,9 @@ export function PhaseBar({ phase, timeRemaining, skipVotes, hasSkipVoted, onSkip
 
   const currentIdx = PHASE_ORDER.indexOf(phase);
   const isWarning = localTime !== null && localTime > 0 && localTime <= 30;
-  const canSkip = phase !== 'reveal' && phase !== 'voting' && !!onSkip;
+  // In whodunit, voting phase has its own UI — skip button is suppressed there.
+  // In reconstruction, 'voting' never appears so this check is harmless but kept for safety.
+  const canSkip = phase !== 'reveal' && phase !== 'voting' && phase !== 'reconstruction' && !!onSkip;
 
   return (
     <div className="phase-bar">

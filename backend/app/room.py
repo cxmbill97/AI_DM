@@ -73,6 +73,10 @@ class Room:
         self._opening_narrated: bool = False
         # player_ids who voted to skip the current phase; reset on phase change
         self._skip_votes: set[str] = set()
+        # Reconstruction mode state
+        self._reconstruction_q_index: int = 0  # current question index
+        self._reconstruction_score: int = 0  # accumulated score (0-12 for 6 questions)
+        self._reconstruction_answers: list[dict] = []  # {q_id, player_name, answer, result, score}
 
         # ---- Shared state ----
         # player_id → PlayerSlot dict
