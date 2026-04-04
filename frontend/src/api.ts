@@ -78,11 +78,33 @@ export interface ChatResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Token management
+// ---------------------------------------------------------------------------
+
+export function getStoredToken(): string | null {
+  return localStorage.getItem('ai_dm_token');
+}
+
+export function setStoredToken(token: string): void {
+  localStorage.setItem('ai_dm_token', token);
+}
+
+export function clearStoredToken(): void {
+  localStorage.removeItem('ai_dm_token');
+}
+
+// ---------------------------------------------------------------------------
 // Internal helper
 // ---------------------------------------------------------------------------
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(path, options);
+  const token = getStoredToken();
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string> ?? {}),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(path, { ...options, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const detail = (body as { detail?: string | { message?: string } }).detail;
@@ -253,4 +275,61 @@ export function listCommunityScripts(filters: CommunityScriptFilters = {}): Prom
 
 export function likeScript(scriptId: string): Promise<{ script_id: string; likes: number }> {
   return apiFetch(`/api/community/scripts/${scriptId}/like`, { method: 'POST' });
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url: string;
+  created_at: string;
+}
+
+export function getMe(): Promise<AuthUser> {
+  return apiFetch('/api/me');
+}
+
+// ---------------------------------------------------------------------------
+// Favorites
+// ---------------------------------------------------------------------------
+
+export interface FavoriteItem {
+  user_id: string;
+  item_id: string;
+  item_type: 'puzzle' | 'script';
+  saved_at: string;
+}
+
+export function getFavorites(): Promise<FavoriteItem[]> {
+  return apiFetch('/api/favorites');
+}
+
+export function addFavorite(itemType: 'puzzle' | 'script', itemId: string): Promise<void> {
+  return apiFetch(`/api/favorites/${itemType}/${itemId}`, { method: 'POST' });
+}
+
+export function removeFavorite(itemType: 'puzzle' | 'script', itemId: string): Promise<void> {
+  return apiFetch(`/api/favorites/${itemType}/${itemId}`, { method: 'DELETE' });
+}
+
+// ---------------------------------------------------------------------------
+// History
+// ---------------------------------------------------------------------------
+
+export interface HistoryItem {
+  id: string;
+  user_id: string;
+  room_id: string;
+  game_type: string;
+  title: string;
+  player_count: number;
+  played_at: string;
+}
+
+export function getHistory(): Promise<HistoryItem[]> {
+  return apiFetch('/api/history');
 }
