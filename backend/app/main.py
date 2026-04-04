@@ -148,6 +148,21 @@ async def auth_dev_login(name: str = "Dev User") -> RedirectResponse:
     return RedirectResponse(f"{settings.frontend_url}/?token={token}")
 
 
+@app.get("/auth/dev-login/mobile")
+async def auth_dev_login_mobile(name: str = "Dev User") -> RedirectResponse:
+    """Dev-only mobile login bypass — redirects to aidm:// deep link."""
+    if settings.google_client_id:
+        raise HTTPException(status_code=404)
+    user = upsert_user(
+        provider_sub=f"dev:{name}",
+        name=name,
+        email=f"{name.lower().replace(' ', '.')}@dev.local",
+        avatar_url="",
+    )
+    token = create_jwt(user["id"])
+    return RedirectResponse(f"aidm://auth?token={token}")
+
+
 @app.get("/auth/google")
 async def auth_google() -> RedirectResponse:
     """Redirect browser to Google's OAuth consent screen."""
