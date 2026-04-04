@@ -29,12 +29,12 @@ def init_auth_db() -> None:
     with _lock, _conn() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
-                id          TEXT PRIMARY KEY,
-                google_sub  TEXT UNIQUE NOT NULL,
-                name        TEXT NOT NULL,
-                email       TEXT NOT NULL,
-                avatar_url  TEXT NOT NULL DEFAULT '',
-                created_at  TEXT NOT NULL
+                id           TEXT PRIMARY KEY,
+                provider_sub TEXT UNIQUE NOT NULL,
+                name         TEXT NOT NULL,
+                email        TEXT NOT NULL,
+                avatar_url   TEXT NOT NULL DEFAULT '',
+                created_at   TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS user_favorites (
                 user_id   TEXT NOT NULL,
@@ -53,26 +53,30 @@ def init_auth_db() -> None:
                 played_at    TEXT NOT NULL
             );
         """)
+        # Idempotent migration: rename google_sub → provider_sub on existing DBs
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "google_sub" in cols and "provider_sub" not in cols:
+            conn.execute("ALTER TABLE users RENAME COLUMN google_sub TO provider_sub")
         conn.commit()
 
 
-def upsert_user(google_sub: str, name: str, email: str, avatar_url: str) -> dict:
-    """Insert or update a user. Returns the user row as a dict."""
+def upsert_user(provider_sub: str, name: str, email: str, avatar_url: str) -> dict:
+    """Insert or update a user. provider_sub format: 'google:<sub>' or 'apple:<sub>'"""
     now = datetime.now(UTC).isoformat()
     with _lock, _conn() as conn:
         conn.execute(
             """
-            INSERT INTO users (id, google_sub, name, email, avatar_url, created_at)
+            INSERT INTO users (id, provider_sub, name, email, avatar_url, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(google_sub) DO UPDATE SET
+            ON CONFLICT(provider_sub) DO UPDATE SET
                 name       = excluded.name,
                 email      = excluded.email,
                 avatar_url = excluded.avatar_url
             """,
-            (str(uuid.uuid4()), google_sub, name, email, avatar_url, now),
+            (str(uuid.uuid4()), provider_sub, name, email, avatar_url, now),
         )
         conn.commit()
-        row = conn.execute("SELECT * FROM users WHERE google_sub = ?", (google_sub,)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE provider_sub = ?", (provider_sub,)).fetchone()
     return dict(row)
 
 

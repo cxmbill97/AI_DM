@@ -139,13 +139,13 @@ async def auth_dev_login(name: str = "Dev User") -> RedirectResponse:
     if settings.google_client_id:
         raise HTTPException(status_code=404)
     user = upsert_user(
-        google_sub=f"dev:{name}",
+        provider_sub=f"dev:{name}",
         name=name,
         email=f"{name.lower().replace(' ', '.')}@dev.local",
         avatar_url="",
     )
     token = create_jwt(user["id"])
-    return RedirectResponse(f"/?token={token}")
+    return RedirectResponse(f"{settings.frontend_url}/?token={token}")
 
 
 @app.get("/auth/google")
@@ -167,7 +167,7 @@ async def auth_google() -> RedirectResponse:
 async def auth_google_callback(code: str = "", error: str = "") -> RedirectResponse:
     """Exchange Google code for user info, issue JWT, redirect to frontend."""
     if error or not code:
-        return RedirectResponse("/?error=oauth_failed")
+        return RedirectResponse(f"{settings.frontend_url}/?error=oauth_failed")
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(
             "https://oauth2.googleapis.com/token",
@@ -180,23 +180,23 @@ async def auth_google_callback(code: str = "", error: str = "") -> RedirectRespo
             },
         )
         if token_resp.status_code != 200:
-            return RedirectResponse("/?error=oauth_failed")
+            return RedirectResponse(f"{settings.frontend_url}/?error=oauth_failed")
         access_token = token_resp.json().get("access_token", "")
         info_resp = await client.get(
             "https://www.googleapis.com/oauth2/v2/userinfo",
             headers={"Authorization": f"Bearer {access_token}"},
         )
         if info_resp.status_code != 200:
-            return RedirectResponse("/?error=oauth_failed")
+            return RedirectResponse(f"{settings.frontend_url}/?error=oauth_failed")
         info = info_resp.json()
     user = upsert_user(
-        google_sub=info["id"],
+        provider_sub=f"google:{info['id']}",
         name=info.get("name", info.get("email", "Player")),
         email=info.get("email", ""),
         avatar_url=info.get("picture", ""),
     )
     jwt_token = create_jwt(user["id"])
-    return RedirectResponse(f"/?token={jwt_token}")
+    return RedirectResponse(f"{settings.frontend_url}/?token={jwt_token}")
 
 
 @app.get("/api/me")

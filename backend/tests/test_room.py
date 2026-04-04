@@ -52,7 +52,7 @@ from app.room import room_manager  # noqa: E402
 def _make_token(name: str) -> str:
     """Create a JWT token for a test user with the given name."""
     import app.auth as auth_mod
-    user = auth_mod.upsert_user(f"test_sub_{name}", name, f"{name.lower()}@test.com", "")
+    user = auth_mod.upsert_user(f"test:{name}", name, f"{name.lower()}@test.com", "")
     return auth_mod.create_jwt(user["id"])
 
 
