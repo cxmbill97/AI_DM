@@ -6,7 +6,7 @@ import sqlite3
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import jwt as pyjwt
@@ -58,7 +58,7 @@ def init_auth_db() -> None:
 
 def upsert_user(google_sub: str, name: str, email: str, avatar_url: str) -> dict:
     """Insert or update a user. Returns the user row as a dict."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     with _lock, _conn() as conn:
         conn.execute(
             """
@@ -102,7 +102,7 @@ def get_user_by_id(user_id: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def add_favorite(user_id: str, item_id: str, item_type: str) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     with _lock, _conn() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO user_favorites (user_id, item_id, item_type, saved_at) VALUES (?,?,?,?)",
@@ -134,7 +134,7 @@ def list_favorites(user_id: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def add_history(user_id: str, room_id: str, game_type: str, title: str, player_count: int) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     with _lock, _conn() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO room_history (id, user_id, room_id, game_type, title, player_count, played_at) VALUES (?,?,?,?,?,?,?)",
