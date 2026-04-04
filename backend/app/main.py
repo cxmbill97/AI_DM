@@ -250,6 +250,67 @@ async def auth_google_mobile_callback(code: str = "", error: str = "") -> Redire
     return RedirectResponse(f"aidm://auth?token={jwt_token}")
 
 
+class AppleAuthRequest(BaseModel):
+    identity_token: str
+    full_name: str = ""
+
+
+@app.post("/auth/apple")
+async def auth_apple(req: AppleAuthRequest) -> dict:
+    """Verify Apple identity token, upsert user, return JWT."""
+    import base64  # noqa: PLC0415
+    import json as _json  # noqa: PLC0415
+
+    if not settings.apple_bundle_id:
+        raise HTTPException(status_code=503, detail="Apple Sign-In not configured")
+
+    # Fetch Apple's public keys
+    async with httpx.AsyncClient() as client:
+        keys_resp = await client.get("https://appleid.apple.com/auth/keys")
+        if keys_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Could not fetch Apple public keys")
+        jwks = keys_resp.json()
+
+    # Decode header to find which key to use
+    try:
+        header_b64 = req.identity_token.split(".")[0]
+        header_b64 += "=" * (4 - len(header_b64) % 4)
+        header = _json.loads(base64.b64decode(header_b64))
+        kid = header["kid"]
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Malformed identity token") from exc
+
+    apple_key = next((k for k in jwks["keys"] if k["kid"] == kid), None)
+    if apple_key is None:
+        raise HTTPException(status_code=400, detail="Unknown key ID in Apple token")
+
+    try:
+        import jwt as _jwt  # noqa: PLC0415
+        from jwt.algorithms import RSAAlgorithm  # noqa: PLC0415
+        public_key = RSAAlgorithm.from_jwk(_json.dumps(apple_key))
+        payload = _jwt.decode(
+            req.identity_token,
+            public_key,
+            algorithms=["RS256"],
+            audience=settings.apple_bundle_id,
+            issuer="https://appleid.apple.com",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid Apple token: {exc}") from exc
+
+    apple_sub = payload["sub"]
+    email = payload.get("email", f"{apple_sub}@privaterelay.appleid.com")
+    name = req.full_name or email.split("@")[0]
+
+    user = upsert_user(
+        provider_sub=f"apple:{apple_sub}",
+        name=name,
+        email=email,
+        avatar_url="",
+    )
+    return {"token": create_jwt(user["id"])}
+
+
 @app.get("/api/me")
 async def get_me(user: dict = Depends(_require_user)) -> dict:
     """Return the current authenticated user."""
