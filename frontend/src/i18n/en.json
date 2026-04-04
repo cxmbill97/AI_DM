@@ -210,5 +210,22 @@
     "puzzle_title": "Upload Turtle Soup Puzzle",
     "puzzle_success": "Puzzle \"{title}\" added!",
     "puzzle_btn": "Upload Puzzle"
+  },
+  "auth": {
+    "tagline": "AI-powered mystery game master",
+    "sign_in_google": "Sign in with Google",
+    "oauth_failed": "Sign-in failed — please try again",
+    "login_note": "Sign in to save favorites and track your games",
+    "logout": "Sign out"
+  },
+  "profile": {
+    "title": "My Profile",
+    "favorites": "Favorites",
+    "history": "History",
+    "no_favorites": "No favorites yet — click the heart on any game card to save it",
+    "no_history": "No games played yet",
+    "games_played": "{n} games played",
+    "favorites_count": "{n} saved",
+    "member_since": "Member since {date}"
   }
 }
