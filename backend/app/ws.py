@@ -26,6 +26,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
+from app.auth import add_history, decode_jwt, get_user_by_id  # noqa: E402
 from app.dm import dm_proactive_message, dm_turn, dm_turn_private  # noqa: E402
 from app.room import RECONNECT_WINDOW_SECS, Room, room_manager  # noqa: E402
 from app.visibility import VisibilityRegistry  # noqa: E402
@@ -824,22 +825,33 @@ def _maybe_cancel_tick(room: Room) -> None:
 async def websocket_endpoint(
     websocket: WebSocket,
     room_id: str,
-    player_name: str,
+    token: str,
 ) -> None:
     """Entry point called from main.py's @app.websocket route."""
 
     await websocket.accept()
 
+    # Authenticate via JWT
+    user_id: str | None = None
+    player_name = ""
+    try:
+        payload = decode_jwt(token)
+        user = get_user_by_id(payload["sub"])
+        if user:
+            user_id = user["id"]
+            player_name = user["name"]
+    except (ValueError, KeyError):
+        pass
+
+    if not player_name:
+        await websocket.send_json({"type": "error", "text": "Authentication required"})
+        await websocket.close(code=4001)
+        return
+
     room = room_manager.get_room(room_id)
     if room is None:
         await websocket.send_json({"type": "error", "text": f"房间 {room_id} 不存在"})
         await websocket.close(code=4404)
-        return
-
-    player_name = player_name.strip()
-    if not player_name:
-        await websocket.send_json({"type": "error", "text": "玩家名不能为空"})
-        await websocket.close(code=4400)
         return
 
     # ----------------------------------------------------------------
@@ -940,6 +952,16 @@ async def websocket_endpoint(
         for pid in room.players:
             if pid != player_id:
                 await room.send_to(pid, players_update)
+
+    # Log play history for authenticated users (new joins only)
+    if user_id and not is_reconnect:
+        _title = room.script.title if room.game_type == "murder_mystery" and room.script else (room.puzzle.title if room.puzzle else room_id)
+        _game_type = room.game_type or "turtle_soup"
+        _player_count = len(room.players)
+        try:
+            add_history(user_id, room_id, _game_type, _title, _player_count)
+        except Exception:
+            pass  # non-critical
 
     # ----------------------------------------------------------------
     # Deliver join-specific private info (new joins only)

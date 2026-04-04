@@ -542,15 +542,15 @@ async def like_script_endpoint(script_id: str) -> dict:
 async def ws_endpoint(
     websocket: WebSocket,
     room_id: str,
-    player_name: str = "",
+    token: str = "",
 ) -> None:
     """WebSocket connection for multiplayer rooms.
 
     Query params:
-      player_name  — display name (required)
+      token  — JWT issued by /auth/google/callback (required)
 
     Protocol:
       Client sends: {"type": "chat", "text": "..."}
       Server sends: dm_response | player_message | system | room_snapshot | error
     """
-    await websocket_endpoint(websocket, room_id, player_name)
+    await websocket_endpoint(websocket, room_id, token)
