@@ -127,6 +127,27 @@ async def health() -> dict:
 # Auth — Google OAuth
 # ---------------------------------------------------------------------------
 
+@app.get("/auth/config")
+async def auth_config() -> dict:
+    """Returns which auth providers are available."""
+    return {"google": bool(settings.google_client_id), "dev": not bool(settings.google_client_id)}
+
+
+@app.get("/auth/dev-login")
+async def auth_dev_login(name: str = "Dev User") -> RedirectResponse:
+    """Dev-only login bypass. Only works when GOOGLE_CLIENT_ID is not set."""
+    if settings.google_client_id:
+        raise HTTPException(status_code=404)
+    user = upsert_user(
+        google_sub=f"dev:{name}",
+        name=name,
+        email=f"{name.lower().replace(' ', '.')}@dev.local",
+        avatar_url="",
+    )
+    token = create_jwt(user["id"])
+    return RedirectResponse(f"/?token={token}")
+
+
 @app.get("/auth/google")
 async def auth_google() -> RedirectResponse:
     """Redirect browser to Google's OAuth consent screen."""
