@@ -4,13 +4,26 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket
+import httpx
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from openai import APIError
 from pydantic import BaseModel
 
+from app.auth import (
+    add_favorite,
+    create_jwt,
+    decode_jwt,
+    get_user_by_id,
+    init_auth_db,
+    list_favorites,
+    list_history,
+    remove_favorite,
+    upsert_user,
+)
 from app.community import init_db, like_script, list_community_scripts, upsert_script
+from app.config import settings
 from app.dm import dm_turn
 from app.models import (
     ChatRequest,
@@ -44,6 +57,7 @@ app = FastAPI(title="AI DM — 海龟汤")
 @app.on_event("startup")
 async def _startup() -> None:
     init_db()
+    init_auth_db()
 
 
 @app.exception_handler(APIError)
@@ -83,6 +97,22 @@ def _get_session(session_id: str) -> GameSession:
     return session
 
 
+def _require_user(request: Request) -> dict:
+    """Dependency: extract and validate JWT from Authorization header."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = auth.removeprefix("Bearer ").strip()
+    try:
+        payload = decode_jwt(token)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    user = get_user_by_id(payload["sub"])
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -91,6 +121,103 @@ def _get_session(session_id: str) -> GameSession:
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Auth — Google OAuth
+# ---------------------------------------------------------------------------
+
+@app.get("/auth/google")
+async def auth_google() -> RedirectResponse:
+    """Redirect browser to Google's OAuth consent screen."""
+    from urllib.parse import urlencode  # noqa: PLC0415
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": settings.google_redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+    }
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+    return RedirectResponse(url)
+
+
+@app.get("/auth/google/callback")
+async def auth_google_callback(code: str = "", error: str = "") -> RedirectResponse:
+    """Exchange Google code for user info, issue JWT, redirect to frontend."""
+    if error or not code:
+        return RedirectResponse("/?error=oauth_failed")
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "redirect_uri": settings.google_redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+        if token_resp.status_code != 200:
+            return RedirectResponse("/?error=oauth_failed")
+        access_token = token_resp.json().get("access_token", "")
+        info_resp = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if info_resp.status_code != 200:
+            return RedirectResponse("/?error=oauth_failed")
+        info = info_resp.json()
+    user = upsert_user(
+        google_sub=info["id"],
+        name=info.get("name", info.get("email", "Player")),
+        email=info.get("email", ""),
+        avatar_url=info.get("picture", ""),
+    )
+    jwt_token = create_jwt(user["id"])
+    return RedirectResponse(f"/?token={jwt_token}")
+
+
+@app.get("/api/me")
+async def get_me(user: dict = Depends(_require_user)) -> dict:
+    """Return the current authenticated user."""
+    return {
+        "id": user["id"],
+        "name": user["name"],
+        "email": user["email"],
+        "avatar_url": user["avatar_url"],
+        "created_at": user["created_at"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Favorites
+# ---------------------------------------------------------------------------
+
+@app.get("/api/favorites")
+async def get_favorites(user: dict = Depends(_require_user)) -> list[dict]:
+    return list_favorites(user["id"])
+
+
+@app.post("/api/favorites/{item_type}/{item_id}", status_code=204)
+async def post_favorite(item_type: str, item_id: str, user: dict = Depends(_require_user)) -> None:
+    if item_type not in ("puzzle", "script"):
+        raise HTTPException(status_code=422, detail="item_type must be 'puzzle' or 'script'")
+    add_favorite(user["id"], item_id, item_type)
+
+
+@app.delete("/api/favorites/{item_type}/{item_id}", status_code=204)
+async def delete_favorite(item_type: str, item_id: str, user: dict = Depends(_require_user)) -> None:
+    remove_favorite(user["id"], item_id, item_type)
+
+
+# ---------------------------------------------------------------------------
+# History
+# ---------------------------------------------------------------------------
+
+@app.get("/api/history")
+async def get_history(user: dict = Depends(_require_user)) -> list[dict]:
+    return list_history(user["id"])
 
 
 @app.get("/api/puzzles", response_model=list[PuzzleSummary])
