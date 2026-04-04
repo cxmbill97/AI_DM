@@ -199,6 +199,57 @@ async def auth_google_callback(code: str = "", error: str = "") -> RedirectRespo
     return RedirectResponse(f"{settings.frontend_url}/?token={jwt_token}")
 
 
+@app.get("/auth/google/mobile")
+async def auth_google_mobile() -> RedirectResponse:
+    """Mobile OAuth entry — uses aidm:// redirect URI."""
+    from urllib.parse import urlencode  # noqa: PLC0415
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": settings.google_mobile_redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+    }
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+    return RedirectResponse(url)
+
+
+@app.get("/auth/google/mobile/callback")
+async def auth_google_mobile_callback(code: str = "", error: str = "") -> RedirectResponse:
+    """Exchange Google code for JWT, redirect to aidm:// custom URL scheme."""
+    if error or not code:
+        return RedirectResponse("aidm://auth?error=oauth_failed")
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "redirect_uri": settings.google_mobile_redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+        if token_resp.status_code != 200:
+            return RedirectResponse("aidm://auth?error=oauth_failed")
+        access_token = token_resp.json().get("access_token", "")
+        info_resp = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if info_resp.status_code != 200:
+            return RedirectResponse("aidm://auth?error=oauth_failed")
+        info = info_resp.json()
+    user = upsert_user(
+        provider_sub=f"google:{info['id']}",
+        name=info.get("name", info.get("email", "Player")),
+        email=info.get("email", ""),
+        avatar_url=info.get("picture", ""),
+    )
+    jwt_token = create_jwt(user["id"])
+    return RedirectResponse(f"aidm://auth?token={jwt_token}")
+
+
 @app.get("/api/me")
 async def get_me(user: dict = Depends(_require_user)) -> dict:
     """Return the current authenticated user."""

@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:8000/auth/google/callback"
+    google_mobile_redirect_uri: str = "http://localhost:8000/auth/google/mobile/callback"
+    frontend_url: str = "http://localhost:5173"
+    apple_bundle_id: str = ""
 
 
 settings = Settings()
