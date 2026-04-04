@@ -209,7 +209,7 @@ export interface ScriptTheme {
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
-export function useRoom(roomId: string, playerName: string) {
+export function useRoom(roomId: string, token: string) {
   const { t } = useT();
 
   // Shared state
@@ -279,7 +279,7 @@ export function useRoom(roomId: string, playerName: string) {
     // HTTPS (ngrok / cloudflare tunnel). Relative WebSocket URLs are non-standard
     // and silently break in some browsers when the page protocol is https:.
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}?player_name=${encodeURIComponent(playerName)}`;
+    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}?token=${encodeURIComponent(token)}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 

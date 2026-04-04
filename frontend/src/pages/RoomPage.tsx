@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../auth';
 import { CluePanel } from '../components/CluePanel';
 import { PlayerList } from '../components/PlayerList';
 import { PuzzleCard } from '../components/PuzzleCard';
@@ -500,14 +501,10 @@ function MultiplayerReview({
 
 export function RoomPage() {
   const { roomId = '' } = useParams<{ roomId: string }>();
-  const location = useLocation();
   const navigate = useNavigate();
-
-  const sessionKey = `playerName:${roomId}`;
-  const statePlayerName = (location.state as { playerName?: string })?.playerName ?? '';
-  // Persist to sessionStorage so refresh doesn't lose the player name
-  if (statePlayerName) sessionStorage.setItem(sessionKey, statePlayerName);
-  const playerName: string = statePlayerName || sessionStorage.getItem(sessionKey) || '';
+  const { user } = useAuth();
+  const token = localStorage.getItem('ai_dm_token') ?? '';
+  const playerName = user?.name ?? '';
 
   const {
     messages, players, clues, connected, progress, truth, puzzle, error,
@@ -520,7 +517,7 @@ export function RoomPage() {
     mmRequiredPlayers, mmGameMode,
     reconstructionQuestion, reconstructionResults, reconstructionComplete, sendReconstructionAnswer,
     scriptTheme,
-  } = useRoom(roomId, playerName);
+  } = useRoom(roomId, token);
 
   const { t } = useT();
   const { showTraces, toggleTraces } = useTraceSetting();
