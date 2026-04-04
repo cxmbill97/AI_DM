@@ -81,6 +81,12 @@ ios/AIDungeonMaster/
 - On cold launch: `KeychainService.loadToken()` → `GET /api/me` → if 401, show LoginView
 - Sign out: delete Keychain token, clear `AuthViewModel.user`
 
+### Dev login (DEBUG only)
+`LoginView` shows a dev login text field only in `#if DEBUG` builds — never shown in TestFlight or App Store builds. This prevents App Store reviewers from seeing a non-standard auth path.
+
+### WebSocket token security note
+The JWT is passed as a URL query parameter (`?token=<jwt>`) which appears in server logs. This is standard practice for WebSocket auth (headers cannot be set during the HTTP upgrade handshake in iOS). Mitigate by: ensuring backend logs redact the token field, and keeping token lifetime short (current: 30 days — acceptable).
+
 ---
 
 ## Networking
@@ -112,9 +118,10 @@ class WebSocketService: ObservableObject {
 struct AppConfig {
     static var baseURL: String {
         #if DEBUG
-        UserDefaults.standard.string(forKey: "backend_url") ?? "http://192.168.1.x:8000"
+        // Simulator default: localhost. On device: type your LAN IP in Settings → Backend URL.
+        UserDefaults.standard.string(forKey: "backend_url") ?? "http://localhost:8000"
         #else
-        "https://your-production-domain.com"
+        "https://your-production-domain.com"  // replace before App Store submission
         #endif
     }
 }
@@ -125,28 +132,80 @@ struct AppConfig {
 ## Models
 
 ```swift
+// --- REST response models ---
 struct User: Codable { let id, name, email, avatar_url, created_at: String }
 struct PuzzleSummary: Codable { let id, title, difficulty: String; let tags: [String] }
 struct ScriptSummary: Codable { let id, title, difficulty, game_mode: String }
 struct FavoriteItem: Codable { let item_id, item_type, saved_at: String }
 struct HistoryItem: Codable { let id, room_id, game_type, title, played_at: String; let player_count: Int }
 
-// Inbound (server → client)
-enum GameMessage: Codable {
+// --- WebSocket payload structs (match backend models.py exactly) ---
+struct CluePayload: Codable { let id, title, content: String; let unlock_keywords: [String] }
+
+struct DmResponsePayload: Codable {
+    let player_name: String
+    let judgment: String        // "是" | "否" | "部分正确" | "无关"
+    let response: String        // DM's narrative reply
+    let truth_progress: Double  // 0.0–1.0
+    let clue_unlocked: CluePayload?
+    let hint: String?
+    let truth: String?          // non-nil when game is solved
+    let timestamp: Double
+}
+
+struct PlayerMessagePayload: Codable {
+    let player_name: String
+    let text: String
+    let timestamp: Double
+}
+
+struct SystemPayload: Codable { let text: String }
+
+struct PlayerInfo: Codable { let id, name: String; let character: String? }
+
+struct RoomSnapshotPayload: Codable {
+    let room_id: String
+    let game_type: String           // "turtle_soup" | "murder_mystery"
+    let phase: String
+    let current_phase: String?      // MM only
+    let phase_description: String?  // MM only
+    let players: [PlayerInfo]
+    let clues: [CluePayload]        // unlocked clues (full objects, not strings)
+    let time_remaining: Int?        // MM phase timer, seconds
+}
+
+struct ErrorPayload: Codable { let message: String }
+
+// --- GameMessage: inbound discriminated union on "type" field ---
+// Swift Codable cannot auto-synthesize this — use a custom decoder:
+enum GameMessage {
     case dmResponse(DmResponsePayload)
     case playerMessage(PlayerMessagePayload)
     case system(SystemPayload)
     case roomSnapshot(RoomSnapshotPayload)
     case error(ErrorPayload)
 }
-struct DmResponsePayload: Codable { let text: String; let clue_unlocked: String? }
-struct PlayerMessagePayload: Codable { let player_id, player_name, text: String }
-struct SystemPayload: Codable { let text: String }
-struct RoomSnapshotPayload: Codable { let players: [PlayerInfo]; let phase: String; let clues: [String] }
-struct PlayerInfo: Codable { let id, name: String; let character: String? }
-struct ErrorPayload: Codable { let message: String }
 
-// Outbound (client → server)
+extension GameMessage: Decodable {
+    private enum TypeKey: String, Codable {
+        case dm_response, player_message, system, room_snapshot, error
+    }
+    private struct TypeWrapper: Decodable { let type: TypeKey }
+
+    init(from decoder: Decoder) throws {
+        let wrapper = try TypeWrapper(from: decoder)
+        let container = try decoder.singleValueContainer()
+        switch wrapper.type {
+        case .dm_response:    self = .dmResponse(try container.decode(DmResponsePayload.self))
+        case .player_message: self = .playerMessage(try container.decode(PlayerMessagePayload.self))
+        case .system:         self = .system(try container.decode(SystemPayload.self))
+        case .room_snapshot:  self = .roomSnapshot(try container.decode(RoomSnapshotPayload.self))
+        case .error:          self = .error(try container.decode(ErrorPayload.self))
+        }
+    }
+}
+
+// --- Outbound (client → server) ---
 struct ClientMessage: Codable { let type: String; let text: String }
 // Usage: ClientMessage(type: "chat", text: userInput)
 ```
@@ -157,18 +216,27 @@ struct ClientMessage: Codable { let type: String; let text: String }
 
 | Change | File | Details |
 |--------|------|---------|
-| `GET /auth/google/mobile` | `main.py` | Same as `/auth/google` but uses `GOOGLE_MOBILE_REDIRECT_URI` |
-| `GET /auth/google/mobile/callback` | `main.py` | Exchanges code, redirects to `aidm://auth?token=<jwt>` |
-| `POST /auth/apple` | `main.py` | Accepts `{identity_token, full_name}`, verifies with Apple JWKS, upserts user, returns `{token}` |
+| `GET /auth/google/mobile` | `main.py` | Same as `/auth/google` but uses `GOOGLE_MOBILE_REDIRECT_URI` (redirects to `aidm://auth?token=...`) |
+| `GET /auth/google/mobile/callback` | `main.py` | Exchanges code, upserts user, redirects to `aidm://auth?token=<jwt>` |
+| `POST /auth/apple` | `main.py` | Body: `{identity_token: str, full_name: str}`. Fetches Apple JWKS from `https://appleid.apple.com/auth/keys`, verifies RS256 JWT, checks `aud == apple_bundle_id`, upserts user with `sub = "apple:{sub}"`, returns `{token: <jwt>}` |
 | `GOOGLE_MOBILE_REDIRECT_URI` | `config.py` | Default: `http://localhost:8000/auth/google/mobile/callback` |
-| `apple_bundle_id` | `config.py` | Bundle ID used as `aud` claim when verifying Apple identity tokens (e.g. `com.yourname.aidm`) |
-| `cryptography` dep | `pyproject.toml` | Required for Apple RS256 JWT verification |
+| `apple_bundle_id` | `config.py` | Bundle ID as `aud` claim for Apple token verification (e.g. `com.yourname.aidm`) |
+| `cryptography` dep | `pyproject.toml` | Required for Apple RS256 JWT verification (PyJWT uses it) |
+| DB: `google_sub` → `provider_sub` | `auth.py` + migration | Rename `google_sub` column to `provider_sub` so Apple users (`apple:<sub>`) and Google users (`google:<sub>`) share the same table cleanly. Add `ALTER TABLE users RENAME COLUMN google_sub TO provider_sub` migration in `init_auth_db`. |
 
 ### Google Cloud Console
 Add `http://localhost:8000/auth/google/mobile/callback` as an additional authorized redirect URI.
 
 ### Xcode
-Register URL scheme `aidm` in Info.plist → URL Types.
+- Register URL scheme `aidm` in Info.plist → URL Types (identifier: `com.yourname.aidm`, schemes: `aidm`)
+- Add ATS exception in Info.plist for LAN HTTP (dev builds only):
+  ```xml
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key><true/>
+  </dict>
+  ```
+  `NSAllowsLocalNetworking` permits `*.local` and LAN IPs without allowing arbitrary internet HTTP — safe for App Store review.
 
 ---
 
