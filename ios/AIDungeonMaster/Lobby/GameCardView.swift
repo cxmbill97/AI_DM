@@ -11,100 +11,126 @@ struct GameCardView: View {
     var onSolo: () -> Void
     var onCreateRoom: () -> Void
 
-    var diffColor: Color {
-        switch difficulty {
-        case "简单", "beginner", "Easy": return Color(hex: "#4ade80")
-        case "困难", "hard", "Hard": return Color(hex: "#f87171")
-        default: return Color(hex: "#fbbf24")
+    private var isTurtleSoup: Bool { gameType == "turtle_soup" }
+
+    private var diffColor: Color {
+        switch normalizedDifficulty(difficulty) {
+        case "easy": return Color(hex: "#34d399")
+        case "hard": return Color(hex: "#f87171")
+        default:     return Color(hex: "#fbbf24")
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Thumbnail
-            ZStack(alignment: .topLeading) {
+            // Thumbnail area
+            ZStack(alignment: .bottom) {
                 thumbGradient
-                    .frame(height: 110)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .frame(height: 120)
 
-                Text(gameType == "turtle_soup" ? "Turtle Soup" : "Murder Mystery")
-                    .font(.system(size: 10, weight: .bold))
+                // Bottom gradient overlay
+                LinearGradient(
+                    colors: [Color.clear, Color.black.opacity(0.6)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .frame(height: 60)
+
+                // Title on top of gradient
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(gameType == "turtle_soup" ? Color(hex: "#1a4f7a") : Color(hex: "#5a1a3a"))
-                    .cornerRadius(6)
-                    .padding(10)
-
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(alignment: .topLeading) {
+                Text(isTurtleSoup ? "🐢 Turtle Soup" : "🔍 Murder Mystery")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(isTurtleSoup ? Color(hex: "#7dd3fc") : Color(hex: "#d8b4fe"))
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .padding(8)
+            }
+            .overlay(alignment: .topTrailing) {
                 Button(action: onFavorite) {
                     Image(systemName: isFavorite ? "heart.fill" : "heart")
-                        .font(.system(size: 13))
-                        .foregroundColor(isFavorite ? Color(hex: "#e85d75") : Color(hex: "#666680"))
-                        .padding(8)
-                        .background(Color.black.opacity(0.4))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(isFavorite ? Color(hex: "#fb7185") : .white)
+                        .padding(7)
+                        .background(.ultraThinMaterial)
                         .clipShape(Circle())
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(8)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-
+            // Card body
+            VStack(alignment: .leading, spacing: 8) {
+                // Tags row
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         if !difficulty.isEmpty {
-                            Text(difficulty)
-                                .font(.system(size: 10))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(diffColor.opacity(0.15))
+                            Text(localizedDifficulty(difficulty))
+                                .font(.system(size: 10, weight: .semibold))
                                 .foregroundColor(diffColor)
-                                .cornerRadius(4)
+                                .padding(.horizontal, 7).padding(.vertical, 3)
+                                .background(diffColor.opacity(0.12))
+                                .clipShape(Capsule())
                         }
-                        ForEach(tags.prefix(2), id: \.self) { tag in
+                        ForEach(tags.prefix(3), id: \.self) { tag in
                             Text(tag)
                                 .font(.system(size: 10))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Color(hex: "#1e1e28"))
-                                .foregroundColor(Color(hex: "#9090b0"))
-                                .cornerRadius(4)
+                                .foregroundColor(Color(hex: "#7878a8"))
+                                .padding(.horizontal, 7).padding(.vertical, 3)
+                                .background(Color(hex: "#7878a8").opacity(0.1))
+                                .clipShape(Capsule())
                         }
                     }
                 }
 
+                // Action buttons
                 HStack(spacing: 8) {
-                    Button("Solo") { onSolo() }
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(hex: "#c9a84c"))
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(hex: "#c9a84c"), lineWidth: 1))
+                    Button(action: onSolo) {
+                        Label("Solo", systemImage: "person.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color(hex: "#c9a84c"))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 7)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "#c9a84c").opacity(0.6), lineWidth: 1))
+                    }
 
-                    Button("Room") { onCreateRoom() }
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Color(hex: "#c9a84c"))
-                        .cornerRadius(6)
+                    Button(action: onCreateRoom) {
+                        Label("Room", systemImage: "person.3.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 7)
+                            .background(Color(hex: "#c9a84c"))
+                            .cornerRadius(8)
+                    }
                 }
-                .padding(.top, 4)
             }
             .padding(12)
         }
-        .background(Color(hex: "#141420"))
-        .cornerRadius(12)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "#1e1e2e"), lineWidth: 1))
+        .background(Color(hex: "#16151f"))
+        .cornerRadius(14)
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: "#2a2840").opacity(0.8), lineWidth: 1))
+        .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
     }
 
     private var thumbGradient: LinearGradient {
         let seed = itemId.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        let hue = Double(seed % 360) / 360.0
+        let hues: [(Double, Double)] = [
+            (0.55, 0.65), (0.75, 0.85), (0.15, 0.25),
+            (0.05, 0.10), (0.35, 0.45), (0.85, 0.95)
+        ]
+        let pair = hues[seed % hues.count]
         return LinearGradient(
             colors: [
-                Color(hue: hue, saturation: 0.4, brightness: 0.25),
-                Color(hue: (hue + 0.1).truncatingRemainder(dividingBy: 1.0), saturation: 0.5, brightness: 0.15)
+                Color(hue: pair.0, saturation: 0.6, brightness: 0.35),
+                Color(hue: pair.1, saturation: 0.7, brightness: 0.2),
             ],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )

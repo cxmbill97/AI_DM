@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from app.auth import (
     add_favorite,
+    complete_history,
     create_jwt,
     decode_jwt,
     get_user_by_id,
@@ -349,8 +350,8 @@ async def get_favorites(user: dict = Depends(_require_user)) -> list[dict]:
 
 @app.post("/api/favorites/{item_type}/{item_id}", status_code=204)
 async def post_favorite(item_type: str, item_id: str, user: dict = Depends(_require_user)) -> None:
-    if item_type not in ("puzzle", "script"):
-        raise HTTPException(status_code=422, detail="item_type must be 'puzzle' or 'script'")
+    if item_type not in ("puzzle", "script", "puzzle_like", "script_like"):
+        raise HTTPException(status_code=422, detail="item_type must be 'puzzle', 'script', 'puzzle_like', or 'script_like'")
     add_favorite(user["id"], item_id, item_type)
 
 
@@ -495,6 +496,7 @@ class CreateRoomRequest(BaseModel):
     puzzle_id: str | None = None  # turtle_soup: None → random puzzle
     script_id: str | None = None  # murder_mystery: required
     language: str = "zh"  # "zh" | "en"
+    is_public: bool = True
 
 
 @app.post("/api/rooms")
@@ -516,6 +518,7 @@ async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         room_id = room_manager.create_room(script=script, language=lang)
+        room_manager.rooms[room_id].is_public = body.is_public
         return {"room_id": room_id, "game_type": "murder_mystery", "script_id": script.id}
 
     # turtle_soup (default)
@@ -524,6 +527,7 @@ async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     room_id = room_manager.create_room(puzzle=puzzle, language=lang)
+    room_manager.rooms[room_id].is_public = body.is_public
     return {"room_id": room_id, "game_type": "turtle_soup", "puzzle_id": puzzle.id}
 
 
@@ -534,6 +538,37 @@ async def list_scripts(lang: str = "zh") -> list[dict]:
     Query param: lang=zh (default) | lang=en
     """
     return [{"id": s.id, "title": s.title, "difficulty": s.metadata.difficulty, "player_count": s.metadata.player_count} for s in load_scripts(lang)]
+
+
+@app.get("/api/rooms")
+async def list_active_rooms() -> list[dict]:
+    """List all currently active (non-empty) rooms for the lobby browser."""
+    import time as _time  # noqa: PLC0415
+
+    now = _time.time()
+    result = []
+    for room_id, room in room_manager.rooms.items():
+        if not getattr(room, "is_public", True):
+            continue
+        connected = sum(1 for p in room.players.values() if p.get("connected"))
+        total = sum(
+            1 for p in room.players.values()
+            if p.get("connected") or (now - p.get("last_seen", 0)) < 60
+        )
+        title = ""
+        if room.puzzle:
+            title = room.puzzle.title
+        elif room.script:
+            title = room.script.title
+        result.append({
+            "room_id": room_id,
+            "game_type": room.game_type,
+            "title": title,
+            "player_count": total,
+            "connected_count": connected,
+            "language": room.language,
+        })
+    return result
 
 
 @app.get("/api/rooms/{room_id}", response_model=RoomState)
@@ -565,6 +600,16 @@ async def get_room(room_id: str) -> RoomState:
         phase=room.phase,
         game_type="turtle_soup",
     )
+
+
+@app.post("/api/rooms/{room_id}/complete")
+async def complete_room(room_id: str, body: dict, user: dict = Depends(_require_user)) -> dict:
+    """Mark a room session as completed for the authenticated user."""
+    outcome = body.get("outcome", "success")
+    if outcome not in ("success", "failed"):
+        raise HTTPException(status_code=422, detail="outcome must be 'success' or 'failed'")
+    complete_history(user_id=user["id"], room_id=room_id, outcome=outcome)
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

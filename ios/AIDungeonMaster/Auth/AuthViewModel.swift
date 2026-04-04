@@ -6,6 +6,7 @@ final class AuthViewModel: NSObject, ObservableObject {
     @Published var user: User?
     @Published var isLoading = true
     @Published var error: String?
+    @Published var debugRoomId: String? = nil
 
     override init() {
         super.init()
@@ -14,6 +15,7 @@ final class AuthViewModel: NSObject, ObservableObject {
         if let idx = args.firstIndex(of: "--debug-token"), idx + 1 < args.count {
             KeychainService.save(token: args[idx + 1])
         }
+        debugRoomId = args.firstIndex(of: "--debug-room").map { args[$0 + 1] }
         #endif
         Task { await validateSession() }
     }

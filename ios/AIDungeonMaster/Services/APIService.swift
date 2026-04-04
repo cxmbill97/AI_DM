@@ -55,12 +55,16 @@ final class APIService {
         }
     }
 
-    private func requestRaw(_ path: String, method: String) async throws {
+    private func requestRaw(_ path: String, method: String, jsonData: Data? = nil) async throws {
         guard let url = URL(string: baseURL + path) else { throw APIError.networkError(URLError(.badURL)) }
         var req = URLRequest(url: url)
         req.httpMethod = method
         if let token = KeychainService.loadToken() {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        if let data = jsonData {
+            req.httpBody = data
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         let (_, response) = try await URLSession.shared.data(for: req)
         if let http = response as? HTTPURLResponse, http.statusCode == 401 { throw APIError.unauthorized }
@@ -82,20 +86,28 @@ final class APIService {
         try await request("/api/scripts?lang=\(lang)")
     }
 
-    func createRoom(gameId: String, gameType: String, lang: String) async throws -> CreateRoomResponse {
+    func createRoom(gameId: String, gameType: String, lang: String, isPublic: Bool = true) async throws -> CreateRoomResponse {
         struct Body: Encodable {
             let game_type: String
             let puzzle_id: String?
             let script_id: String?
             let language: String
+            let is_public: Bool
         }
         let body = Body(
             game_type: gameType,
             puzzle_id: gameType == "turtle_soup" ? gameId : nil,
             script_id: gameType == "murder_mystery" ? gameId : nil,
-            language: lang
+            language: lang,
+            is_public: isPublic
         )
         return try await request("/api/rooms", method: "POST", body: body)
+    }
+
+    func completeRoom(roomId: String, outcome: String) async throws {
+        struct Body: Encodable { let outcome: String }
+        let data = try JSONEncoder().encode(Body(outcome: outcome))
+        try await requestRaw("/api/rooms/\(roomId)/complete", method: "POST", jsonData: data)
     }
 
     // MARK: - Favorites
@@ -116,5 +128,25 @@ final class APIService {
 
     func getHistory() async throws -> [HistoryItem] {
         try await request("/api/history")
+    }
+
+    // MARK: - Active Rooms
+
+    func getActiveRooms() async throws -> [ActiveRoom] {
+        try await request("/api/rooms")
+    }
+
+    // MARK: - Community
+
+    func getCommunityScripts(lang: String, search: String = "", limit: Int = 50) async throws -> [CommunityScript] {
+        var path = "/api/community/scripts?lang=\(lang)&limit=\(limit)"
+        if !search.isEmpty { path += "&search=\(search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search)" }
+        return try await request(path)
+    }
+
+    func likeScript(scriptId: String) async throws -> Int {
+        struct LikeResp: Decodable { let likes: Int }
+        let resp: LikeResp = try await request("/api/community/scripts/\(scriptId)/like", method: "POST")
+        return resp.likes
     }
 }

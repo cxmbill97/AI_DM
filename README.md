@@ -1,6 +1,6 @@
 # AI DM — 海龟汤 & 剧本杀
 
-> **AI-powered game master for Chinese social deduction games, built with a multi-agent LLM pipeline, real-time WebSocket multiplayer, and a React frontend. Supports bilingual (zh/en) gameplay with streaming DM responses, per-player secret isolation, and an automated evaluation harness.**
+> **AI-powered game master for Chinese social deduction games, built with a multi-agent LLM pipeline, real-time WebSocket multiplayer, a React web frontend, and a native iOS app. Supports bilingual (zh/en) gameplay with streaming DM responses, per-player secret isolation, and an automated evaluation harness.**
 
 ---
 
@@ -40,15 +40,14 @@ The game engine is exposed as MCP tools over stdio, making it playable from Clau
 |-------|-------------|
 | Backend | Python 3.12, FastAPI, WebSocket, asyncio |
 | LLM | MiniMax M2.5 via OpenAI-compatible SDK; streaming + non-streaming |
-| Frontend | React 19, TypeScript, Vite, React Router |
+| Web frontend | React 19, TypeScript, Vite, React Router |
+| iOS app | SwiftUI, MVVM, URLSession, KeychainServices, Google + Apple Sign-In |
 | Real-time | Native WebSocket (auto ws/wss for LAN and tunnel access) |
 | Testing | pytest, pytest-asyncio, 400+ test cases including red-team suite |
 | CI | GitHub Actions (pytest + ruff + tsc + vite build) |
 | Packaging | uv (Python), pnpm (Node); one-command startup via `./start.sh` |
 
 ---
-
-## Quick Start
 
 ## Quick Start
 
@@ -92,6 +91,25 @@ cd frontend
 pnpm install
 pnpm dev --host 0.0.0.0   # UI at http://localhost:5173
 ```
+
+### iOS App
+
+```bash
+cd ios
+xcodegen generate
+open AIDungeonMaster.xcodeproj   # build & run from Xcode, or:
+xcodebuild -scheme AIDungeonMaster -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+```
+
+Requires Xcode 16+. Point `AppConfig.baseURL` at your backend host. The simulator uses `UserDefaults` for token storage (Keychain requires code-signing on device).
+
+**iOS features:**
+- Instagram-style scrollable feed with like, save, and play actions
+- Custom gold/purple tab bar (Home · Explore · Activity · Saved · Profile)
+- Game mode sheet — choose Solo or Public before creating a room
+- Profile page with Games Played (completed only) and Liked tabs
+- Real-time room view with clue panel, progress bar, and chat
+- Google Sign-In and Apple Sign-In
 
 ---
 
@@ -336,6 +354,19 @@ frontend/
 │       ├── useRoom.ts        # Multiplayer: WebSocket (auto ws/wss) + all MM message types
 │       └── useTraceSetting.ts  # localStorage toggle for agent trace visibility
 └── vite.config.ts            # host 0.0.0.0; proxy /api → :8000, /ws → ws://:8000 (ws:true)
+
+ios/AIDungeonMaster/
+├── App/                      # MainTabView, CustomTabBar, TabBarVisibility, AppConfig
+├── Auth/                     # LoginView, AuthViewModel, KeychainService
+├── Home/                     # Feed, FeedCardView, GameModeSheet, HomeViewModel
+├── Explore/                  # Active rooms list (ExploreView)
+├── Profile/                  # History (completed only), Liked games, ProfileViewModel
+├── Room/                     # Game chat, clue panel, progress, RoomViewModel (WebSocket)
+├── Saved/                    # Bookmarked games (SavedView)
+├── Activity/                 # Recent community scripts (ActivityView)
+├── Lobby/                    # Script/puzzle browser with difficulty badges (LobbyView)
+├── Models/                   # Shared models + difficulty normalisation helpers
+└── Services/                 # APIService (REST + JWT), WebSocketService
 ```
 
 ---
@@ -355,8 +386,10 @@ frontend/
 
 | Method | Path | Body / Query | Description |
 |--------|------|-------------|-------------|
-| `POST` | `/api/rooms` | `{ game_type, puzzle_id?, script_id?, language }` | Create room |
+| `POST` | `/api/rooms` | `{ game_type, puzzle_id?, script_id?, language, is_public }` | Create room |
+| `GET`  | `/api/rooms` | — | List all public active rooms |
 | `GET`  | `/api/rooms/{room_id}` | — | Room state (players, phase, title) |
+| `POST` | `/api/rooms/{room_id}/complete` | `{ outcome }` | Mark session completed (success/failed) |
 | `GET`  | `/api/scripts` | `?lang=zh\|en` | List murder mystery scripts |
 | `WS`   | `/ws/{room_id}?player_name=…` | — | Join room (real-time) |
 

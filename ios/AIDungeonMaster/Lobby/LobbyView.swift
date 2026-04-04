@@ -1,127 +1,47 @@
 import SwiftUI
 
 struct LobbyView: View {
+    @EnvironmentObject private var auth: AuthViewModel
     @StateObject private var vm = LobbyViewModel()
-    @State private var joinRoomCode = ""
-    @State private var navigateToRoom: String?
+    @State private var joinCode = ""
+    @State private var navigateToRoom: String? = nil
+    @State private var isCreating = false
 
     let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(hex: "#0d0d0f").ignoresSafeArea()
+                Color(hex: "#0a0a0f").ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // Join strip
-                        HStack(spacing: 8) {
-                            TextField("Room code (e.g. ABC123)", text: $joinRoomCode)
-                                .textFieldStyle(.plain)
-                                .padding(.horizontal, 12).padding(.vertical, 10)
-                                .background(Color(hex: "#141420"))
-                                .cornerRadius(8)
-                                .foregroundColor(.white)
-                                .font(.system(size: 14))
-                                .autocapitalization(.allCharacters)
-                                .disableAutocorrection(true)
-                            Button("Join") {
-                                if !joinRoomCode.trimmingCharacters(in: .whitespaces).isEmpty {
-                                    navigateToRoom = joinRoomCode.uppercased().trimmingCharacters(in: .whitespaces)
-                                }
-                            }
-                            .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(Color(hex: "#c9a84c"))
-                            .foregroundColor(.black)
-                            .font(.system(size: 14, weight: .semibold))
-                            .cornerRadius(8)
-                            .disabled(joinRoomCode.trimmingCharacters(in: .whitespaces).isEmpty)
-                        }
+                VStack(spacing: 0) {
+                    // Header
+                    headerView
+
+                    // Join strip
+                    joinStrip
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, 10)
 
-                        // Search
-                        HStack {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundColor(Color(hex: "#666680"))
-                            TextField("Search", text: $vm.search)
-                                .foregroundColor(.white)
-                                .font(.system(size: 14))
-                        }
-                        .padding(.horizontal, 12).padding(.vertical, 10)
-                        .background(Color(hex: "#141420"))
-                        .cornerRadius(8)
+                    // Tabs
+                    tabBar
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+
+                    // Search
+                    searchBar
                         .padding(.horizontal, 16)
                         .padding(.bottom, 12)
 
-                        // Tabs
-                        HStack(spacing: 0) {
-                            tabButton("🐢 Turtle Soup", tab: .turtleSoup)
-                            tabButton("🔍 Murder Mystery", tab: .murderMystery)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
-
-                        // Grid
-                        if vm.isLoading {
-                            ProgressView()
-                                .tint(Color(hex: "#c9a84c"))
-                                .padding(.top, 60)
-                        } else if vm.selectedTab == .turtleSoup {
-                            if vm.filteredPuzzles.isEmpty {
-                                Text("No puzzles found")
-                                    .foregroundColor(Color(hex: "#666680"))
-                                    .padding(.top, 60)
-                            } else {
-                                LazyVGrid(columns: columns, spacing: 12) {
-                                    ForEach(vm.filteredPuzzles) { puzzle in
-                                        GameCardView(
-                                            title: puzzle.title,
-                                            difficulty: puzzle.difficulty,
-                                            tags: puzzle.tags,
-                                            gameType: "turtle_soup",
-                                            itemId: puzzle.id,
-                                            isFavorite: vm.favorites.contains("puzzle:\(puzzle.id)"),
-                                            onFavorite: { vm.toggleFavorite(type: "puzzle", id: puzzle.id) },
-                                            onSolo: { createAndNavigate(gameId: puzzle.id, gameType: "turtle_soup") },
-                                            onCreateRoom: { createAndNavigate(gameId: puzzle.id, gameType: "turtle_soup") }
-                                        )
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                            }
-                        } else {
-                            if vm.filteredScripts.isEmpty {
-                                Text("No scripts found")
-                                    .foregroundColor(Color(hex: "#666680"))
-                                    .padding(.top, 60)
-                            } else {
-                                LazyVGrid(columns: columns, spacing: 12) {
-                                    ForEach(vm.filteredScripts) { script in
-                                        GameCardView(
-                                            title: script.title,
-                                            difficulty: script.difficulty,
-                                            tags: [],
-                                            gameType: "murder_mystery",
-                                            itemId: script.id,
-                                            isFavorite: vm.favorites.contains("script:\(script.id)"),
-                                            onFavorite: { vm.toggleFavorite(type: "script", id: script.id) },
-                                            onSolo: { createAndNavigate(gameId: script.id, gameType: "murder_mystery") },
-                                            onCreateRoom: { createAndNavigate(gameId: script.id, gameType: "murder_mystery") }
-                                        )
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                            }
-                        }
-                        Spacer(minLength: 32)
+                    // Content
+                    ScrollView {
+                        gameGrid
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 24)
                     }
                 }
             }
-            .navigationTitle("Browse Games")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color(hex: "#0d0d0f"), for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .navigationBarHidden(true)
             .navigationDestination(isPresented: Binding(
                 get: { navigateToRoom != nil },
                 set: { if !$0 { navigateToRoom = nil } }
@@ -130,7 +50,15 @@ struct LobbyView: View {
                     RoomView(roomId: roomId)
                 }
             }
-            .task { await vm.load() }
+            .task {
+                await vm.load()
+                #if DEBUG
+                if let roomId = auth.debugRoomId {
+                    auth.debugRoomId = nil
+                    navigateToRoom = roomId
+                }
+                #endif
+            }
             .alert("Error", isPresented: Binding(
                 get: { vm.error != nil },
                 set: { if !$0 { vm.error = nil } }
@@ -142,21 +70,203 @@ struct LobbyView: View {
         }
     }
 
-    private func tabButton(_ label: String, tab: LobbyViewModel.GameTab) -> some View {
-        Button(label) { vm.selectedTab = tab }
-            .font(.system(size: 13, weight: .medium))
-            .foregroundColor(vm.selectedTab == tab ? Color(hex: "#c9a84c") : Color(hex: "#666680"))
-            .padding(.vertical, 8)
+    // MARK: - Header
+
+    private var headerView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("AI DM")
+                    .font(.system(size: 22, weight: .black, design: .serif))
+                    .foregroundStyle(LinearGradient(
+                        colors: [Color(hex: "#f0d878"), Color(hex: "#c9a84c")],
+                        startPoint: .leading, endPoint: .trailing
+                    ))
+                Text("Choose your adventure")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(hex: "#44446a"))
+            }
+            Spacer()
+            if vm.isLoading {
+                ProgressView()
+                    .tint(Color(hex: "#c9a84c"))
+                    .scaleEffect(0.8)
+            } else {
+                Button { Task { await vm.load() } } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(hex: "#44446a"))
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+    }
+
+    // MARK: - Join strip
+
+    private var joinStrip: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "key.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(hex: "#c9a84c").opacity(0.6))
+                TextField("Room code (e.g. ABC123)", text: $joinCode)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+                    .autocapitalization(.allCharacters)
+                    .disableAutocorrection(true)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 11)
+            .background(Color(hex: "#16151f"))
+            .cornerRadius(11)
+            .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color(hex: "#2a2840"), lineWidth: 1))
+
+            Button("Join") {
+                let code = joinCode.trimmingCharacters(in: .whitespaces).uppercased()
+                guard !code.isEmpty else { return }
+                navigateToRoom = code
+            }
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(.black)
+            .padding(.horizontal, 20).padding(.vertical, 11)
+            .background(Color(hex: "#c9a84c"))
+            .cornerRadius(11)
+        }
+    }
+
+    // MARK: - Tab bar
+
+    private var tabBar: some View {
+        HStack(spacing: 8) {
+            ForEach(LobbyViewModel.GameTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(.spring(response: 0.3)) { vm.selectedTab = tab }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(tab.icon)
+                            .font(.system(size: 14))
+                        Text(tab.label)
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(vm.selectedTab == tab ? .black : Color(hex: "#5555a0"))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background(vm.selectedTab == tab
+                        ? AnyShapeStyle(LinearGradient(colors: [Color(hex: "#e8c96a"), Color(hex: "#c9a84c")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        : AnyShapeStyle(Color(hex: "#16151f"))
+                    )
+                    .cornerRadius(10)
+                    .overlay(RoundedRectangle(cornerRadius: 10)
+                        .stroke(vm.selectedTab == tab ? Color.clear : Color(hex: "#2a2840"), lineWidth: 1))
+                }
+            }
+        }
+    }
+
+    // MARK: - Search
+
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13))
+                .foregroundColor(Color(hex: "#44446a"))
+            TextField("Search…", text: $vm.search)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+            if !vm.search.isEmpty {
+                Button { vm.search = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(hex: "#44446a"))
+                }
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(Color(hex: "#16151f"))
+        .cornerRadius(11)
+        .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color(hex: "#2a2840"), lineWidth: 1))
+    }
+
+    // MARK: - Grid
+
+    @ViewBuilder
+    private var gameGrid: some View {
+        let items = vm.selectedTab == .turtleSoup ? vm.filteredPuzzles.map(AnyGame.puzzle) : vm.filteredScripts.map(AnyGame.script)
+
+        if items.isEmpty && !vm.isLoading {
+            VStack(spacing: 12) {
+                Image(systemName: "eyes.inverse")
+                    .font(.system(size: 36))
+                    .foregroundColor(Color(hex: "#2a2840"))
+                Text("Nothing found")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(hex: "#44446a"))
+            }
             .frame(maxWidth: .infinity)
-            .background(vm.selectedTab == tab ? Color(hex: "#1e1e10") : Color.clear)
-            .cornerRadius(8)
+            .padding(.top, 60)
+        } else {
+            LazyVGrid(columns: columns, spacing: 14) {
+                ForEach(items) { item in
+                    GameCardView(
+                        title: item.title,
+                        difficulty: item.difficulty,
+                        tags: item.tags,
+                        gameType: item.gameType,
+                        itemId: item.id,
+                        isFavorite: vm.favorites.contains(item.favoriteKey),
+                        onFavorite: { vm.toggleFavorite(type: item.favType, id: item.id) },
+                        onSolo: { createAndNavigate(gameId: item.id, gameType: item.gameType) },
+                        onCreateRoom: { createAndNavigate(gameId: item.id, gameType: item.gameType) }
+                    )
+                }
+            }
+        }
     }
 
     private func createAndNavigate(gameId: String, gameType: String) {
+        guard !isCreating else { return }
+        isCreating = true
+        let lang = UserDefaults.standard.string(forKey: "lang") ?? "zh"
         Task {
-            if let roomId = await vm.createRoom(gameId: gameId, gameType: gameType) {
-                navigateToRoom = roomId
+            defer { isCreating = false }
+            do {
+                let resp = try await APIService.shared.createRoom(gameId: gameId, gameType: gameType, lang: lang)
+                navigateToRoom = resp.room_id
+            } catch {
+                vm.error = error.localizedDescription
             }
         }
+    }
+}
+
+// MARK: - AnyGame helper (unifies PuzzleSummary + ScriptSummary)
+
+private enum AnyGame: Identifiable {
+    case puzzle(PuzzleSummary)
+    case script(ScriptSummary)
+
+    var id: String {
+        switch self { case .puzzle(let p): return p.id; case .script(let s): return s.id }
+    }
+    var title: String {
+        switch self { case .puzzle(let p): return p.title; case .script(let s): return s.title }
+    }
+    var difficulty: String {
+        switch self { case .puzzle(let p): return p.difficulty; case .script(let s): return s.difficulty }
+    }
+    var tags: [String] {
+        switch self { case .puzzle(let p): return p.tags; case .script: return [] }
+    }
+    var gameType: String {
+        switch self { case .puzzle: return "turtle_soup"; case .script: return "murder_mystery" }
+    }
+    var favoriteKey: String {
+        switch self { case .puzzle(let p): return "puzzle:\(p.id)"; case .script(let s): return "script:\(s.id)" }
+    }
+    var favType: String {
+        switch self { case .puzzle: return "puzzle"; case .script: return "script" }
     }
 }

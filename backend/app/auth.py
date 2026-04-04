@@ -50,13 +50,18 @@ def init_auth_db() -> None:
                 game_type    TEXT NOT NULL,
                 title        TEXT NOT NULL,
                 player_count INTEGER NOT NULL DEFAULT 0,
-                played_at    TEXT NOT NULL
+                played_at    TEXT NOT NULL,
+                outcome      TEXT
             );
         """)
         # Idempotent migration: rename google_sub → provider_sub on existing DBs
         cols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
         if "google_sub" in cols and "provider_sub" not in cols:
             conn.execute("ALTER TABLE users RENAME COLUMN google_sub TO provider_sub")
+        # Idempotent migration: add outcome column if missing
+        history_cols = {row[1] for row in conn.execute("PRAGMA table_info(room_history)").fetchall()}
+        if "outcome" not in history_cols:
+            conn.execute("ALTER TABLE room_history ADD COLUMN outcome TEXT")
         conn.commit()
 
 
@@ -154,3 +159,12 @@ def list_history(user_id: str, limit: int = 50) -> list[dict]:
             (user_id, limit),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def complete_history(user_id: str, room_id: str, outcome: str) -> None:
+    with _lock, _conn() as conn:
+        conn.execute(
+            "UPDATE room_history SET outcome=? WHERE user_id=? AND room_id=?",
+            (outcome, user_id, room_id),
+        )
+        conn.commit()

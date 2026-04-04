@@ -39,6 +39,45 @@ struct HistoryItem: Codable, Identifiable {
     let title: String
     let player_count: Int
     let played_at: String
+    let outcome: String?
+}
+
+struct ActiveRoom: Codable, Identifiable {
+    let room_id: String
+    let game_type: String
+    let title: String
+    let player_count: Int
+    let connected_count: Int
+    let language: String
+    var id: String { room_id }
+}
+
+struct CommunityScript: Codable, Identifiable {
+    let script_id: String
+    let title: String
+    let author: String
+    let difficulty: String
+    let player_count: Int
+    let game_mode: String
+    let lang: String
+    let likes: Int
+    let created_at: String
+    var id: String { script_id }
+}
+
+// Feed item — local model combining puzzles, scripts, and community scripts
+struct FeedItem: Identifiable {
+    let id: String          // "puzzle:xxx" | "script:xxx"
+    let gameId: String
+    let title: String
+    let difficulty: String
+    let tags: [String]
+    let gameType: String    // "turtle_soup" | "murder_mystery"
+    let playerCount: Int
+    let author: String
+    let likeCount: Int
+    var isSaved: Bool
+    var isLiked: Bool
 }
 
 struct CreateRoomResponse: Codable {
@@ -86,11 +125,13 @@ struct PlayerInfo: Codable, Identifiable {
 struct RoomSnapshotPayload: Codable {
     let room_id: String?
     let game_type: String?
+    let title: String?
+    let surface: String?         // turtle soup: the opening question/scenario
     let phase: String?
     let current_phase: String?
     let phase_description: String?
     let players: [PlayerInfo]
-    let clues: [CluePayload]
+    let clues: [CluePayload]?    // optional — turtle soup omits this
     let time_remaining: Int?
 }
 
@@ -150,5 +191,26 @@ extension Color {
         let g = Double((int >> 8) & 0xFF) / 255
         let b = Double(int & 0xFF) / 255
         self.init(red: r, green: g, blue: b)
+    }
+}
+
+// MARK: - Difficulty helpers
+
+/// Normalises any difficulty string (Chinese or English) to "easy" | "medium" | "hard"
+func normalizedDifficulty(_ s: String) -> String {
+    switch s.lowercased() {
+    case "简单", "easy", "beginner": return "easy"
+    case "困难", "hard", "advanced": return "hard"
+    default: return "medium"   // 中等 / medium / intermediate / unknown
+    }
+}
+
+/// Returns a localised display string based on the app's current language setting
+func localizedDifficulty(_ s: String) -> String {
+    let lang = UserDefaults.standard.string(forKey: "lang") ?? "zh"
+    switch normalizedDifficulty(s) {
+    case "easy": return lang == "zh" ? "简单" : "Easy"
+    case "hard": return lang == "zh" ? "困难" : "Hard"
+    default:     return lang == "zh" ? "中等" : "Medium"
     }
 }

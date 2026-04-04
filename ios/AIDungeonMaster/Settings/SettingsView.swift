@@ -2,90 +2,108 @@ import SwiftUI
 
 struct SettingsView: View {
     @AppStorage("lang") private var lang: String = "zh"
-    @State private var customBaseURL: String = ""
-    @EnvironmentObject var auth: AuthViewModel
 
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(hex: "#0d0d0f").ignoresSafeArea()
+                Color(hex: "#0a0a0f").ignoresSafeArea()
 
                 List {
-                    // Language
                     Section {
-                        HStack {
-                            Text("Language")
-                                .foregroundColor(.white)
-                            Spacer()
-                            Picker("Language", selection: $lang) {
-                                Text("中文").tag("zh")
-                                Text("English").tag("en")
-                            }
-                            .pickerStyle(.segmented)
-                            .frame(width: 150)
-                        }
+                        languagePicker
                     } header: {
-                        Text("Game")
-                            .foregroundColor(Color(hex: "#666680"))
+                        sectionHeader("Game")
                     }
-                    .listRowBackground(Color(hex: "#141420"))
+                    .listRowBackground(Color(hex: "#16151f"))
 
                     #if DEBUG
-                    // Server URL
                     Section {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Backend URL")
-                                .foregroundColor(Color(hex: "#666680"))
-                                .font(.system(size: 11))
-                            TextField(AppConfig.baseURL, text: $customBaseURL)
-                                .textFieldStyle(.plain)
-                                .foregroundColor(.white)
-                                .font(.system(size: 14))
-                                .autocapitalization(.none)
-                                .disableAutocorrection(true)
-                                .keyboardType(.URL)
-                            Button("Save URL") {
-                                let trimmed = customBaseURL.trimmingCharacters(in: .whitespaces)
-                                if !trimmed.isEmpty {
-                                    UserDefaults.standard.set(trimmed, forKey: "dev_base_url")
-                                }
-                            }
-                            .foregroundColor(Color(hex: "#c9a84c"))
-                            .font(.system(size: 13))
-                        }
-                        .padding(.vertical, 4)
+                        DevServerRow()
                     } header: {
-                        Text("Developer")
-                            .foregroundColor(Color(hex: "#666680"))
+                        sectionHeader("Developer")
                     }
-                    .listRowBackground(Color(hex: "#141420"))
+                    .listRowBackground(Color(hex: "#16151f"))
                     #endif
 
-                    // About
                     Section {
-                        HStack {
-                            Text("Version")
-                                .foregroundColor(.white)
-                            Spacer()
-                            Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
-                                .foregroundColor(Color(hex: "#666680"))
-                        }
+                        aboutRow("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
+                        aboutRow("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1")
                     } header: {
-                        Text("About")
-                            .foregroundColor(Color(hex: "#666680"))
+                        sectionHeader("About")
                     }
-                    .listRowBackground(Color(hex: "#141420"))
+                    .listRowBackground(Color(hex: "#16151f"))
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color(hex: "#0d0d0f"), for: .navigationBar)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(Color(hex: "#0a0a0f"), for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .onAppear {
-                customBaseURL = UserDefaults.standard.string(forKey: "dev_base_url") ?? ""
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .bold))
+            .foregroundColor(Color(hex: "#44446a"))
+            .tracking(1.5)
+    }
+
+    private var languagePicker: some View {
+        HStack {
+            Image(systemName: "globe")
+                .foregroundColor(Color(hex: "#c9a84c"))
+                .frame(width: 28)
+            Text("Language")
+                .foregroundColor(.white)
+            Spacer()
+            Picker("", selection: $lang) {
+                Text("中文").tag("zh")
+                Text("English").tag("en")
             }
+            .pickerStyle(.segmented)
+            .frame(width: 140)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func aboutRow(_ label: String, value: String) -> some View {
+        HStack {
+            Text(label).foregroundColor(.white)
+            Spacer()
+            Text(value).foregroundColor(Color(hex: "#44446a"))
         }
     }
 }
+
+#if DEBUG
+private struct DevServerRow: View {
+    @State private var url: String = UserDefaults.standard.string(forKey: "dev_base_url") ?? ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "server.rack")
+                    .foregroundColor(Color(hex: "#c9a84c"))
+                    .frame(width: 28)
+                Text("Backend URL")
+                    .foregroundColor(.white)
+            }
+            TextField(AppConfig.baseURL, text: $url)
+                .textFieldStyle(.plain)
+                .foregroundColor(Color(hex: "#c9a84c"))
+                .font(.system(size: 13, design: .monospaced))
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+                .keyboardType(.URL)
+            Button("Save") {
+                UserDefaults.standard.set(url.trimmingCharacters(in: .whitespaces), forKey: "dev_base_url")
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(Color(hex: "#c9a84c"))
+        }
+        .padding(.vertical, 4)
+    }
+}
+#endif

@@ -6,120 +6,187 @@ struct LoginView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#0d0d0f").ignoresSafeArea()
+            // Rich background
+            LinearGradient(
+                colors: [Color(hex: "#0a0a0f"), Color(hex: "#12101a"), Color(hex: "#0d0810")],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            // Subtle grid pattern
+            Canvas { ctx, size in
+                let spacing: CGFloat = 40
+                let cols = Int(size.width / spacing) + 2
+                let rows = Int(size.height / spacing) + 2
+                var path = Path()
+                for i in 0...cols {
+                    let x = CGFloat(i) * spacing
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x, y: size.height))
+                }
+                for i in 0...rows {
+                    let y = CGFloat(i) * spacing
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: size.width, y: y))
+                }
+                ctx.stroke(path, with: .color(Color.white.opacity(0.025)), lineWidth: 0.5)
+            }
+            .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer()
 
-                Image(systemName: "clock.circle.fill")
-                    .font(.system(size: 56))
-                    .foregroundColor(Color(hex: "#c9a84c"))
-                    .padding(.bottom, 20)
+                // Logo area
+                VStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [Color(hex: "#c9a84c").opacity(0.3), Color.clear],
+                                    center: .center, startRadius: 0, endRadius: 50
+                                )
+                            )
+                            .frame(width: 100, height: 100)
 
-                Text("AI DM")
-                    .font(.system(size: 32, weight: .black))
-                    .foregroundColor(.white)
+                        Image(systemName: "theatermasks.fill")
+                            .font(.system(size: 44))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: "#e8c96a"), Color(hex: "#a07830")],
+                                    startPoint: .top, endPoint: .bottom
+                                )
+                            )
+                    }
 
-                Text("AI-powered mystery game master")
-                    .font(.system(size: 14))
-                    .foregroundColor(Color(hex: "#666680"))
-                    .padding(.top, 8)
-                    .padding(.bottom, 40)
+                    VStack(spacing: 6) {
+                        Text("AI DM")
+                            .font(.system(size: 38, weight: .black, design: .serif))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: "#f0d878"), Color(hex: "#c9a84c")],
+                                    startPoint: .top, endPoint: .bottom
+                                )
+                            )
+                            .tracking(4)
 
+                        Text("Mystery awaits")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(hex: "#6060a0"))
+                            .tracking(2)
+                    }
+                }
+                .padding(.bottom, 52)
+
+                // Error
                 if let error = auth.error {
-                    Text(error)
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(hex: "#f87171"))
-                        .padding(.horizontal, 24)
-                        .multilineTextAlignment(.center)
-                        .padding(.bottom, 16)
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12))
+                        Text(error)
+                            .font(.system(size: 13))
+                    }
+                    .foregroundColor(Color(hex: "#f87171"))
+                    .padding(.horizontal, 20).padding(.vertical, 10)
+                    .background(Color(hex: "#f87171").opacity(0.08))
+                    .cornerRadius(10)
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 20)
                 }
 
+                // Auth buttons
                 VStack(spacing: 12) {
-                    Button {
-                        auth.googleSignIn()
-                    } label: {
+                    Button { auth.googleSignIn() } label: {
                         HStack(spacing: 12) {
-                            GoogleLogoView()
-                                .frame(width: 20, height: 20)
-                            Text("Sign in with Google")
-                                .font(.system(size: 15, weight: .medium))
+                            GoogleLogoView().frame(width: 18, height: 18)
+                            Text("Continue with Google")
+                                .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(.white)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color(hex: "#1e1e28"))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "#2e2e3d"), lineWidth: 1))
-                        .cornerRadius(12)
+                        .padding(.vertical, 15)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color(hex: "#1c1c2e"))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: "#2e2e4a"), lineWidth: 1))
+                        )
                     }
 
-                    SignInWithAppleButton(.signIn) { request in
-                        request.requestedScopes = [.fullName, .email]
+                    SignInWithAppleButton(.continue) { req in
+                        req.requestedScopes = [.fullName, .email]
                     } onCompletion: { _ in
                         auth.appleSignIn()
                     }
                     .signInWithAppleButtonStyle(.white)
                     .frame(height: 50)
-                    .cornerRadius(12)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
 
                     #if DEBUG
                     DevLoginView()
                     #endif
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 28)
 
                 Spacer()
 
-                Text("Sign in to save favorites and game history")
+                Text("Your secrets are safe with us")
                     .font(.system(size: 11))
-                    .foregroundColor(Color(hex: "#44445a"))
-                    .padding(.bottom, 32)
+                    .foregroundColor(Color(hex: "#333360"))
+                    .tracking(1)
+                    .padding(.bottom, 36)
             }
         }
     }
 }
 
-// MARK: - Dev login (DEBUG only)
+// MARK: - Dev login
 
 private struct DevLoginView: View {
     @EnvironmentObject var auth: AuthViewModel
     @State private var name = ""
 
     var body: some View {
-        VStack(spacing: 8) {
-            Divider().background(Color(hex: "#2e2e3d")).padding(.top, 8)
-            Text("Dev login")
-                .font(.system(size: 11))
-                .foregroundColor(Color(hex: "#44445a"))
+        VStack(spacing: 10) {
+            HStack {
+                Rectangle().fill(Color(hex: "#2e2e4a")).frame(height: 1)
+                Text("DEV")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Color(hex: "#444480"))
+                    .tracking(2)
+                Rectangle().fill(Color(hex: "#2e2e4a")).frame(height: 1)
+            }
+            .padding(.top, 4)
+
             HStack(spacing: 8) {
-                TextField("Your name", text: $name)
+                TextField("Name", text: $name)
                     .textFieldStyle(.plain)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(Color(hex: "#1e1e28"))
-                    .cornerRadius(8)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .background(Color(hex: "#1c1c2e"))
                     .foregroundColor(.white)
                     .font(.system(size: 14))
+                    .cornerRadius(10)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: "#2e2e4a"), lineWidth: 1))
+
                 Button("Go") {
-                    let trimmed = name.trimmingCharacters(in: .whitespaces)
-                    guard !trimmed.isEmpty else { return }
+                    let t = name.trimmingCharacters(in: .whitespaces)
+                    guard !t.isEmpty else { return }
                     Task {
-                        let token = await DevLoginHelper.fetchToken(baseURL: AppConfig.baseURL, name: trimmed)
+                        let token = await DevLoginHelper.fetchToken(baseURL: AppConfig.baseURL, name: t)
                         if let token {
                             KeychainService.save(token: token)
                             await auth.validateSession()
                         } else {
-                            auth.error = "Dev login failed"
+                            auth.error = "Dev login unavailable (Google creds active)"
                         }
                     }
                 }
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 11)
                 .background(Color(hex: "#c9a84c"))
                 .foregroundColor(.black)
-                .font(.system(size: 14, weight: .semibold))
-                .cornerRadius(8)
+                .font(.system(size: 14, weight: .bold))
+                .cornerRadius(10)
             }
         }
         .padding(.top, 4)
@@ -135,16 +202,13 @@ enum DevLoginHelper {
 
         final class RedirectCatcher: NSObject, URLSessionTaskDelegate {
             var capturedToken: String?
-            func urlSession(
-                _ session: URLSession,
-                task: URLSessionTask,
-                willPerformHTTPRedirection response: HTTPURLResponse,
-                newRequest request: URLRequest,
-                completionHandler: @escaping (URLRequest?) -> Void
-            ) {
+            func urlSession(_ session: URLSession, task: URLSessionTask,
+                            willPerformHTTPRedirection response: HTTPURLResponse,
+                            newRequest request: URLRequest,
+                            completionHandler: @escaping (URLRequest?) -> Void) {
                 if let url = request.url, url.scheme == "aidm" {
-                    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-                    capturedToken = components?.queryItems?.first(where: { $0.name == "token" })?.value
+                    capturedToken = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                        .queryItems?.first(where: { $0.name == "token" })?.value
                     completionHandler(nil)
                 } else {
                     completionHandler(request)

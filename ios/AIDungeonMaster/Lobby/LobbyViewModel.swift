@@ -10,7 +10,11 @@ final class LobbyViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
-    enum GameTab { case turtleSoup, murderMystery }
+    enum GameTab: CaseIterable {
+        case turtleSoup, murderMystery
+        var label: String { self == .turtleSoup ? "Turtle Soup" : "Murder Mystery" }
+        var icon: String { self == .turtleSoup ? "🐢" : "🔍" }
+    }
 
     var lang: String {
         UserDefaults.standard.string(forKey: "lang") ?? "zh"

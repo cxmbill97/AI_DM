@@ -26,6 +26,7 @@ final class RoomViewModel: ObservableObject {
 
     let roomId: String
     private let ws = WebSocketService()
+    private var surfaceShown = false
 
     init(roomId: String) {
         self.roomId = roomId
@@ -75,6 +76,7 @@ final class RoomViewModel: ObservableObject {
                 truth = t
                 gameWon = true
                 messages.append(ChatMessage(sender: "System", text: "🎉 \(t)", type: .system))
+                Task { try? await APIService.shared.completeRoom(roomId: roomId, outcome: "success") }
             }
 
         case .system(let s):
@@ -82,10 +84,16 @@ final class RoomViewModel: ObservableObject {
 
         case .roomSnapshot(let snap):
             players = snap.players
-            clues = snap.clues
+            clues = snap.clues ?? []
             phase = snap.phase ?? snap.current_phase ?? ""
             phaseDescription = snap.phase_description ?? ""
             timeRemaining = snap.time_remaining
+            // Show puzzle surface as first message (insert at 0, above any "joined" system notice)
+            if !surfaceShown, let surface = snap.surface {
+                surfaceShown = true
+                let title = snap.title ?? "Mystery"
+                messages.insert(ChatMessage(sender: title, text: surface, type: .dm), at: 0)
+            }
 
         case .error(let e):
             messages.append(ChatMessage(sender: "System", text: "⚠️ \(e.message)", type: .error))
