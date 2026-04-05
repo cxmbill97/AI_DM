@@ -139,15 +139,18 @@ def _next_non_typing(ws: Any) -> dict:
 
 
 def _drain_others_join_notice(ws: Any) -> dict:
-    """When another player joins, existing players get a system notice
-    followed by a players_update message.
+    """When another player joins, existing players get a system notice,
+    optionally a player_joined lobby event, then a players_update message.
 
-    Reads both and returns the system notice.
+    Reads all and returns the system notice.
     """
     msg = ws.receive_json()
     assert msg["type"] == "system"
-    update = ws.receive_json()
-    assert update["type"] == "players_update"
+    next_msg = ws.receive_json()
+    # Consume optional player_joined lobby event
+    if next_msg["type"] == "player_joined":
+        next_msg = ws.receive_json()
+    assert next_msg["type"] == "players_update"
     return msg
 
 

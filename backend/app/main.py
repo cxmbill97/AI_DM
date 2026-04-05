@@ -493,6 +493,7 @@ class CreateRoomRequest(BaseModel):
     script_id: str | None = None  # murder_mystery: required
     language: str = "zh"  # "zh" | "en"
     is_public: bool = True
+    lobby_mode: bool = False  # True → room stays in lobby until host starts; False → start immediately (backward compat)
 
 
 @app.post("/api/rooms")
@@ -514,7 +515,10 @@ async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         room_id = room_manager.create_room(script=script, language=lang)
-        room_manager.rooms[room_id].is_public = body.is_public
+        room = room_manager.rooms[room_id]
+        room.is_public = body.is_public
+        if not body.lobby_mode:
+            room.started = True
         return {"room_id": room_id, "game_type": "murder_mystery", "script_id": script.id}
 
     # turtle_soup (default)
@@ -523,7 +527,10 @@ async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     room_id = room_manager.create_room(puzzle=puzzle, language=lang)
-    room_manager.rooms[room_id].is_public = body.is_public
+    room = room_manager.rooms[room_id]
+    room.is_public = body.is_public
+    if not body.lobby_mode:
+        room.started = True
     return {"room_id": room_id, "game_type": "turtle_soup", "puzzle_id": puzzle.id}
 
 
