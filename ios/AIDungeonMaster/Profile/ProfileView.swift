@@ -4,7 +4,7 @@ struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
     @EnvironmentObject var auth: AuthViewModel
     @State private var selectedTab = 0
-    @State private var navigateToRoom: String? = nil
+    @State private var waitingRoomDest: WaitingRoomDestination? = nil
     @State private var isCreating = false
     @State private var error: String?
 
@@ -49,10 +49,12 @@ struct ProfileView: View {
             .navigationBarHidden(true)
             .task { await vm.load() }
             .navigationDestination(isPresented: Binding(
-                get: { navigateToRoom != nil },
-                set: { if !$0 { navigateToRoom = nil } }
+                get: { waitingRoomDest != nil },
+                set: { if !$0 { waitingRoomDest = nil } }
             )) {
-                if let roomId = navigateToRoom { RoomView(roomId: roomId) }
+                if let dest = waitingRoomDest {
+                    WaitingRoomView(gameId: dest.gameId, gameType: dest.gameType, roomId: dest.roomId)
+                }
             }
             .alert("Error", isPresented: Binding(
                 get: { error != nil },
@@ -225,8 +227,8 @@ struct ProfileView: View {
         Task {
             defer { isCreating = false }
             do {
-                let resp = try await APIService.shared.createRoom(gameId: game.gameId, gameType: game.gameType, lang: lang, isPublic: false)
-                navigateToRoom = resp.room_id
+                let resp = try await APIService.shared.createRoom(gameId: game.gameId, gameType: game.gameType, lang: lang, lobbyMode: true)
+                waitingRoomDest = WaitingRoomDestination(gameId: game.gameId, gameType: game.gameType, roomId: resp.room_id)
             } catch { self.error = error.localizedDescription }
         }
     }

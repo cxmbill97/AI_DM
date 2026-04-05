@@ -86,22 +86,37 @@ final class APIService {
         try await request("/api/scripts?lang=\(lang)")
     }
 
-    func createRoom(gameId: String, gameType: String, lang: String, isPublic: Bool = true) async throws -> CreateRoomResponse {
+    func createRoom(gameId: String, gameType: String, lang: String, isPublic: Bool = true, lobbyMode: Bool = true) async throws -> CreateRoomResponse {
         struct Body: Encodable {
             let game_type: String
             let puzzle_id: String?
             let script_id: String?
             let language: String
             let is_public: Bool
+            let lobby_mode: Bool
         }
         let body = Body(
             game_type: gameType,
             puzzle_id: gameType == "turtle_soup" ? gameId : nil,
             script_id: gameType == "murder_mystery" ? gameId : nil,
             language: lang,
-            is_public: isPublic
+            is_public: isPublic,
+            lobby_mode: lobbyMode
         )
         return try await request("/api/rooms", method: "POST", body: body)
+    }
+
+    func startRoom(roomId: String) async throws {
+        try await requestRaw("/api/rooms/\(roomId)/start", method: "POST")
+    }
+
+    func patchRoom(roomId: String, isPublic: Bool? = nil, maxPlayers: Int? = nil) async throws {
+        struct Body: Encodable {
+            let is_public: Bool?
+            let max_players: Int?
+        }
+        let data = try JSONEncoder().encode(Body(is_public: isPublic, max_players: maxPlayers))
+        try await requestRaw("/api/rooms/\(roomId)", method: "PATCH", jsonData: data)
     }
 
     func completeRoom(roomId: String, outcome: String) async throws {

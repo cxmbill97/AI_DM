@@ -1,12 +1,16 @@
 import SwiftUI
 
+struct WaitingRoomDestination: Hashable {
+    let gameId: String
+    let gameType: String
+    let roomId: String
+}
+
 struct HomeView: View {
     @EnvironmentObject private var auth: AuthViewModel
     @StateObject private var vm = HomeViewModel()
-    @State private var navigateToRoom: String? = nil
+    @State private var waitingRoomDest: WaitingRoomDestination? = nil
     @State private var isCreating = false
-    @State private var showGameModeSheet = false
-    @State private var pendingItem: FeedItem?
 
     var body: some View {
         NavigationStack {
@@ -31,7 +35,7 @@ struct HomeView: View {
                                         item: item,
                                         onSave: { vm.toggleSave(item: item) },
                                         onLike: { vm.toggleLike(item: item) },
-                                        onPlay: { pendingItem = item; showGameModeSheet = true }
+                                        onPlay: { createAndNavigate(item: item) }
                                     )
                                     .padding(.bottom, 12)
                                 }
@@ -51,27 +55,26 @@ struct HomeView: View {
             }
             .navigationBarHidden(true)
             .navigationDestination(isPresented: Binding(
-                get: { navigateToRoom != nil },
-                set: { if !$0 { navigateToRoom = nil } }
+                get: { waitingRoomDest != nil },
+                set: { if !$0 { waitingRoomDest = nil } }
             )) {
-                if let roomId = navigateToRoom { RoomView(roomId: roomId) }
+                if let dest = waitingRoomDest {
+                    WaitingRoomView(gameId: dest.gameId, gameType: dest.gameType, roomId: dest.roomId)
+                }
             }
             .task {
                 await vm.load()
                 #if DEBUG
                 if let roomId = auth.debugRoomId {
-                    auth.debugRoomId = nil  // consume once — prevents re-navigation on tab switch
-                    navigateToRoom = roomId
+                    auth.debugRoomId = nil
+                    waitingRoomDest = WaitingRoomDestination(gameId: "", gameType: "turtle_soup", roomId: roomId)
                 }
                 #endif
             }
-            .sheet(isPresented: $showGameModeSheet) {
-                if let item = pendingItem {
-                    GameModeSheet { isPublic in
-                        showGameModeSheet = false
-                        createAndNavigate(item: item, isPublic: isPublic)
-                    }
-                }
+            .onChange(of: auth.pendingRoomId) { _ in
+                guard let roomId = auth.pendingRoomId else { return }
+                auth.pendingRoomId = nil
+                waitingRoomDest = WaitingRoomDestination(gameId: "", gameType: "turtle_soup", roomId: roomId)
             }
             .alert("Error", isPresented: Binding(
                 get: { vm.error != nil },
@@ -159,7 +162,7 @@ struct HomeView: View {
 
     // MARK: - Create room
 
-    private func createAndNavigate(item: FeedItem, isPublic: Bool = true) {
+    private func createAndNavigate(item: FeedItem) {
         guard !isCreating else { return }
         isCreating = true
         let lang = UserDefaults.standard.string(forKey: "lang") ?? "zh"
@@ -170,9 +173,9 @@ struct HomeView: View {
                     gameId: item.gameId,
                     gameType: item.gameType,
                     lang: lang,
-                    isPublic: isPublic
+                    lobbyMode: true
                 )
-                navigateToRoom = resp.room_id
+                waitingRoomDest = WaitingRoomDestination(gameId: item.gameId, gameType: item.gameType, roomId: resp.room_id)
             } catch {
                 vm.error = error.localizedDescription
             }

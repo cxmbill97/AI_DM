@@ -101,6 +101,14 @@ final class RoomViewModel: ObservableObject {
             messages.append(ChatMessage(sender: "System", text: "⚠️ \(e.message)", type: .error))
             errorMessage = e.message
 
+        case .lobbyPlayerJoined, .lobbyPlayerReady:
+            // Lobby events — ignored once game has started
+            break
+
+        case .gameStarted:
+            // Already in the room view; no action needed
+            break
+
         case .unknown:
             break
         }

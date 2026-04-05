@@ -40,8 +40,20 @@ final class AuthViewModel: NSObject, ObservableObject {
         user = nil
     }
 
+    /// Published room ID for deep link `aidm://room/{id}` — consumed once by the active view
+    @Published var pendingRoomId: String? = nil
+
     func handleDeepLink(_ url: URL) {
-        guard url.scheme == "aidm", url.host == "auth" else { return }
+        guard url.scheme == "aidm" else { return }
+
+        if url.host == "room" {
+            // aidm://room/{room_id}
+            let roomId = url.pathComponents.dropFirst().joined()
+            if !roomId.isEmpty { pendingRoomId = roomId }
+            return
+        }
+
+        guard url.host == "auth" else { return }
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         if let token = components?.queryItems?.first(where: { $0.name == "token" })?.value {
             KeychainService.save(token: token)

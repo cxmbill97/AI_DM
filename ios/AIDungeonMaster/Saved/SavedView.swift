@@ -2,10 +2,8 @@ import SwiftUI
 
 struct SavedView: View {
     @StateObject private var vm = SavedViewModel()
-    @State private var navigateToRoom: String? = nil
+    @State private var waitingRoomDest: WaitingRoomDestination? = nil
     @State private var isCreating = false
-    @State private var showGameModeSheet = false
-    @State private var pendingItem: SavedViewModel.SavedFeedItem? = nil
 
     var body: some View {
         NavigationStack {
@@ -42,8 +40,7 @@ struct SavedView: View {
                             LazyVStack(spacing: 10) {
                                 ForEach(vm.savedItems) { item in
                                     SavedRow(item: item, onPlay: {
-                                        pendingItem = item
-                                        showGameModeSheet = true
+                                        createAndNavigate(gameId: item.gameId, gameType: item.gameType)
                                     }, onRemove: {
                                         vm.remove(item: item)
                                     })
@@ -57,20 +54,14 @@ struct SavedView: View {
             }
             .navigationBarHidden(true)
             .navigationDestination(isPresented: Binding(
-                get: { navigateToRoom != nil },
-                set: { if !$0 { navigateToRoom = nil } }
+                get: { waitingRoomDest != nil },
+                set: { if !$0 { waitingRoomDest = nil } }
             )) {
-                if let roomId = navigateToRoom { RoomView(roomId: roomId) }
-            }
-            .task { await vm.load() }
-            .sheet(isPresented: $showGameModeSheet) {
-                if let item = pendingItem {
-                    GameModeSheet { isPublic in
-                        showGameModeSheet = false
-                        createAndNavigate(gameId: item.gameId, gameType: item.gameType, isPublic: isPublic)
-                    }
+                if let dest = waitingRoomDest {
+                    WaitingRoomView(gameId: dest.gameId, gameType: dest.gameType, roomId: dest.roomId)
                 }
             }
+            .task { await vm.load() }
             .alert("Error", isPresented: Binding(
                 get: { vm.error != nil },
                 set: { if !$0 { vm.error = nil } }
@@ -100,15 +91,15 @@ struct SavedView: View {
         .padding(.top, 80)
     }
 
-    private func createAndNavigate(gameId: String, gameType: String, isPublic: Bool = true) {
+    private func createAndNavigate(gameId: String, gameType: String) {
         guard !isCreating else { return }
         isCreating = true
         let lang = UserDefaults.standard.string(forKey: "lang") ?? "zh"
         Task {
             defer { isCreating = false }
             do {
-                let resp = try await APIService.shared.createRoom(gameId: gameId, gameType: gameType, lang: lang, isPublic: isPublic)
-                navigateToRoom = resp.room_id
+                let resp = try await APIService.shared.createRoom(gameId: gameId, gameType: gameType, lang: lang, lobbyMode: true)
+                waitingRoomDest = WaitingRoomDestination(gameId: gameId, gameType: gameType, roomId: resp.room_id)
             } catch {
                 vm.error = error.localizedDescription
             }
