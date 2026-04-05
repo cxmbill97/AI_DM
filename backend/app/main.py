@@ -114,6 +114,19 @@ def _require_user(request: Request) -> dict:
     return user
 
 
+def _optional_user(request: Request) -> dict | None:
+    """Dependency: like _require_user but returns None instead of raising when unauthenticated."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth.removeprefix("Bearer ").strip()
+    try:
+        payload = decode_jwt(token)
+    except ValueError:
+        return None
+    return get_user_by_id(payload["sub"])
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -497,7 +510,7 @@ class CreateRoomRequest(BaseModel):
 
 
 @app.post("/api/rooms")
-async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
+async def create_room(body: CreateRoomRequest = CreateRoomRequest(), user: dict | None = Depends(_optional_user)) -> dict:
     """Create a new multiplayer room.
 
     For turtle_soup: pass puzzle_id (or omit for random).
@@ -517,6 +530,8 @@ async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
         room_id = room_manager.create_room(script=script, language=lang)
         room = room_manager.rooms[room_id]
         room.is_public = body.is_public
+        if user:
+            room.host_user_id = str(user["id"])
         if not body.lobby_mode:
             room.started = True
         return {"room_id": room_id, "game_type": "murder_mystery", "script_id": script.id}
@@ -529,6 +544,8 @@ async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
     room_id = room_manager.create_room(puzzle=puzzle, language=lang)
     room = room_manager.rooms[room_id]
     room.is_public = body.is_public
+    if user:
+        room.host_user_id = str(user["id"])
     if not body.lobby_mode:
         room.started = True
     return {"room_id": room_id, "game_type": "turtle_soup", "puzzle_id": puzzle.id}
@@ -612,6 +629,49 @@ async def complete_room(room_id: str, body: dict, user: dict = Depends(_require_
     if outcome not in ("success", "failed"):
         raise HTTPException(status_code=422, detail="outcome must be 'success' or 'failed'")
     complete_history(user_id=user["id"], room_id=room_id, outcome=outcome)
+    return {"ok": True}
+
+
+@app.post("/api/rooms/{room_id}/start")
+async def start_room(room_id: str, user: dict | None = Depends(_optional_user)) -> dict:
+    """Host starts the game — sets room.started=True and broadcasts game_started to all players."""
+    import asyncio as _asyncio  # noqa: PLC0415
+
+    room = room_manager.get_room(room_id)
+    if room is None:
+        raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
+    if room.started:
+        return {"ok": True, "already_started": True}
+    # Verify the caller is the host (if authenticated)
+    if user and room.host_user_id and str(user["id"]) != room.host_user_id:
+        raise HTTPException(status_code=403, detail="Only the host can start the game")
+    room.started = True
+    event = {"type": "game_started", "room_id": room_id}
+    _asyncio.get_event_loop().call_soon(
+        lambda: _asyncio.ensure_future(room.broadcast(event))
+    )
+    return {"ok": True}
+
+
+class PatchRoomRequest(BaseModel):
+    is_public: bool | None = None
+    max_players: int | None = None
+
+
+@app.patch("/api/rooms/{room_id}")
+async def patch_room(room_id: str, body: PatchRoomRequest, user: dict | None = Depends(_optional_user)) -> dict:
+    """Update room settings (host only). Supports is_public and max_players."""
+    room = room_manager.get_room(room_id)
+    if room is None:
+        raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
+    if user and room.host_user_id and str(user["id"]) != room.host_user_id:
+        raise HTTPException(status_code=403, detail="Only the host can modify room settings")
+    if body.is_public is not None:
+        room.is_public = body.is_public
+    if body.max_players is not None:
+        if not (2 <= body.max_players <= 8):
+            raise HTTPException(status_code=422, detail="max_players must be between 2 and 8")
+        room.max_players = body.max_players
     return {"ok": True}
 
 
