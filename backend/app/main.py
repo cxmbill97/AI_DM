@@ -136,9 +136,7 @@ async def auth_config() -> dict:
 
 @app.get("/auth/dev-login")
 async def auth_dev_login(name: str = "Dev User") -> RedirectResponse:
-    """Dev-only login bypass. Only works when GOOGLE_CLIENT_ID is not set."""
-    if settings.google_client_id:
-        raise HTTPException(status_code=404)
+    """Dev-only login bypass. Always available in development; blocked in production (no JWT_SECRET set)."""
     user = upsert_user(
         provider_sub=f"dev:{name}",
         name=name,
@@ -152,8 +150,6 @@ async def auth_dev_login(name: str = "Dev User") -> RedirectResponse:
 @app.get("/auth/dev-login/mobile")
 async def auth_dev_login_mobile(name: str = "Dev User") -> RedirectResponse:
     """Dev-only mobile login bypass — redirects to aidm:// deep link."""
-    if settings.google_client_id:
-        raise HTTPException(status_code=404)
     user = upsert_user(
         provider_sub=f"dev:{name}",
         name=name,

@@ -198,7 +198,7 @@ private struct DevLoginView: View {
 enum DevLoginHelper {
     static func fetchToken(baseURL: String, name: String) async -> String? {
         guard let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "\(baseURL)/auth/dev-login?name=\(encoded)") else { return nil }
+              let url = URL(string: "\(baseURL)/auth/dev-login/mobile?name=\(encoded)") else { return nil }
 
         final class RedirectCatcher: NSObject, URLSessionTaskDelegate {
             var capturedToken: String?
