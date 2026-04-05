@@ -94,9 +94,13 @@ def _mm_snapshot(room: Room, player_id: str) -> dict[str, Any]:
                 "name": p["name"],
                 "connected": p["connected"],
                 "character": room._char_assignments.get(pid),
+                "is_host": pid == room.host_player_id,
+                "is_ready": pid in room.ready_players,
             }
             for pid, p in room.players.items()
         ],
+        "started": room.started,
+        "max_players": room.max_players,
         # Public character list — no secret_bio, no is_culprit
         "characters": [{"id": c.id, "name": c.name, "public_bio": c.public_bio} for c in room.script.characters],
         "game_mode": room.script.game_mode,
@@ -915,11 +919,33 @@ async def websocket_endpoint(
         }
         room.message_history.append(join_notice)
         await room.broadcast(join_notice)
+        # Structured event for lobby UI — sent to EXISTING players only,
+        # not the joiner (who gets a full snapshot below)
+        if not room.started:
+            joined_event: dict[str, Any] = {
+                "type": "player_joined",
+                "player_id": player_id,
+                "player_name": player_name,
+                "is_host": player_id == room.host_player_id,
+                "timestamp": time.time(),
+            }
+            for existing_pid in room.players:
+                if existing_pid != player_id:
+                    await room.send_to(existing_pid, joined_event)
 
     # ----------------------------------------------------------------
     # Send room snapshot to joining player; broadcast updated player
     # list to everyone else so their "Waiting for players" banner updates.
     # ----------------------------------------------------------------
+    def _lobby_player(pid: str, p: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": pid,
+            "name": p["name"],
+            "connected": p["connected"],
+            "is_host": pid == room.host_player_id,
+            "is_ready": pid in room.ready_players,
+        }
+
     if room.game_type == "murder_mystery":
         snapshot = _mm_snapshot(room, player_id)
         await room.send_to(player_id, snapshot)
@@ -932,7 +958,7 @@ async def websocket_endpoint(
             if pid != player_id:
                 await room.send_to(pid, players_update)
     else:
-        players_list = [{"id": pid, "name": p["name"], "connected": p["connected"]} for pid, p in room.players.items()]
+        players_list = [_lobby_player(pid, p) for pid, p in room.players.items()]
         snapshot = {
             "type": "room_snapshot",
             "game_type": "turtle_soup",
@@ -942,6 +968,8 @@ async def websocket_endpoint(
             "surface": room.puzzle.surface,
             "players": players_list,
             "phase": room.phase,
+            "started": room.started,
+            "max_players": room.max_players,
         }
         await room.send_to(player_id, snapshot)
         # Broadcast updated player list to all other players
@@ -989,7 +1017,8 @@ async def websocket_endpoint(
     # Murder mystery: send opening narration once a second player joins
     # ----------------------------------------------------------------
     if (
-        room.game_type == "murder_mystery"
+        room.started
+        and room.game_type == "murder_mystery"
         and not room._opening_narrated
         and room.state_machine is not None
         and room.state_machine.current_phase == "opening"
@@ -1030,6 +1059,25 @@ async def websocket_endpoint(
                 continue
 
             msg_type = data.get("type")
+
+            # ---- Lobby: ready message (any game type) ----
+            if msg_type == "ready":
+                room.ready_players.add(player_id)
+                await room.broadcast({
+                    "type": "player_ready",
+                    "player_id": player_id,
+                    "player_name": player_name,
+                    "timestamp": time.time(),
+                })
+                continue
+
+            # ---- Block gameplay messages until host starts the game ----
+            if not room.started and msg_type in (
+                "chat", "vote", "private_chat", "skip_phase", "reconstruction_answer"
+            ):
+                _not_started = "Game hasn't started yet" if _lang == "en" else "游戏尚未开始"
+                await room.send_to(player_id, {"type": "error", "text": _not_started})
+                continue
 
             # ============================================================
             # MURDER MYSTERY routing

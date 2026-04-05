@@ -47,7 +47,16 @@ struct LobbyView: View {
                 set: { if !$0 { navigateToRoom = nil } }
             )) {
                 if let roomId = navigateToRoom {
-                    RoomView(roomId: roomId)
+                    // Join by code → go to WaitingRoom (auto-proceeds if already started)
+                    WaitingRoomView(gameId: "", gameType: "turtle_soup", roomId: roomId)
+                }
+            }
+            .navigationDestination(isPresented: Binding(
+                get: { waitingRoomDest != nil },
+                set: { if !$0 { waitingRoomDest = nil } }
+            )) {
+                if let dest = waitingRoomDest {
+                    WaitingRoomView(gameId: dest.gameId, gameType: dest.gameType, roomId: dest.roomId)
                 }
             }
             .task {
@@ -226,6 +235,8 @@ struct LobbyView: View {
         }
     }
 
+    @State private var waitingRoomDest: WaitingRoomDestination? = nil
+
     private func createAndNavigate(gameId: String, gameType: String) {
         guard !isCreating else { return }
         isCreating = true
@@ -233,8 +244,8 @@ struct LobbyView: View {
         Task {
             defer { isCreating = false }
             do {
-                let resp = try await APIService.shared.createRoom(gameId: gameId, gameType: gameType, lang: lang)
-                navigateToRoom = resp.room_id
+                let resp = try await APIService.shared.createRoom(gameId: gameId, gameType: gameType, lang: lang, lobbyMode: true)
+                waitingRoomDest = WaitingRoomDestination(gameId: gameId, gameType: gameType, roomId: resp.room_id)
             } catch {
                 vm.error = error.localizedDescription
             }

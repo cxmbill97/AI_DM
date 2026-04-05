@@ -120,6 +120,8 @@ struct PlayerInfo: Codable, Identifiable {
     let name: String
     let character: String?
     let connected: Bool?
+    let is_host: Bool?
+    let is_ready: Bool?
 }
 
 struct RoomSnapshotPayload: Codable {
@@ -133,6 +135,26 @@ struct RoomSnapshotPayload: Codable {
     let players: [PlayerInfo]
     let clues: [CluePayload]?    // optional — turtle soup omits this
     let time_remaining: Int?
+    let started: Bool?
+    let max_players: Int?
+    let host_player_id: String?
+}
+
+struct LobbyPlayerJoinedPayload: Codable {
+    let player_id: String
+    let player_name: String
+    let is_host: Bool?
+    let timestamp: Double
+}
+
+struct LobbyPlayerReadyPayload: Codable {
+    let player_id: String
+    let player_name: String
+    let timestamp: Double
+}
+
+struct GameStartedPayload: Codable {
+    let room_id: String?
 }
 
 struct ErrorPayload: Codable {
@@ -147,6 +169,9 @@ enum GameMessage {
     case system(SystemPayload)
     case roomSnapshot(RoomSnapshotPayload)
     case error(ErrorPayload)
+    case lobbyPlayerJoined(LobbyPlayerJoinedPayload)
+    case lobbyPlayerReady(LobbyPlayerReadyPayload)
+    case gameStarted(GameStartedPayload)
     case unknown(String)
 }
 
@@ -167,6 +192,12 @@ extension GameMessage: Decodable {
             self = .roomSnapshot(try container.decode(RoomSnapshotPayload.self))
         case "error":
             self = .error(try container.decode(ErrorPayload.self))
+        case "player_joined":
+            self = .lobbyPlayerJoined(try container.decode(LobbyPlayerJoinedPayload.self))
+        case "player_ready":
+            self = .lobbyPlayerReady(try container.decode(LobbyPlayerReadyPayload.self))
+        case "game_started":
+            self = .gameStarted(try container.decode(GameStartedPayload.self))
         default:
             self = .unknown(wrapper.type)
         }

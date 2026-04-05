@@ -4,7 +4,7 @@ struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
     @EnvironmentObject var auth: AuthViewModel
     @State private var selectedTab = 0
-    @State private var navigateToRoom: String? = nil
+    @State private var waitingRoomDest: WaitingRoomDestination? = nil
     @State private var isCreating = false
     @State private var error: String?
 
@@ -40,6 +40,7 @@ struct ProfileView: View {
                             .padding(.bottom, 40)
                     }
                 }
+                .refreshable { await vm.load() }
 
                 if vm.isLoading {
                     ProgressView().tint(Color(hex: "#c9a84c"))
@@ -48,10 +49,12 @@ struct ProfileView: View {
             .navigationBarHidden(true)
             .task { await vm.load() }
             .navigationDestination(isPresented: Binding(
-                get: { navigateToRoom != nil },
-                set: { if !$0 { navigateToRoom = nil } }
+                get: { waitingRoomDest != nil },
+                set: { if !$0 { waitingRoomDest = nil } }
             )) {
-                if let roomId = navigateToRoom { RoomView(roomId: roomId) }
+                if let dest = waitingRoomDest {
+                    WaitingRoomView(gameId: dest.gameId, gameType: dest.gameType, roomId: dest.roomId)
+                }
             }
             .alert("Error", isPresented: Binding(
                 get: { error != nil },
@@ -206,9 +209,9 @@ struct ProfileView: View {
             .padding(.top, 40)
         } else {
             LazyVStack(spacing: 10) {
-                ForEach(vm.likedItems) { fav in
-                    LikedRow(fav: fav) {
-                        createAndNavigateFromFav(fav)
+                ForEach(vm.likedItems) { game in
+                    LikedRow(game: game) {
+                        createAndNavigateFromLiked(game)
                     }
                     .padding(.horizontal, 20)
                 }
@@ -217,17 +220,15 @@ struct ProfileView: View {
         }
     }
 
-    private func createAndNavigateFromFav(_ fav: FavoriteItem) {
+    private func createAndNavigateFromLiked(_ game: ProfileViewModel.LikedGame) {
         guard !isCreating else { return }
         isCreating = true
-        let gameId = fav.item_id
-        let gameType = fav.item_type == "puzzle_like" ? "turtle_soup" : "murder_mystery"
         let lang = UserDefaults.standard.string(forKey: "lang") ?? "zh"
         Task {
             defer { isCreating = false }
             do {
-                let resp = try await APIService.shared.createRoom(gameId: gameId, gameType: gameType, lang: lang, isPublic: false)
-                navigateToRoom = resp.room_id
+                let resp = try await APIService.shared.createRoom(gameId: game.gameId, gameType: game.gameType, lang: lang, lobbyMode: true)
+                waitingRoomDest = WaitingRoomDestination(gameId: game.gameId, gameType: game.gameType, roomId: resp.room_id)
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -311,9 +312,12 @@ private struct HistoryRow: View {
 
             Spacer()
 
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: item.outcome == "failed" ? "xmark.circle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 20))
-                .foregroundColor(Color(hex: "#34d399").opacity(0.6))
+                .foregroundColor(item.outcome == "failed"
+                    ? Color(hex: "#f87171").opacity(0.6)
+                    : Color(hex: "#34d399").opacity(0.6)
+                )
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .background(Color(hex: "#16151f"))
@@ -336,17 +340,15 @@ private struct HistoryRow: View {
 // MARK: - LikedRow
 
 private struct LikedRow: View {
-    let fav: FavoriteItem
+    let game: ProfileViewModel.LikedGame
     let onPlay: () -> Void
-
-    private var isSOup: Bool { fav.item_type == "puzzle_like" }
 
     private var gradientColors: [Color] {
         let hues: [(Double, Double)] = [
             (0.05, 0.15), (0.55, 0.65), (0.3, 0.4),
             (0.7, 0.8), (0.15, 0.25), (0.45, 0.55)
         ]
-        let pair = hues[abs(fav.item_id.hashValue) % hues.count]
+        let pair = hues[abs(game.title.hashValue) % hues.count]
         return [Color(hue: pair.0, saturation: 0.5, brightness: 0.3), Color(hue: pair.1, saturation: 0.6, brightness: 0.2)]
     }
 
@@ -356,18 +358,18 @@ private struct LikedRow: View {
                 .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: 56, height: 56)
                 .overlay(
-                    Text(isSOup ? "🐢" : "🔍")
+                    Text(game.gameType == "turtle_soup" ? "🐢" : "🔍")
                         .font(.system(size: 24))
                 )
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(isSOup ? "Turtle Soup" : "Murder Mystery")
+                Text(game.title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
-                Text(fav.item_id)
+                    .lineLimit(1)
+                Text(game.gameType == "turtle_soup" ? "Turtle Soup" : "Murder Mystery")
                     .font(.system(size: 11))
                     .foregroundColor(Color(hex: "#5555a0"))
-                    .lineLimit(1)
             }
 
             Spacer()

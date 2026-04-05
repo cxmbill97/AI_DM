@@ -23,6 +23,7 @@ final class RoomViewModel: ObservableObject {
     @Published var isSending = false
     @Published var showClues = false
     @Published var errorMessage: String?
+    @Published var gameTitle: String = ""
 
     let roomId: String
     private let ws = WebSocketService()
@@ -88,6 +89,7 @@ final class RoomViewModel: ObservableObject {
             phase = snap.phase ?? snap.current_phase ?? ""
             phaseDescription = snap.phase_description ?? ""
             timeRemaining = snap.time_remaining
+            if let title = snap.title, !title.isEmpty { gameTitle = title }
             // Show puzzle surface as first message (insert at 0, above any "joined" system notice)
             if !surfaceShown, let surface = snap.surface {
                 surfaceShown = true
@@ -98,6 +100,14 @@ final class RoomViewModel: ObservableObject {
         case .error(let e):
             messages.append(ChatMessage(sender: "System", text: "⚠️ \(e.message)", type: .error))
             errorMessage = e.message
+
+        case .lobbyPlayerJoined, .lobbyPlayerReady:
+            // Lobby events — ignored once game has started
+            break
+
+        case .gameStarted:
+            // Already in the room view; no action needed
+            break
 
         case .unknown:
             break
