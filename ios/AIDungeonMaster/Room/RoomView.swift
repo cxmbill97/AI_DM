@@ -56,9 +56,10 @@ struct RoomView: View {
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("Room \(roomId)")
+                Text(vm.gameTitle.isEmpty ? "Room \(roomId)" : vm.gameTitle)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
+                    .lineLimit(1)
                 HStack(spacing: 5) {
                     Circle()
                         .fill(statusColor)

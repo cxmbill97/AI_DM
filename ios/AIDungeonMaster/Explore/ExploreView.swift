@@ -259,16 +259,17 @@ private struct RoomRow: View {
     }
 
     private var playerDots: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<4, id: \.self) { i in
+        let capacity = max(room.player_count, 1)
+        return HStack(spacing: 4) {
+            ForEach(0..<capacity, id: \.self) { i in
                 Circle()
                     .fill(i < room.connected_count
                         ? Color(hex: "#34d399")
-                        : (i < room.player_count ? Color(hex: "#44446a") : Color(hex: "#1e1c2e"))
+                        : Color(hex: "#44446a")
                     )
                     .frame(width: 8, height: 8)
             }
-            Text("\(room.connected_count)/4")
+            Text("\(room.connected_count)/\(capacity)")
                 .font(.system(size: 11))
                 .foregroundColor(Color(hex: "#44446a"))
         }

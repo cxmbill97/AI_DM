@@ -4,6 +4,8 @@ struct SavedView: View {
     @StateObject private var vm = SavedViewModel()
     @State private var navigateToRoom: String? = nil
     @State private var isCreating = false
+    @State private var showGameModeSheet = false
+    @State private var pendingItem: SavedViewModel.SavedFeedItem? = nil
 
     var body: some View {
         NavigationStack {
@@ -40,7 +42,8 @@ struct SavedView: View {
                             LazyVStack(spacing: 10) {
                                 ForEach(vm.savedItems) { item in
                                     SavedRow(item: item, onPlay: {
-                                        createAndNavigate(gameId: item.gameId, gameType: item.gameType)
+                                        pendingItem = item
+                                        showGameModeSheet = true
                                     }, onRemove: {
                                         vm.remove(item: item)
                                     })
@@ -60,6 +63,14 @@ struct SavedView: View {
                 if let roomId = navigateToRoom { RoomView(roomId: roomId) }
             }
             .task { await vm.load() }
+            .sheet(isPresented: $showGameModeSheet) {
+                if let item = pendingItem {
+                    GameModeSheet { isPublic in
+                        showGameModeSheet = false
+                        createAndNavigate(gameId: item.gameId, gameType: item.gameType, isPublic: isPublic)
+                    }
+                }
+            }
             .alert("Error", isPresented: Binding(
                 get: { vm.error != nil },
                 set: { if !$0 { vm.error = nil } }
@@ -89,14 +100,14 @@ struct SavedView: View {
         .padding(.top, 80)
     }
 
-    private func createAndNavigate(gameId: String, gameType: String) {
+    private func createAndNavigate(gameId: String, gameType: String, isPublic: Bool = true) {
         guard !isCreating else { return }
         isCreating = true
         let lang = UserDefaults.standard.string(forKey: "lang") ?? "zh"
         Task {
             defer { isCreating = false }
             do {
-                let resp = try await APIService.shared.createRoom(gameId: gameId, gameType: gameType, lang: lang)
+                let resp = try await APIService.shared.createRoom(gameId: gameId, gameType: gameType, lang: lang, isPublic: isPublic)
                 navigateToRoom = resp.room_id
             } catch {
                 vm.error = error.localizedDescription

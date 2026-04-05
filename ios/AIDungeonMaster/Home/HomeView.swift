@@ -367,7 +367,7 @@ struct FeedCardView: View {
                         .foregroundColor(item.isLiked ? Color(hex: "#f87171") : Color(hex: "#44446a"))
                         .scaleEffect(item.isLiked ? 1.1 : 1.0)
                         .animation(.spring(response: 0.2), value: item.isLiked)
-                    Text("\(item.likeCount + (item.isLiked ? 1 : 0))")
+                    Text("\(item.likeCount)")
                         .font(.system(size: 13))
                         .foregroundColor(Color(hex: "#44446a"))
                 }
