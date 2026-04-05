@@ -5,6 +5,7 @@ struct RoomView: View {
     @StateObject private var vm: RoomViewModel
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tabBarState: TabBarVisibility
+    @State private var keyboardHeight: CGFloat = 0
 
     init(roomId: String) {
         self.roomId = roomId
@@ -27,12 +28,24 @@ struct RoomView: View {
                     inputBar
                 }
             }
+            // Manually compensate for keyboard because MainTabView swallows
+            // the keyboard safe-area inset via .ignoresSafeArea(.keyboard).
+            .padding(.bottom, keyboardHeight)
+            .animation(.easeOut(duration: 0.25), value: keyboardHeight)
         }
         .navigationBarHidden(true)
         .onAppear { tabBarState.isHidden = true }
         .onDisappear { tabBarState.isHidden = false }
         .task { await vm.connect() }
         .onDisappear { vm.disconnect() }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { n in
+            if let frame = n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                keyboardHeight = frame.height
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardHeight = 0
+        }
         .sheet(isPresented: $vm.showClues) { ClueSheet(clues: vm.clues) }
         .alert("Error", isPresented: Binding(
             get: { vm.errorMessage != nil },
