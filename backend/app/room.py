@@ -94,6 +94,16 @@ class Room:
         # Background tick task — created and cancelled by ws.py
         self._tick_task: asyncio.Task | None = None
 
+        # ---- Lobby state ----
+        self.started: bool = False
+        self.host_user_id: str | None = None   # set by main.py after creation
+        self.host_player_id: str | None = None  # set to first player that joins
+        self.ready_players: set[str] = set()    # player_ids who clicked Ready
+        # max_players: script specifies it for murder_mystery, turtle_soup defaults 4
+        self.max_players: int = (
+            script.metadata.player_count if script is not None else 4
+        )
+
         # Initialise type-specific components
         if puzzle is not None:
             self.game_session = GameSession(
@@ -125,7 +135,7 @@ class Room:
         return sum(1 for p in self.players.values() if p["connected"] or (now - p["last_seen"]) < RECONNECT_WINDOW_SECS)
 
     def is_full(self) -> bool:
-        return self._active_player_count() >= MAX_PLAYERS
+        return self._active_player_count() >= self.max_players
 
     def find_player_by_name(self, name: str) -> str | None:
         """Return the player_id for a given name, or None."""
@@ -171,6 +181,8 @@ class Room:
             "last_seen": time.time(),
             "send_lock": asyncio.Lock(),
         }
+        if self.host_player_id is None:
+            self.host_player_id = player_id
         if self.game_type == "turtle_soup":
             self._assign_player_slot(player_id)
         else:

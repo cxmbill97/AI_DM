@@ -26,6 +26,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
+from app.auth import add_history, decode_jwt, get_user_by_id  # noqa: E402
 from app.dm import dm_proactive_message, dm_turn, dm_turn_private  # noqa: E402
 from app.room import RECONNECT_WINDOW_SECS, Room, room_manager  # noqa: E402
 from app.visibility import VisibilityRegistry  # noqa: E402
@@ -93,13 +94,18 @@ def _mm_snapshot(room: Room, player_id: str) -> dict[str, Any]:
                 "name": p["name"],
                 "connected": p["connected"],
                 "character": room._char_assignments.get(pid),
+                "is_host": pid == room.host_player_id,
+                "is_ready": pid in room.ready_players,
             }
             for pid, p in room.players.items()
         ],
+        "started": room.started,
+        "max_players": room.max_players,
         # Public character list — no secret_bio, no is_culprit
         "characters": [{"id": c.id, "name": c.name, "public_bio": c.public_bio} for c in room.script.characters],
         "game_mode": room.script.game_mode,
         "required_players": room.script.metadata.player_count,
+        "theme": room.script.theme.model_dump(),
     }
 
 
@@ -254,18 +260,20 @@ async def _do_mm_reveal(room: Room) -> None:
     if game_mode == "reconstruction":
         # Reconstruction mode: reveal full story, no culprit
         if lang == "en":
-            if truth.full_story:
-                truth_text = f"Full Story:\n{truth.full_story}\n\nTimeline: {truth.timeline}"
-            else:
-                truth_text = f"Motive: {truth.motive}\nMethod: {truth.method}\nTimeline: {truth.timeline}"
+            truth_text = (
+                f"Full Story:\n{truth.full_story}\n\nTimeline: {truth.timeline}"
+                if truth.full_story
+                else f"Motive: {truth.motive}\nMethod: {truth.method}\nTimeline: {truth.timeline}"
+            )
             reveal_player_msg = "The full truth is revealed"
             canned_fallback = f"Truth revealed! {truth_text}"
             error_fallback = f"The full truth:\n{truth_text}"
         else:
-            if truth.full_story:
-                truth_text = f"完整真相：\n{truth.full_story}\n\n时间线：{truth.timeline}"
-            else:
-                truth_text = f"动机：{truth.motive}\n手法：{truth.method}\n时间线：{truth.timeline}"
+            truth_text = (
+                f"完整真相：\n{truth.full_story}\n\n时间线：{truth.timeline}"
+                if truth.full_story
+                else f"动机：{truth.motive}\n手法：{truth.method}\n时间线：{truth.timeline}"
+            )
             reveal_player_msg = "完整真相揭晓"
             canned_fallback = f"真相揭晓！{truth_text}"
             error_fallback = f"完整真相：\n{truth_text}"
@@ -815,22 +823,33 @@ def _maybe_cancel_tick(room: Room) -> None:
 async def websocket_endpoint(
     websocket: WebSocket,
     room_id: str,
-    player_name: str,
+    token: str,
 ) -> None:
     """Entry point called from main.py's @app.websocket route."""
 
     await websocket.accept()
 
+    # Authenticate via JWT
+    user_id: str | None = None
+    player_name = ""
+    try:
+        payload = decode_jwt(token)
+        user = get_user_by_id(payload["sub"])
+        if user:
+            user_id = user["id"]
+            player_name = user["name"]
+    except (ValueError, KeyError):
+        pass
+
+    if not player_name:
+        await websocket.send_json({"type": "error", "text": "Authentication required"})
+        await websocket.close(code=4001)
+        return
+
     room = room_manager.get_room(room_id)
     if room is None:
         await websocket.send_json({"type": "error", "text": f"房间 {room_id} 不存在"})
         await websocket.close(code=4404)
-        return
-
-    player_name = player_name.strip()
-    if not player_name:
-        await websocket.send_json({"type": "error", "text": "玩家名不能为空"})
-        await websocket.close(code=4400)
         return
 
     # ----------------------------------------------------------------
@@ -894,11 +913,33 @@ async def websocket_endpoint(
         }
         room.message_history.append(join_notice)
         await room.broadcast(join_notice)
+        # Structured event for lobby UI — sent to EXISTING players only,
+        # not the joiner (who gets a full snapshot below)
+        if not room.started:
+            joined_event: dict[str, Any] = {
+                "type": "player_joined",
+                "player_id": player_id,
+                "player_name": player_name,
+                "is_host": player_id == room.host_player_id,
+                "timestamp": time.time(),
+            }
+            for existing_pid in room.players:
+                if existing_pid != player_id:
+                    await room.send_to(existing_pid, joined_event)
 
     # ----------------------------------------------------------------
     # Send room snapshot to joining player; broadcast updated player
     # list to everyone else so their "Waiting for players" banner updates.
     # ----------------------------------------------------------------
+    def _lobby_player(pid: str, p: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": pid,
+            "name": p["name"],
+            "connected": p["connected"],
+            "is_host": pid == room.host_player_id,
+            "is_ready": pid in room.ready_players,
+        }
+
     if room.game_type == "murder_mystery":
         snapshot = _mm_snapshot(room, player_id)
         await room.send_to(player_id, snapshot)
@@ -911,7 +952,7 @@ async def websocket_endpoint(
             if pid != player_id:
                 await room.send_to(pid, players_update)
     else:
-        players_list = [{"id": pid, "name": p["name"], "connected": p["connected"]} for pid, p in room.players.items()]
+        players_list = [_lobby_player(pid, p) for pid, p in room.players.items()]
         snapshot = {
             "type": "room_snapshot",
             "game_type": "turtle_soup",
@@ -921,6 +962,8 @@ async def websocket_endpoint(
             "surface": room.puzzle.surface,
             "players": players_list,
             "phase": room.phase,
+            "started": room.started,
+            "max_players": room.max_players,
         }
         await room.send_to(player_id, snapshot)
         # Broadcast updated player list to all other players
@@ -931,6 +974,16 @@ async def websocket_endpoint(
         for pid in room.players:
             if pid != player_id:
                 await room.send_to(pid, players_update)
+
+    # Log play history for authenticated users (new joins only)
+    if user_id and not is_reconnect:
+        _title = room.script.title if room.game_type == "murder_mystery" and room.script else (room.puzzle.title if room.puzzle else room_id)
+        _game_type = room.game_type or "turtle_soup"
+        _player_count = len(room.players)
+        try:
+            add_history(user_id, room_id, _game_type, _title, _player_count)
+        except Exception:
+            pass  # non-critical
 
     # ----------------------------------------------------------------
     # Deliver join-specific private info (new joins only)
@@ -996,7 +1049,8 @@ async def websocket_endpoint(
     # Murder mystery: send opening narration once a second player joins
     # ----------------------------------------------------------------
     if (
-        room.game_type == "murder_mystery"
+        room.started
+        and room.game_type == "murder_mystery"
         and not room._opening_narrated
         and room.state_machine is not None
         and room.state_machine.current_phase == "opening"
@@ -1037,6 +1091,25 @@ async def websocket_endpoint(
                 continue
 
             msg_type = data.get("type")
+
+            # ---- Lobby: ready message (any game type) ----
+            if msg_type == "ready":
+                room.ready_players.add(player_id)
+                await room.broadcast({
+                    "type": "player_ready",
+                    "player_id": player_id,
+                    "player_name": player_name,
+                    "timestamp": time.time(),
+                })
+                continue
+
+            # ---- Block gameplay messages until host starts the game ----
+            if not room.started and msg_type in (
+                "chat", "vote", "private_chat", "skip_phase", "reconstruction_answer"
+            ):
+                _not_started = "Game hasn't started yet" if _lang == "en" else "游戏尚未开始"
+                await room.send_to(player_id, {"type": "error", "text": _not_started})
+                continue
 
             # ============================================================
             # MURDER MYSTERY routing

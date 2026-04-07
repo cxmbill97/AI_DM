@@ -78,14 +78,38 @@ export interface ChatResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Token management
+// ---------------------------------------------------------------------------
+
+export function getStoredToken(): string | null {
+  return localStorage.getItem('ai_dm_token');
+}
+
+export function setStoredToken(token: string): void {
+  localStorage.setItem('ai_dm_token', token);
+}
+
+export function clearStoredToken(): void {
+  localStorage.removeItem('ai_dm_token');
+}
+
+// ---------------------------------------------------------------------------
 // Internal helper
 // ---------------------------------------------------------------------------
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(path, options);
+  const token = getStoredToken();
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string> ?? {}),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(path, { ...options, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`);
+    const detail = (body as { detail?: string | { message?: string } }).detail;
+    const msg = typeof detail === 'string' ? detail : detail?.message ?? `HTTP ${res.status}`;
+    throw new Error(msg);
   }
   return res.json() as Promise<T>;
 }
@@ -171,4 +195,141 @@ export function createRoom(
 
 export function getRoom(roomId: string): Promise<RoomState> {
   return apiFetch(`/api/rooms/${roomId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Script ingestion
+// ---------------------------------------------------------------------------
+
+export interface PuzzleUploadResponse {
+  puzzle_id: string;
+  title: string;
+  difficulty: string;
+  tags: string[];
+  clue_count: number;
+  key_fact_count: number;
+  warning?: string;
+}
+
+export function uploadPuzzle(file: File, lang: string): Promise<PuzzleUploadResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('lang', lang);
+  return apiFetch('/api/puzzles/upload', { method: 'POST', body: form });
+}
+
+export interface ScriptUploadResponse {
+  script_id: string;
+  title: string;
+  player_count: number;
+  difficulty: string;
+  game_mode: string;
+  character_names: string[];
+  phase_count: number;
+  clue_count: number;
+  warning?: string;
+}
+
+export function uploadScript(file: File, lang: string, author = ''): Promise<ScriptUploadResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('lang', lang);
+  form.append('author', author);
+  // Note: do NOT set Content-Type — the browser sets it with the multipart boundary
+  return apiFetch('/api/scripts/upload', { method: 'POST', body: form });
+}
+
+// ---------------------------------------------------------------------------
+// Community library
+// ---------------------------------------------------------------------------
+
+export interface CommunityScript {
+  script_id: string;
+  title: string;
+  author: string;
+  difficulty: string;
+  player_count: number;
+  game_mode: string;
+  lang: string;
+  likes: number;
+  created_at: string;
+}
+
+export interface CommunityScriptFilters {
+  lang?: string;
+  search?: string;
+  difficulty?: string;
+  game_mode?: string;
+  limit?: number;
+}
+
+export function listCommunityScripts(filters: CommunityScriptFilters = {}): Promise<CommunityScript[]> {
+  const params = new URLSearchParams();
+  if (filters.lang) params.set('lang', filters.lang);
+  if (filters.search) params.set('search', filters.search);
+  if (filters.difficulty) params.set('difficulty', filters.difficulty);
+  if (filters.game_mode) params.set('game_mode', filters.game_mode);
+  if (filters.limit) params.set('limit', String(filters.limit));
+  return apiFetch(`/api/community/scripts?${params}`);
+}
+
+export function likeScript(scriptId: string): Promise<{ script_id: string; likes: number }> {
+  return apiFetch(`/api/community/scripts/${scriptId}/like`, { method: 'POST' });
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url: string;
+  created_at: string;
+}
+
+export function getMe(): Promise<AuthUser> {
+  return apiFetch('/api/me');
+}
+
+// ---------------------------------------------------------------------------
+// Favorites
+// ---------------------------------------------------------------------------
+
+export interface FavoriteItem {
+  user_id: string;
+  item_id: string;
+  item_type: 'puzzle' | 'script';
+  saved_at: string;
+}
+
+export function getFavorites(): Promise<FavoriteItem[]> {
+  return apiFetch('/api/favorites');
+}
+
+export function addFavorite(itemType: 'puzzle' | 'script', itemId: string): Promise<void> {
+  return apiFetch(`/api/favorites/${itemType}/${itemId}`, { method: 'POST' });
+}
+
+export function removeFavorite(itemType: 'puzzle' | 'script', itemId: string): Promise<void> {
+  return apiFetch(`/api/favorites/${itemType}/${itemId}`, { method: 'DELETE' });
+}
+
+// ---------------------------------------------------------------------------
+// History
+// ---------------------------------------------------------------------------
+
+export interface HistoryItem {
+  id: string;
+  user_id: string;
+  room_id: string;
+  game_type: string;
+  title: string;
+  player_count: number;
+  played_at: string;
+}
+
+export function getHistory(): Promise<HistoryItem[]> {
+  return apiFetch('/api/history');
 }

@@ -142,6 +142,7 @@ class NarratorAgent:
             visible_context=visible_context,
             truth_for_reveal=truth_for_reveal,
             language=language,
+            dm_style=dm_style,
         )
         messages = self._build_messages(judgment, player_message, language=language)
         try:
@@ -160,6 +161,7 @@ class NarratorAgent:
         phase: str,
         truth_for_reveal: str | None = None,
         language: str = "zh",
+        dm_style: str = "",
     ) -> AsyncGenerator[str, None]:
         """Stream the narrator response token-by-token.
 
@@ -171,6 +173,7 @@ class NarratorAgent:
             visible_context=visible_context,
             truth_for_reveal=truth_for_reveal,
             language=language,
+            dm_style=dm_style,
         )
         messages = self._build_messages(judgment, player_message, language=language)
         return chat_stream(system_prompt, messages)
@@ -185,9 +188,13 @@ class NarratorAgent:
         visible_context: VisibleContext,
         truth_for_reveal: str | None,
         language: str = "zh",
+        dm_style: str = "",
     ) -> str:
         if language == "en":
-            parts = [_DM_PERSONA_EN]
+            base_persona = _DM_PERSONA_EN
+            if dm_style:
+                base_persona = f"{base_persona}\nNarrative style for this script: {dm_style}"
+            parts = [base_persona]
             phase_instruction = _PHASE_INSTRUCTIONS_EN.get(phase, _DEFAULT_PHASE_INSTRUCTION_EN)
             parts.append(f"\n## Current Phase Behavior\n{phase_instruction}")
 
@@ -212,7 +219,10 @@ class NarratorAgent:
                     "Do not speculate beyond the information and judgment result above."
                 )
         else:
-            parts = [_DM_PERSONA_ZH]
+            base_persona_zh = _DM_PERSONA_ZH
+            if dm_style:
+                base_persona_zh = f"{base_persona_zh}\n本剧本叙事风格：{dm_style}"
+            parts = [base_persona_zh]
             phase_instruction = _PHASE_INSTRUCTIONS_ZH.get(phase, _DEFAULT_PHASE_INSTRUCTION_ZH)
             parts.append(f"\n## 当前阶段行为\n{phase_instruction}")
 

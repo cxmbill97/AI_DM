@@ -34,6 +34,7 @@ Then the reconnecting player receives any missed messages.
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 from unittest.mock import MagicMock
@@ -41,9 +42,27 @@ from unittest.mock import MagicMock
 import pytest
 from starlette.testclient import TestClient
 
-from app.main import app
-from app.puzzle_loader import load_puzzle
-from app.room import room_manager
+os.environ.setdefault("JWT_SECRET", "test-secret-key-room-tests")
+
+from app.main import app  # noqa: E402
+from app.puzzle_loader import load_puzzle  # noqa: E402
+from app.room import room_manager  # noqa: E402
+
+
+def _make_token(name: str) -> str:
+    """Create a JWT token for a test user with the given name."""
+    import app.auth as auth_mod
+    user = auth_mod.upsert_user(f"test:{name}", name, f"{name.lower()}@test.com", "")
+    return auth_mod.create_jwt(user["id"])
+
+
+@pytest.fixture(autouse=True)
+def _auth_db(monkeypatch, tmp_path):
+    """Point auth module at a temp DB for each test."""
+    import app.auth as auth_mod
+    monkeypatch.setattr(auth_mod, "_DB_PATH", tmp_path / "auth.db")
+    auth_mod.init_auth_db()
+    yield
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -120,15 +139,18 @@ def _next_non_typing(ws: Any) -> dict:
 
 
 def _drain_others_join_notice(ws: Any) -> dict:
-    """When another player joins, existing players get a system notice
-    followed by a players_update message.
+    """When another player joins, existing players get a system notice,
+    optionally a player_joined lobby event, then a players_update message.
 
-    Reads both and returns the system notice.
+    Reads all and returns the system notice.
     """
     msg = ws.receive_json()
     assert msg["type"] == "system"
-    update = ws.receive_json()
-    assert update["type"] == "players_update"
+    next_msg = ws.receive_json()
+    # Consume optional player_joined lobby event
+    if next_msg["type"] == "player_joined":
+        next_msg = ws.receive_json()
+    assert next_msg["type"] == "players_update"
     return msg
 
 
@@ -246,12 +268,12 @@ class TestCreateAndJoinRoom:
             assert resp.status_code == 200
             room_id = resp.json()["room_id"]
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws_a:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws_a:
                 snap_a = _drain_join(ws_a)
                 assert snap_a["puzzle_id"] == "icicle_murder"
                 assert len(snap_a["players"]) == 1
 
-                with client.websocket_connect(f"/ws/{room_id}?player_name=Bob") as ws_b:
+                with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Bob')}") as ws_b:
                     # Alice gets Bob's join notice
                     _drain_others_join_notice(ws_a)
                     # Bob: drain his own join + snapshot
@@ -271,7 +293,7 @@ class TestCreateAndJoinRoom:
         with TestClient(app) as client:
             resp = client.post("/api/rooms", json={"puzzle_id": "icicle_murder"})
             room_id = resp.json()["room_id"]
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws:
                 snap = _drain_join(ws)
                 assert snap["type"] == "room_snapshot"
                 assert snap["puzzle_id"] == "icicle_murder"
@@ -279,16 +301,16 @@ class TestCreateAndJoinRoom:
 
     def test_unknown_room_sends_error(self):
         with TestClient(app) as client:
-            with client.websocket_connect("/ws/BADXXX?player_name=Alice") as ws:
+            with client.websocket_connect(f"/ws/BADXXX?token={_make_token('Alice')}") as ws:
                 msg = ws.receive_json()
                 assert msg["type"] == "error"
                 assert "BADXXX" in msg["text"] or "不存在" in msg["text"]
 
-    def test_empty_player_name_sends_error(self, mock_llm):
+    def test_unauthenticated_sends_error(self, mock_llm):
         with TestClient(app) as client:
             resp = client.post("/api/rooms", json={})
             room_id = resp.json()["room_id"]
-            with client.websocket_connect(f"/ws/{room_id}?player_name=") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token=") as ws:
                 msg = ws.receive_json()
                 assert msg["type"] == "error"
 
@@ -296,10 +318,10 @@ class TestCreateAndJoinRoom:
         with TestClient(app) as client:
             resp = client.post("/api/rooms", json={})
             room_id = resp.json()["room_id"]
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws_a:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws_a:
                 _drain_join(ws_a)
                 # Second connection with same name — Alice is still connected
-                with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws_dup:
+                with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws_dup:
                     msg = ws_dup.receive_json()
                     assert msg["type"] == "error"
                     assert "Alice" in msg["text"] or "使用" in msg["text"]
@@ -322,7 +344,7 @@ class TestRoomCapacityLimit:
         assert room.is_full()
 
         with TestClient(app) as client:
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Eve") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Eve')}") as ws:
                 msg = ws.receive_json()
                 assert msg["type"] == "error"
                 assert "满" in msg["text"]
@@ -357,10 +379,10 @@ class TestMessageBroadcast:
             resp = client.post("/api/rooms", json={"puzzle_id": "icicle_murder"})
             room_id = resp.json()["room_id"]
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws_a:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws_a:
                 _drain_join(ws_a)
 
-                with client.websocket_connect(f"/ws/{room_id}?player_name=Bob") as ws_b:
+                with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Bob')}") as ws_b:
                     _drain_others_join_notice(ws_a)  # Alice: "Bob joined"
                     _drain_join(ws_b)  # Bob: join + snapshot
 
@@ -399,7 +421,7 @@ class TestMessageBroadcast:
         with TestClient(app) as client:
             resp = client.post("/api/rooms", json={"puzzle_id": "icicle_murder"})
             room_id = resp.json()["room_id"]
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws:
                 _drain_join(ws)
                 ws.send_json({"type": "chat", "text": "凶器是固体的吗？"})
                 ws.receive_json()  # player_message
@@ -429,7 +451,7 @@ class TestSharedClueState:
             room_id = resp.json()["room_id"]
             room = room_manager.get_room(room_id)
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws:
                 _drain_join(ws)
                 # "仓库" is in clue_building.unlock_keywords
                 ws.send_json({"type": "chat", "text": "案发地点旁边有仓库吗？"})
@@ -456,10 +478,10 @@ class TestSharedClueState:
             resp = client.post("/api/rooms", json={"puzzle_id": "icicle_murder"})
             room_id = resp.json()["room_id"]
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws_a:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws_a:
                 _drain_join(ws_a)
 
-                with client.websocket_connect(f"/ws/{room_id}?player_name=Bob") as ws_b:
+                with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Bob')}") as ws_b:
                     _drain_others_join_notice(ws_a)
                     _drain_join(ws_b)
 
@@ -497,7 +519,7 @@ class TestSharedClueState:
             room_id = resp.json()["room_id"]
             room = room_manager.get_room(room_id)
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws:
                 _drain_join(ws)
                 # First question — should unlock clue_building
                 ws.send_json({"type": "chat", "text": "现场旁边有仓库吗？"})
@@ -550,7 +572,7 @@ class TestPlayerDisconnectReconnect:
             room_id = resp.json()["room_id"]
             room = room_manager.get_room(room_id)
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws:
                 _drain_join(ws)
             # Alice disconnected
 
@@ -566,7 +588,7 @@ class TestPlayerDisconnectReconnect:
             room_id = resp.json()["room_id"]
             room = room_manager.get_room(room_id)
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws:
                 _drain_join(ws)
 
             assert room._active_player_count() == 1  # still in window
@@ -577,11 +599,11 @@ class TestPlayerDisconnectReconnect:
             resp = client.post("/api/rooms", json={"puzzle_id": "icicle_murder"})
             room_id = resp.json()["room_id"]
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws:
                 _drain_join(ws)
             # Alice disconnected
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws2:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws2:
                 msg = ws2.receive_json()
                 assert msg["type"] == "system"
                 assert "Alice" in msg["text"]
@@ -594,10 +616,10 @@ class TestPlayerDisconnectReconnect:
             room_id = resp.json()["room_id"]
             room = room_manager.get_room(room_id)
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws:
                 _drain_join(ws)
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws2:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws2:
                 ws2.receive_json()  # reconnect notice
                 alice_id = room.find_player_by_name("Alice")
                 assert room.players[alice_id]["connected"]
@@ -609,7 +631,7 @@ class TestPlayerDisconnectReconnect:
             room_id = resp.json()["room_id"]
             room = room_manager.get_room(room_id)
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws:
                 _drain_join(ws)
             # Alice disconnected
 
@@ -646,7 +668,7 @@ class TestPlayerDisconnectReconnect:
                 }
             )
 
-            with client.websocket_connect(f"/ws/{room_id}?player_name=Alice") as ws2:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Alice')}") as ws2:
                 ws2.receive_json()  # reconnect broadcast to Alice
                 r1 = ws2.receive_json()  # replayed player_message
                 r2 = ws2.receive_json()  # replayed dm_response

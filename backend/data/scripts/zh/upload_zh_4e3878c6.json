@@ -1,0 +1,216 @@
+{
+  "id": "upload_zh_4e3878c6",
+  "title": "书房密室之谜",
+  "game_mode": "whodunit",
+  "metadata": {
+    "player_count": 4,
+    "duration_minutes": 60,
+    "difficulty": "intermediate",
+    "age_rating": "12+"
+  },
+  "characters": [
+    {
+      "id": "char_lin",
+      "name": "林雪",
+      "public_bio": "40岁，死者的妻子，婚姻表面幸福，擅长理财，持家有道。",
+      "secret_bio": "发现丈夫长期包养情人白露，计划离婚并转移财产。案发当晚曾进入书房与丈夫激烈争吵，被佣人目击。争吵内容包括要求分割财产和离婚补偿。她是最后发现尸体的人之一。",
+      "is_culprit": false
+    },
+    {
+      "id": "char_chen",
+      "name": "陈俊",
+      "public_bio": "35岁，死者多年来的得力助理，为人谨慎，工作能力突出。",
+      "secret_bio": "长期盗用公款共计50万元用作赌博，已被死者发现并收到最后通碟归还。他手中有一把备用书房钥匙，声称遗失但实际是被白露偷走。他有重大作案嫌疑。",
+      "is_culprit": false
+    },
+    {
+      "id": "char_su",
+      "name": "苏明",
+      "public_bio": "28岁，死者的外甥，家族唯一亲属，在舅舅公司担任经理。",
+      "secret_bio": "得知舅舅更改遗嘱，将大部分遗产捐给慈善机构，自己将几乎得不到任何继承。愤怒之下曾威胁要找舅舅理论。他有不在场证明（在公司加班至22:00），但动机强烈。",
+      "is_culprit": false
+    },
+    {
+      "id": "char_bailu",
+      "name": "白露",
+      "public_bio": "32岁，死者的私人艺术顾问，常出入豪宅，气质优雅。",
+      "secret_bio": "真正凶手。死者准备抛弃她并断绝经济支持，这让她极度愤怒。她提前从陈俊处盗取备用钥匙，案发当晚利用提前配置的备用钥匙进入书房，与死者谈判破裂后用裁纸刀刺杀死者两刀。从书架密道离开后从内部反锁门制造密室假象。",
+      "is_culprit": true
+    }
+  ],
+  "phases": [
+    {
+      "id": "opening",
+      "type": "narration",
+      "next": "reading",
+      "duration_seconds": 120,
+      "allowed_actions": [
+        "listen"
+      ],
+      "dm_script": "各位玩家，请注意。这是一个风雨交加的夜晚，著名收藏家魏廷松被发现死于自己的书房中。书房从内部上锁，窗户紧闭，死者身中两刀，凶器裁纸刀留在现场。警方确认死亡时间为晚上9点到11点之间。现在，请各玩家阅读自己的剧本，了解各自的身份和信息。",
+      "available_clues": null,
+      "per_player_content": null,
+      "reconstruction_questions": []
+    },
+    {
+      "id": "reading",
+      "type": "reading",
+      "next": "investigation_1",
+      "duration_seconds": 360,
+      "allowed_actions": [
+        "read_script"
+      ],
+      "dm_script": null,
+      "available_clues": null,
+      "per_player_content": {
+        "char_lin": "你是林雪，40岁，魏廷松的妻子。你们结婚多年，表面婚姻幸福，你擅长理财，持家有道。然而你最近发现丈夫长期包养情人白露，决定收集证据计划离婚并转移财产。案发当晚8点左右，你曾进入书房与丈夫争吵，被佣人目击。你们争吵的内容涉及离婚财产分割。晚上21:30左右，你再次进入书房想继续谈判，却发现丈夫已经倒在血泊中，你惊慌离开通知佣人。",
+        "char_chen": "你是陈俊，35岁，魏廷松的得力助理，跟随他多年。你为人谨慎，工作能力突出。但你有个致命秘密：长期盗用公款共计50万元用作赌博。几天前被死者发现，他给你最后通碟要求一周内归还。你手中有一把备用书房钥匙，今天发现钥匙不见了，但你以为是 自己弄丢了就没有声张。案发当晚你在自己的办公室加班到22:00。",
+        "char_su": "你是苏明，28岁，魏廷松的外甥，家族唯一亲属。你在舅舅公司担任经理，自认为对舅舅事业有重要贡献。然而最近得知舅舅更改遗嘱，将大部分遗产捐给慈善机构，你将几乎什么都得不到。你愤怒地找舅舅理论，舅舅却说你不争气。当晚你19:00离开公司回家，在家看电影，没有不在场证明。",
+        "char_bailu": "你是白露，32岁，魏廷松的私人艺术顾问，常出入豪宅。你与魏廷松保持秘密情人关系多年，享受着奢华的生活。但最近魏廷松告诉你，他要与妻子复合，准备抛弃你并断断绝经济支持。你无法接受被抛弃，决定报复。你早已暗中从陈俊处复制了备用钥匙。案发当晚20:30你以谈判为由约魏廷松在书房相见，20:45进入书房后争吵升级，21:10你用书桌上的裁纸刀刺向他两刀，然后从书架后方的隐蔽密道离开，从内部锁上门制造密室假象。"
+      },
+      "reconstruction_questions": []
+    },
+    {
+      "id": "investigation_1",
+      "type": "investigation",
+      "next": "discussion",
+      "duration_seconds": 600,
+      "allowed_actions": [
+        "question",
+        "npc",
+        "search"
+      ],
+      "dm_script": null,
+      "available_clues": [
+        "clue_1",
+        "clue_2",
+        "clue_3",
+        "clue_4",
+        "clue_5"
+      ],
+      "per_player_content": null,
+      "reconstruction_questions": []
+    },
+    {
+      "id": "discussion",
+      "type": "discussion",
+      "next": "voting",
+      "duration_seconds": 300,
+      "allowed_actions": [
+        "accuse",
+        "question"
+      ],
+      "dm_script": null,
+      "available_clues": null,
+      "per_player_content": null,
+      "reconstruction_questions": []
+    },
+    {
+      "id": "voting",
+      "type": "voting",
+      "next": "reveal",
+      "duration_seconds": 120,
+      "allowed_actions": [
+        "vote"
+      ],
+      "dm_script": null,
+      "available_clues": null,
+      "per_player_content": null,
+      "reconstruction_questions": []
+    },
+    {
+      "id": "reveal",
+      "type": "reveal",
+      "next": null,
+      "duration_seconds": null,
+      "allowed_actions": [],
+      "dm_script": "真相揭晓：真正的凶手是白露。动机是魏廷松准备抛弃她并断绝经济支持，这让她无法接受被抛弃的命运。她提前从陈俊处盗取备用钥匙，案发当晚20:30以谈判为由约魏廷松书房相见，20:45进入后两人争吵升级，白露用书桌上的裁纸刀刺向魏廷松两刀。21:10行凶后，她从书架后方的隐蔽密道离开，并在门内反锁，制造了密室假象。林雪21:30进入时发现尸体后惊慌离开，佣人23:00发现并报警。",
+      "available_clues": null,
+      "per_player_content": null,
+      "reconstruction_questions": []
+    }
+  ],
+  "clues": [
+    {
+      "id": "clue_1",
+      "title": "裁纸刀上的指纹",
+      "content": "警方对凶器裁纸刀进行指纹检测，发现了两组指纹：一组属于死者魏廷松，另一组是陌生的女性指纹。经比对，该指纹与白露的指纹完全吻合。",
+      "phase_available": "investigation_1",
+      "visibility": "public",
+      "unlock_keywords": [
+        "指纹",
+        "裁纸刀",
+        "检测"
+      ]
+    },
+    {
+      "id": "clue_2",
+      "title": "书房密道",
+      "content": "警方仔细搜查书房时发现，书架后方有一条隐蔽通道，入口被书架遮挡。通道可以直接通往花园，平时无人知晓。白露曾作为艺术顾问出入书房，偶然发现了这条密道。",
+      "phase_available": "investigation_1",
+      "visibility": "public",
+      "unlock_keywords": [
+        "密道",
+        "书架",
+        "通道",
+        "花园"
+      ]
+    },
+    {
+      "id": "clue_3",
+      "title": "白露的日记",
+      "content": "白露的日记本被警方发现，其中一页写着：'如果他真的抛弃我，我绝不会就这么算了。我为他付出了最好的年华，他休想一脚踢开我。'字迹写得很用力，显示情绪极度激动。",
+      "phase_available": "investigation_1",
+      "visibility": "public",
+      "unlock_keywords": [
+        "日记",
+        "抛弃",
+        "白露"
+      ]
+    },
+    {
+      "id": "clue_4",
+      "title": "监控录像",
+      "content": "警方调取豪宅周边监控录像，发现在案发前2小时，也就是19:00左右，白露的车辆曾停在豪宅附近约30分钟。监控显示她下车时神态紧张，四处张望。",
+      "phase_available": "investigation_1",
+      "visibility": "public",
+      "unlock_keywords": [
+        "监控",
+        "白露",
+        "车辆",
+        "晚上"
+      ]
+    },
+    {
+      "id": "clue_5",
+      "title": "备用钥匙",
+      "content": "陈俊发现自己丢失的备用书房钥匙的挂钩是空的，但他向警方坚称钥匙是遗失的。经调查，钥匙挂钩的位置靠近白露经常坐的沙发椅扶手的高度。",
+      "phase_available": "investigation_1",
+      "visibility": "public",
+      "unlock_keywords": [
+        "备用钥匙",
+        "陈俊",
+        "遗失"
+      ]
+    }
+  ],
+  "npcs": [],
+  "truth": {
+    "culprit": "char_bailu",
+    "motive": "魏廷松准备抛弃白露并断绝经济支持要与妻子复合，白露无法接受自己被抛弃的现实，多年青春和感情的投入将付诸东流，愤怒和绝望之下产生了报复念头。",
+    "method": "白露提前从陈俊处盗取备用钥匙，案发当晚以谈判为由进入书房，用书桌上的裁纸刀刺魏廷松两刀致其死亡。随后从书架后方隐藏密道离开，并在门内用钥匙反锁，制造密室假象。",
+    "timeline": "20:30，白露以谈判为由约魏廷松在书房相见；20:45白露进入书房，两人发生激烈争吵；21:10白露行凶，从密道离开现场；21:30林雪进入书房发现尸体，惊慌离开；23:00佣人发现尸体并报警。",
+    "key_facts": [
+      "死者身中两刀，凶器为书房内的裁纸刀",
+      "死亡时间为晚上9点到11点之间",
+      "书房从内部反锁，窗户紧闭，形成密室状态",
+      "书房内有一把备用钥匙，原本由陈俊保管",
+      "书架后方存在一条通往花园的隐蔽密道",
+      "白露当晚曾驾车出现在豪宅附近",
+      "白露的日记显示她对被抛弃极为不满",
+      "现场发现的女性指纹与白露指纹匹配"
+    ],
+    "full_story": "",
+    "cause_of_death": "死者身中两刀，流血过多致死"
+  }
+}

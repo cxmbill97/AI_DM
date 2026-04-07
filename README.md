@@ -1,6 +1,6 @@
 # AI DM — 海龟汤 & 剧本杀
 
-> **AI-powered game master for Chinese social deduction games, built with a multi-agent LLM pipeline, real-time WebSocket multiplayer, and a React frontend. Supports bilingual (zh/en) gameplay with streaming DM responses, per-player secret isolation, and an automated evaluation harness.**
+> **AI-powered game master for Chinese social deduction games, built with a multi-agent LLM pipeline, real-time WebSocket multiplayer, a React web frontend, and a native iOS app. Supports bilingual (zh/en) gameplay with streaming DM responses, per-player secret isolation, and an automated evaluation harness.**
 
 ---
 
@@ -40,15 +40,14 @@ The game engine is exposed as MCP tools over stdio, making it playable from Clau
 |-------|-------------|
 | Backend | Python 3.12, FastAPI, WebSocket, asyncio |
 | LLM | MiniMax M2.5 via OpenAI-compatible SDK; streaming + non-streaming |
-| Frontend | React 19, TypeScript, Vite, React Router |
+| Web frontend | React 19, TypeScript, Vite, React Router |
+| iOS app | SwiftUI, MVVM, URLSession, KeychainServices, Google + Apple Sign-In |
 | Real-time | Native WebSocket (auto ws/wss for LAN and tunnel access) |
 | Testing | pytest, pytest-asyncio, 400+ test cases including red-team suite |
 | CI | GitHub Actions (pytest + ruff + tsc + vite build) |
 | Packaging | uv (Python), pnpm (Node); one-command startup via `./start.sh` |
 
 ---
-
-## Quick Start
 
 ## Quick Start
 
@@ -92,6 +91,53 @@ cd frontend
 pnpm install
 pnpm dev --host 0.0.0.0   # UI at http://localhost:5173
 ```
+
+### iOS App
+
+```bash
+cd ios
+xcodegen generate
+open AIDungeonMaster.xcodeproj   # build & run from Xcode, or:
+xcodebuild -scheme AIDungeonMaster -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+```
+
+Requires Xcode 16+. Point `AppConfig.baseURL` at your backend host. The simulator uses `UserDefaults` for token storage (Keychain requires code-signing on device).
+
+**iOS features:**
+- Instagram-style scrollable feed with like, save, and play actions
+- Custom gold/purple tab bar (Home · Explore · Activity · Saved · Profile)
+- **Multiplayer lobby** — tap Play to enter a waiting room; share a 6-character room code or `aidm://room/{id}` deep link; host presses Start when everyone is ready
+- Profile page with Games Played (completed only) and Liked tabs
+- Real-time room view with clue panel, progress bar, and chat
+- Google Sign-In and Apple Sign-In
+
+**Testing the lobby on simulator:**
+
+```bash
+# Terminal 1 — backend
+cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0
+
+# Terminal 2 — build & run first simulator (Alice, the host)
+cd ios
+xcodebuild -scheme AIDungeonMaster \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  -derivedDataPath build build 2>&1 | grep -E 'error:|Build succeeded'
+open -a Simulator
+
+# Terminal 3 — run a second simulator instance (Bob, the joiner)
+xcrun simctl boot "iPhone 15"
+open -a Simulator
+```
+
+Or simply open `ios/AIDungeonMaster.xcodeproj` in Xcode, run on two different simulators side-by-side (Product → Destination), and:
+
+1. Sign in on both (use the dev login at the bottom of the login screen if OAuth is not set up)
+2. On simulator A: tap any game card → **Play** → a waiting room opens with the room code
+3. On simulator B: go to the **Explore** tab (or Lobby tab) → enter the room code in the join field → tap **Join**
+4. Both simulators now show the same lobby with two player slots
+5. Players can tap **I'm Ready**; the host sees **Start Game** once at least one player has joined
+6. Host taps **Start Game** → both devices navigate to the game room simultaneously
+7. The **share button** (top-right ↗) opens the iOS native share sheet with the `aidm://room/{code}` deep link
 
 ---
 
@@ -147,7 +193,7 @@ uv run pytest tests/test_eval.py          -x -v # eval harness (fast scenarios)
 uv run pytest tests/test_mcp.py           -x -v # MCP server tools
 ```
 
-Current baseline: **408 passed, 44 skipped** (slow tests skipped without `--slow`).
+Current baseline: **425 passed, 50 skipped** (slow tests skipped without `--slow`).
 
 ---
 
@@ -293,6 +339,7 @@ backend/
 │   ├── test_dm.py            # DM correctness (turtle soup)
 │   ├── test_clues.py         # Clue unlock logic
 │   ├── test_room.py          # Room join/leave/broadcast
+│   ├── test_room_lobby.py    # Lobby fields: started, max_players, host_player_id, ready_players
 │   ├── test_intervention.py  # Intervention engine: silence timer, backoff
 │   ├── test_visibility.py    # VisibilityRegistry: per-player context isolation
 │   ├── test_private_chat.py  # Private DM chat (turtle soup)
@@ -336,6 +383,19 @@ frontend/
 │       ├── useRoom.ts        # Multiplayer: WebSocket (auto ws/wss) + all MM message types
 │       └── useTraceSetting.ts  # localStorage toggle for agent trace visibility
 └── vite.config.ts            # host 0.0.0.0; proxy /api → :8000, /ws → ws://:8000 (ws:true)
+
+ios/AIDungeonMaster/
+├── App/                      # MainTabView, CustomTabBar, TabBarVisibility, AppConfig
+├── Auth/                     # LoginView, AuthViewModel (deep link handler), KeychainService
+├── Home/                     # Feed, FeedCardView, HomeViewModel — Play → WaitingRoom
+├── Explore/                  # Active rooms list; join by code → WaitingRoom
+├── Profile/                  # History (completed only), Liked games, ProfileViewModel
+├── Room/                     # Game chat, clue panel, progress, RoomViewModel (WebSocket)
+├── Saved/                    # Bookmarked games (SavedView)
+├── Activity/                 # Recent community scripts (ActivityView)
+├── Lobby/                    # Script/puzzle browser (LobbyView) + WaitingRoomView + WaitingRoomViewModel
+├── Models/                   # Shared models + difficulty normalisation helpers
+└── Services/                 # APIService (REST + JWT), WebSocketService
 ```
 
 ---
@@ -355,8 +415,12 @@ frontend/
 
 | Method | Path | Body / Query | Description |
 |--------|------|-------------|-------------|
-| `POST` | `/api/rooms` | `{ game_type, puzzle_id?, script_id?, language }` | Create room |
+| `POST` | `/api/rooms` | `{ game_type, puzzle_id?, script_id?, language, is_public, lobby_mode }` | Create room (`lobby_mode=true` holds in waiting room until host starts) |
+| `GET`  | `/api/rooms` | — | List all public active rooms |
 | `GET`  | `/api/rooms/{room_id}` | — | Room state (players, phase, title) |
+| `POST` | `/api/rooms/{room_id}/start` | — | Host starts the game; broadcasts `game_started` to all players |
+| `PATCH`| `/api/rooms/{room_id}` | `{ is_public?, max_players? }` | Update room settings (host only) |
+| `POST` | `/api/rooms/{room_id}/complete` | `{ outcome }` | Mark session completed (success/failed) |
 | `GET`  | `/api/scripts` | `?lang=zh\|en` | List murder mystery scripts |
 | `WS`   | `/ws/{room_id}?player_name=…` | — | Join room (real-time) |
 
@@ -370,12 +434,16 @@ frontend/
 | `private_chat` | `text` | Private DM question (turtle soup) |
 | `vote` | `target` | Cast vote for character id (murder mystery) |
 | `skip_phase` | — | Vote to skip the current phase (majority required) |
+| `ready` | — | Mark self as ready in the lobby waiting room |
 
 **Server → Client**
 
 | `type` | Description |
 |--------|-------------|
-| `room_snapshot` | Full state on connect (players, phase, game_type) |
+| `room_snapshot` | Full state on connect — now includes `started`, `max_players`, `host_player_id`, `is_host`/`is_ready` per player |
+| `player_joined` | Sent to existing players when a new player joins the lobby |
+| `player_ready` | A player marked themselves ready in the lobby |
+| `game_started` | Host started the game; all clients navigate from lobby → game room |
 | `system` | System notification (join / leave / error) |
 | `player_message` | Another player's chat message |
 | `dm_response` | DM answer — **broadcast to all players** (judgment + response for TS; text for MM) |
@@ -400,8 +468,11 @@ frontend/
 ### Game Flow
 
 ```
-Lobby → Create MM room (select script, language) → Share room code →
-Players join → Characters auto-assigned in join order →
+Tap Play → WaitingRoomView (lobby) → Host shares 6-char code or aidm://room/{id} link →
+Players join → each sees a player slot update in real time →
+Players tap "I'm Ready" → Host taps "Start Game" → REST POST /api/rooms/{id}/start →
+game_started WS event → all clients navigate to RoomView simultaneously →
+Characters auto-assigned in join order →
 
 opening          DM narrates the case setup (listen only)
 reading          each player reads their own character script privately

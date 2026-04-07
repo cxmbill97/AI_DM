@@ -194,6 +194,14 @@ export interface RoomPuzzleInfo {
   puzzle_id: string;
 }
 
+export interface ScriptTheme {
+  primary_color: string;
+  bg_tone: string;
+  era: string;
+  setting: string;
+  dm_persona: string;
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -201,7 +209,7 @@ export interface RoomPuzzleInfo {
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
-export function useRoom(roomId: string, playerName: string) {
+export function useRoom(roomId: string, token: string) {
   const { t } = useT();
 
   // Shared state
@@ -236,6 +244,9 @@ export function useRoom(roomId: string, playerName: string) {
   const [hasVoted, setHasVoted] = useState(false);
   const [skipVotes, setSkipVotes] = useState<{ voted: number; needed: number } | null>(null);
   const [hasSkipVoted, setHasSkipVoted] = useState(false);
+  // Script theme (murder mystery only)
+  const [scriptTheme, setScriptTheme] = useState<ScriptTheme | null>(null);
+
   // Reconstruction mode state
   const [reconstructionQuestion, setReconstructionQuestion] = useState<ReconstructionQuestion | null>(null);
   const [reconstructionResults, setReconstructionResults] = useState<ReconstructionResult[]>([]);
@@ -268,7 +279,7 @@ export function useRoom(roomId: string, playerName: string) {
     // HTTPS (ngrok / cloudflare tunnel). Relative WebSocket URLs are non-standard
     // and silently break in some browsers when the page protocol is https:.
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}?player_name=${encodeURIComponent(playerName)}`;
+    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}?token=${encodeURIComponent(token)}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -316,6 +327,7 @@ export function useRoom(roomId: string, playerName: string) {
             surface: '',
             puzzle_id: data.script_id as string,
           });
+          if (data.theme) setScriptTheme(data.theme as ScriptTheme);
         } else {
           setPuzzle({
             title: data.title as string,
@@ -766,5 +778,7 @@ export function useRoom(roomId: string, playerName: string) {
     reconstructionResults,
     reconstructionComplete,
     sendReconstructionAnswer,
+    // Theme
+    scriptTheme,
   };
 }

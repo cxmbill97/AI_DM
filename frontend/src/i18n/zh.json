@@ -22,7 +22,10 @@
     "players_count": "👥 {n}人",
     "language": "语言",
     "name_required": "请输入你的名字",
-    "room_code_required": "请输入房间号"
+    "room_code_required": "请输入房间号",
+    "search_placeholder": "搜索剧本…",
+    "community_scripts": "社区上传",
+    "like": "点赞"
   },
   "game": {
     "back": "← 返回",
@@ -187,5 +190,44 @@
     "score_label": "当前得分",
     "complete_label": "还原完成",
     "chat_hint": "可在上方发言讨论，在右侧面板提交答案"
+  },
+  "upload": {
+    "btn": "上传剧本",
+    "title": "上传剧本文件",
+    "drop_hint": "拖拽或点击上传 PDF、DOCX、TXT",
+    "size_hint": "最大 10MB",
+    "parsing": "正在解析剧本…",
+    "step_extract": "提取文本",
+    "step_parse": "AI 解析结构",
+    "step_validate": "验证数据",
+    "preview_title": "解析结果预览",
+    "confirm": "确认添加",
+    "cancel": "取消",
+    "retry": "重试",
+    "warning_truncated": "⚠ 文档过长，已截断至 24000 字符",
+    "error_title": "解析失败",
+    "raw_output": "查看原始输出",
+    "success": "剧本《{title}》已添加！",
+    "show_raw": "查看原始输出",
+    "puzzle_title": "上传汤面汤底谜题",
+    "puzzle_success": "谜题《{title}》已添加！",
+    "puzzle_btn": "上传谜题"
+  },
+  "auth": {
+    "tagline": "AI 驱动的推理游戏主持人",
+    "sign_in_google": "使用 Google 登录",
+    "oauth_failed": "登录失败，请重试",
+    "login_note": "登录后可保存收藏和游戏记录",
+    "logout": "退出登录"
+  },
+  "profile": {
+    "title": "我的主页",
+    "favorites": "收藏",
+    "history": "游戏记录",
+    "no_favorites": "暂无收藏 — 在大厅中点击心形图标保存游戏",
+    "no_history": "暂无游戏记录",
+    "games_played": "{n} 场游戏",
+    "favorites_count": "{n} 个收藏",
+    "member_since": "加入于 {date}"
   }
 }

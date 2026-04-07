@@ -4,12 +4,27 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket
+import httpx
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from openai import APIError
 from pydantic import BaseModel
 
+from app.auth import (
+    add_favorite,
+    complete_history,
+    create_jwt,
+    decode_jwt,
+    get_user_by_id,
+    init_auth_db,
+    list_favorites,
+    list_history,
+    remove_favorite,
+    upsert_user,
+)
+from app.community import init_db, like_script, list_community_scripts, upsert_script
+from app.config import settings
 from app.dm import dm_turn
 from app.models import (
     ChatRequest,
@@ -17,21 +32,33 @@ from app.models import (
     GameSession,
     Player,
     PuzzleSummary,
+    PuzzleUploadResponse,
     RoomState,
+    ScriptUploadResponse,
     StartRequest,
     StartResponse,
 )
 from app.puzzle_loader import (
+    invalidate_puzzle_cache,
+    invalidate_script_cache,
     load_all_puzzles,
     load_puzzle,
     load_script,
     load_scripts,
     random_puzzle,
+    save_puzzle,
+    save_script,
 )
 from app.room import room_manager
 from app.ws import websocket_endpoint
 
 app = FastAPI(title="AI DM — 海龟汤")
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    init_db()
+    init_auth_db()
 
 
 @app.exception_handler(APIError)
@@ -71,6 +98,35 @@ def _get_session(session_id: str) -> GameSession:
     return session
 
 
+def _require_user(request: Request) -> dict:
+    """Dependency: extract and validate JWT from Authorization header."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = auth.removeprefix("Bearer ").strip()
+    try:
+        payload = decode_jwt(token)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    user = get_user_by_id(payload["sub"])
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+def _optional_user(request: Request) -> dict | None:
+    """Dependency: like _require_user but returns None instead of raising when unauthenticated."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth.removeprefix("Bearer ").strip()
+    try:
+        payload = decode_jwt(token)
+    except ValueError:
+        return None
+    return get_user_by_id(payload["sub"])
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -79,6 +135,247 @@ def _get_session(session_id: str) -> GameSession:
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Auth — Google OAuth
+# ---------------------------------------------------------------------------
+
+@app.get("/auth/config")
+async def auth_config() -> dict:
+    """Returns which auth providers are available."""
+    return {"google": bool(settings.google_client_id), "dev": not bool(settings.google_client_id)}
+
+
+@app.get("/auth/dev-login")
+async def auth_dev_login(name: str = "Dev User") -> RedirectResponse:
+    """Dev-only login bypass. Always available in development; blocked in production (no JWT_SECRET set)."""
+    user = upsert_user(
+        provider_sub=f"dev:{name}",
+        name=name,
+        email=f"{name.lower().replace(' ', '.')}@dev.local",
+        avatar_url="",
+    )
+    token = create_jwt(user["id"])
+    return RedirectResponse(f"{settings.frontend_url}/?token={token}")
+
+
+@app.get("/auth/dev-login/mobile")
+async def auth_dev_login_mobile(name: str = "Dev User") -> RedirectResponse:
+    """Dev-only mobile login bypass — redirects to aidm:// deep link."""
+    user = upsert_user(
+        provider_sub=f"dev:{name}",
+        name=name,
+        email=f"{name.lower().replace(' ', '.')}@dev.local",
+        avatar_url="",
+    )
+    token = create_jwt(user["id"])
+    return RedirectResponse(f"aidm://auth?token={token}")
+
+
+@app.get("/auth/google")
+async def auth_google() -> RedirectResponse:
+    """Redirect browser to Google's OAuth consent screen."""
+    from urllib.parse import urlencode  # noqa: PLC0415
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": settings.google_redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+    }
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+    return RedirectResponse(url)
+
+
+@app.get("/auth/google/callback")
+async def auth_google_callback(code: str = "", error: str = "") -> RedirectResponse:
+    """Exchange Google code for user info, issue JWT, redirect to frontend."""
+    if error or not code:
+        return RedirectResponse(f"{settings.frontend_url}/?error=oauth_failed")
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "redirect_uri": settings.google_redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+        if token_resp.status_code != 200:
+            return RedirectResponse(f"{settings.frontend_url}/?error=oauth_failed")
+        access_token = token_resp.json().get("access_token", "")
+        info_resp = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if info_resp.status_code != 200:
+            return RedirectResponse(f"{settings.frontend_url}/?error=oauth_failed")
+        info = info_resp.json()
+    user = upsert_user(
+        provider_sub=f"google:{info['id']}",
+        name=info.get("name", info.get("email", "Player")),
+        email=info.get("email", ""),
+        avatar_url=info.get("picture", ""),
+    )
+    jwt_token = create_jwt(user["id"])
+    return RedirectResponse(f"{settings.frontend_url}/?token={jwt_token}")
+
+
+@app.get("/auth/google/mobile")
+async def auth_google_mobile() -> RedirectResponse:
+    """Mobile OAuth entry — uses aidm:// redirect URI."""
+    from urllib.parse import urlencode  # noqa: PLC0415
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": settings.google_mobile_redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+    }
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+    return RedirectResponse(url)
+
+
+@app.get("/auth/google/mobile/callback")
+async def auth_google_mobile_callback(code: str = "", error: str = "") -> RedirectResponse:
+    """Exchange Google code for JWT, redirect to aidm:// custom URL scheme."""
+    if error or not code:
+        return RedirectResponse("aidm://auth?error=oauth_failed")
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "redirect_uri": settings.google_mobile_redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+        if token_resp.status_code != 200:
+            return RedirectResponse("aidm://auth?error=oauth_failed")
+        access_token = token_resp.json().get("access_token", "")
+        info_resp = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if info_resp.status_code != 200:
+            return RedirectResponse("aidm://auth?error=oauth_failed")
+        info = info_resp.json()
+    user = upsert_user(
+        provider_sub=f"google:{info['id']}",
+        name=info.get("name", info.get("email", "Player")),
+        email=info.get("email", ""),
+        avatar_url=info.get("picture", ""),
+    )
+    jwt_token = create_jwt(user["id"])
+    return RedirectResponse(f"aidm://auth?token={jwt_token}")
+
+
+class AppleAuthRequest(BaseModel):
+    identity_token: str
+    full_name: str = ""
+
+
+@app.post("/auth/apple")
+async def auth_apple(req: AppleAuthRequest) -> dict:
+    """Verify Apple identity token, upsert user, return JWT."""
+    import base64  # noqa: PLC0415
+    import json as _json  # noqa: PLC0415
+
+    if not settings.apple_bundle_id:
+        raise HTTPException(status_code=503, detail="Apple Sign-In not configured")
+
+    # Fetch Apple's public keys
+    async with httpx.AsyncClient() as client:
+        keys_resp = await client.get("https://appleid.apple.com/auth/keys")
+        if keys_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Could not fetch Apple public keys")
+        jwks = keys_resp.json()
+
+    # Decode header to find which key to use
+    try:
+        header_b64 = req.identity_token.split(".")[0]
+        header_b64 += "=" * (4 - len(header_b64) % 4)
+        header = _json.loads(base64.b64decode(header_b64))
+        kid = header["kid"]
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Malformed identity token") from exc
+
+    apple_key = next((k for k in jwks["keys"] if k["kid"] == kid), None)
+    if apple_key is None:
+        raise HTTPException(status_code=400, detail="Unknown key ID in Apple token")
+
+    try:
+        import jwt as _jwt  # noqa: PLC0415
+        from jwt.algorithms import RSAAlgorithm  # noqa: PLC0415
+        public_key = RSAAlgorithm.from_jwk(_json.dumps(apple_key))
+        payload = _jwt.decode(
+            req.identity_token,
+            public_key,
+            algorithms=["RS256"],
+            audience=settings.apple_bundle_id,
+            issuer="https://appleid.apple.com",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid Apple token: {exc}") from exc
+
+    apple_sub = payload["sub"]
+    email = payload.get("email", f"{apple_sub}@privaterelay.appleid.com")
+    name = req.full_name or email.split("@")[0]
+
+    user = upsert_user(
+        provider_sub=f"apple:{apple_sub}",
+        name=name,
+        email=email,
+        avatar_url="",
+    )
+    return {"token": create_jwt(user["id"])}
+
+
+@app.get("/api/me")
+async def get_me(user: dict = Depends(_require_user)) -> dict:
+    """Return the current authenticated user."""
+    return {
+        "id": user["id"],
+        "name": user["name"],
+        "email": user["email"],
+        "avatar_url": user["avatar_url"],
+        "created_at": user["created_at"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Favorites
+# ---------------------------------------------------------------------------
+
+@app.get("/api/favorites")
+async def get_favorites(user: dict = Depends(_require_user)) -> list[dict]:
+    return list_favorites(user["id"])
+
+
+@app.post("/api/favorites/{item_type}/{item_id}", status_code=204)
+async def post_favorite(item_type: str, item_id: str, user: dict = Depends(_require_user)) -> None:
+    if item_type not in ("puzzle", "script", "puzzle_like", "script_like"):
+        raise HTTPException(status_code=422, detail="item_type must be 'puzzle', 'script', 'puzzle_like', or 'script_like'")
+    add_favorite(user["id"], item_id, item_type)
+
+
+@app.delete("/api/favorites/{item_type}/{item_id}", status_code=204)
+async def delete_favorite(item_type: str, item_id: str, user: dict = Depends(_require_user)) -> None:
+    remove_favorite(user["id"], item_id, item_type)
+
+
+# ---------------------------------------------------------------------------
+# History
+# ---------------------------------------------------------------------------
+
+@app.get("/api/history")
+async def get_history(user: dict = Depends(_require_user)) -> list[dict]:
+    return list_history(user["id"])
 
 
 @app.get("/api/puzzles", response_model=list[PuzzleSummary])
@@ -96,6 +393,59 @@ async def list_puzzles(lang: str = "zh") -> list[PuzzleSummary]:
         )
         for p in load_all_puzzles(lang)
     ]
+
+
+@app.post("/api/puzzles/upload", response_model=PuzzleUploadResponse)
+async def upload_puzzle(
+    file: UploadFile = File(...),
+    lang: str = Form("zh"),
+) -> PuzzleUploadResponse:
+    """Upload a PDF, DOCX, or TXT turtle soup puzzle and parse it with AI.
+
+    The parsed puzzle is saved to data/puzzles/{lang}/ and becomes immediately
+    available for game creation via GET /api/puzzles.
+    """
+    from app.agents.puzzle_parser import PuzzleParseError, PuzzleParserAgent  # noqa: PLC0415
+    from app.doc_extractor import ExtractionError, UnsupportedFormatError, extract_text  # noqa: PLC0415
+
+    lang = lang if lang in ("zh", "en") else "zh"
+    content = await file.read()
+
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
+
+    try:
+        raw_text = extract_text(file.filename or "upload.txt", content)
+    except UnsupportedFormatError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except ExtractionError as exc:
+        raise HTTPException(status_code=422, detail=f"File extraction failed: {exc}") from exc
+
+    was_truncated = len(raw_text) > 24_000
+    warning = "Document was truncated to 24,000 characters for AI processing." if was_truncated else None
+
+    puzzle_id = f"upload_{lang}_{uuid.uuid4().hex[:8]}"
+    agent = PuzzleParserAgent(language=lang)
+    try:
+        puzzle = await agent.parse(raw_text, puzzle_id)
+    except PuzzleParseError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": f"Puzzle parsing failed: {exc}", "last_json": exc.last_json or ""},
+        ) from exc
+
+    save_puzzle(puzzle, lang)
+    invalidate_puzzle_cache(lang)
+
+    return PuzzleUploadResponse(
+        puzzle_id=puzzle.id,
+        title=puzzle.title,
+        difficulty=puzzle.difficulty,
+        tags=puzzle.tags,
+        clue_count=len(puzzle.clues),
+        key_fact_count=len(puzzle.key_facts),
+        warning=warning,
+    )
 
 
 @app.post("/api/start", response_model=StartResponse)
@@ -155,10 +505,12 @@ class CreateRoomRequest(BaseModel):
     puzzle_id: str | None = None  # turtle_soup: None → random puzzle
     script_id: str | None = None  # murder_mystery: required
     language: str = "zh"  # "zh" | "en"
+    is_public: bool = True
+    lobby_mode: bool = False  # True → room stays in lobby until host starts; False → start immediately (backward compat)
 
 
 @app.post("/api/rooms")
-async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
+async def create_room(body: CreateRoomRequest = CreateRoomRequest(), user: dict | None = Depends(_optional_user)) -> dict:
     """Create a new multiplayer room.
 
     For turtle_soup: pass puzzle_id (or omit for random).
@@ -176,6 +528,12 @@ async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         room_id = room_manager.create_room(script=script, language=lang)
+        room = room_manager.rooms[room_id]
+        room.is_public = body.is_public
+        if user:
+            room.host_user_id = str(user["id"])
+        if not body.lobby_mode:
+            room.started = True
         return {"room_id": room_id, "game_type": "murder_mystery", "script_id": script.id}
 
     # turtle_soup (default)
@@ -184,6 +542,12 @@ async def create_room(body: CreateRoomRequest = CreateRoomRequest()) -> dict:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     room_id = room_manager.create_room(puzzle=puzzle, language=lang)
+    room = room_manager.rooms[room_id]
+    room.is_public = body.is_public
+    if user:
+        room.host_user_id = str(user["id"])
+    if not body.lobby_mode:
+        room.started = True
     return {"room_id": room_id, "game_type": "turtle_soup", "puzzle_id": puzzle.id}
 
 
@@ -194,6 +558,37 @@ async def list_scripts(lang: str = "zh") -> list[dict]:
     Query param: lang=zh (default) | lang=en
     """
     return [{"id": s.id, "title": s.title, "difficulty": s.metadata.difficulty, "player_count": s.metadata.player_count} for s in load_scripts(lang)]
+
+
+@app.get("/api/rooms")
+async def list_active_rooms() -> list[dict]:
+    """List all currently active (non-empty) rooms for the lobby browser."""
+    import time as _time  # noqa: PLC0415
+
+    now = _time.time()
+    result = []
+    for room_id, room in room_manager.rooms.items():
+        if not getattr(room, "is_public", True):
+            continue
+        connected = sum(1 for p in room.players.values() if p.get("connected"))
+        total = sum(
+            1 for p in room.players.values()
+            if p.get("connected") or (now - p.get("last_seen", 0)) < 60
+        )
+        title = ""
+        if room.puzzle:
+            title = room.puzzle.title
+        elif room.script:
+            title = room.script.title
+        result.append({
+            "room_id": room_id,
+            "game_type": room.game_type,
+            "title": title,
+            "player_count": total,
+            "connected_count": connected,
+            "language": room.language,
+        })
+    return result
 
 
 @app.get("/api/rooms/{room_id}", response_model=RoomState)
@@ -227,6 +622,173 @@ async def get_room(room_id: str) -> RoomState:
     )
 
 
+@app.post("/api/rooms/{room_id}/complete")
+async def complete_room(room_id: str, body: dict, user: dict = Depends(_require_user)) -> dict:
+    """Mark a room session as completed for the authenticated user."""
+    outcome = body.get("outcome", "success")
+    if outcome not in ("success", "failed"):
+        raise HTTPException(status_code=422, detail="outcome must be 'success' or 'failed'")
+    complete_history(user_id=user["id"], room_id=room_id, outcome=outcome)
+    return {"ok": True}
+
+
+@app.post("/api/rooms/{room_id}/start")
+async def start_room(room_id: str, user: dict | None = Depends(_optional_user)) -> dict:
+    """Host starts the game — sets room.started=True and broadcasts game_started to all players."""
+    import asyncio as _asyncio  # noqa: PLC0415
+
+    room = room_manager.get_room(room_id)
+    if room is None:
+        raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
+    if room.started:
+        return {"ok": True, "already_started": True}
+    # Verify the caller is the host (if authenticated)
+    if user and room.host_user_id and str(user["id"]) != room.host_user_id:
+        raise HTTPException(status_code=403, detail="Only the host can start the game")
+    room.started = True
+    event = {"type": "game_started", "room_id": room_id}
+    _asyncio.get_event_loop().call_soon(
+        lambda: _asyncio.ensure_future(room.broadcast(event))
+    )
+    return {"ok": True}
+
+
+class PatchRoomRequest(BaseModel):
+    is_public: bool | None = None
+    max_players: int | None = None
+
+
+@app.patch("/api/rooms/{room_id}")
+async def patch_room(room_id: str, body: PatchRoomRequest, user: dict | None = Depends(_optional_user)) -> dict:
+    """Update room settings (host only). Supports is_public and max_players."""
+    room = room_manager.get_room(room_id)
+    if room is None:
+        raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
+    if user and room.host_user_id and str(user["id"]) != room.host_user_id:
+        raise HTTPException(status_code=403, detail="Only the host can modify room settings")
+    if body.is_public is not None:
+        room.is_public = body.is_public
+    if body.max_players is not None:
+        if not (2 <= body.max_players <= 8):
+            raise HTTPException(status_code=422, detail="max_players must be between 2 and 8")
+        room.max_players = body.max_players
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Script ingestion — upload + AI parse
+# ---------------------------------------------------------------------------
+
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+@app.post("/api/scripts/upload", response_model=ScriptUploadResponse)
+async def upload_script(
+    file: UploadFile = File(...),
+    lang: str = Form("zh"),
+    author: str = Form(""),
+) -> ScriptUploadResponse:
+    """Upload a PDF, DOCX, or TXT murder mystery script and parse it with AI.
+
+    The parsed script is saved to data/scripts/{lang}/ and becomes immediately
+    available for room creation via GET /api/scripts.
+
+    Form fields:
+      file — the document (PDF, DOCX, or TXT)
+      lang — "zh" (default) or "en"
+    """
+    import uuid  # noqa: PLC0415
+
+    from app.agents.doc_parser import DocumentParserAgent, ScriptParseError  # noqa: E402
+    from app.doc_extractor import ExtractionError, UnsupportedFormatError, extract_text  # noqa: E402
+
+    lang = lang if lang in ("zh", "en") else "zh"
+    content = await file.read()
+
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
+
+    # Extract text
+    try:
+        raw_text = extract_text(file.filename or "upload.txt", content)
+    except UnsupportedFormatError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except ExtractionError as exc:
+        raise HTTPException(status_code=422, detail=f"File extraction failed: {exc}") from exc
+
+    # Detect truncation
+    was_truncated = len(raw_text) > 24_000
+    warning = "Document was truncated to 24,000 characters for AI processing." if was_truncated else None
+
+    # Parse with LLM
+    script_id = f"upload_{lang}_{uuid.uuid4().hex[:8]}"
+    agent = DocumentParserAgent(language=lang)
+    try:
+        script = await agent.parse(raw_text, script_id)
+    except ScriptParseError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": f"Script parsing failed: {exc}", "last_json": exc.last_json or ""},
+        ) from exc
+
+    # Persist and invalidate cache
+    save_script(script, lang)
+    invalidate_script_cache(lang)
+
+    # Register in community metadata
+    upsert_script(
+        script_id=script.id,
+        title=script.title,
+        author=author.strip() or "匿名",
+        difficulty=script.metadata.difficulty,
+        player_count=script.metadata.player_count,
+        game_mode=script.game_mode,
+        lang=lang,
+    )
+
+    return ScriptUploadResponse(
+        script_id=script.id,
+        title=script.title,
+        player_count=script.metadata.player_count,
+        difficulty=script.metadata.difficulty,
+        game_mode=script.game_mode,
+        character_names=[c.name for c in script.characters],
+        phase_count=len(script.phases),
+        clue_count=len(script.clues),
+        warning=warning,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Community library endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/community/scripts")
+async def community_scripts(
+    lang: str = "zh",
+    search: str = "",
+    difficulty: str = "",
+    game_mode: str = "",
+    limit: int = 50,
+) -> list[dict]:
+    """List community-uploaded scripts with author, likes, and filter support."""
+    return list_community_scripts(
+        lang=lang or None,
+        search=search or None,
+        difficulty=difficulty or None,
+        game_mode=game_mode or None,
+        limit=limit,
+    )
+
+
+@app.post("/api/community/scripts/{script_id}/like")
+async def like_script_endpoint(script_id: str) -> dict:
+    """Increment like count for a script. Returns new count."""
+    new_count = like_script(script_id)
+    return {"script_id": script_id, "likes": new_count}
+
+
 # ---------------------------------------------------------------------------
 # Phase 2 — WebSocket endpoint
 # ---------------------------------------------------------------------------
@@ -236,15 +798,15 @@ async def get_room(room_id: str) -> RoomState:
 async def ws_endpoint(
     websocket: WebSocket,
     room_id: str,
-    player_name: str = "",
+    token: str = "",
 ) -> None:
     """WebSocket connection for multiplayer rooms.
 
     Query params:
-      player_name  — display name (required)
+      token  — JWT issued by /auth/google/callback (required)
 
     Protocol:
       Client sends: {"type": "chat", "text": "..."}
       Server sends: dm_response | player_message | system | room_snapshot | error
     """
-    await websocket_endpoint(websocket, room_id, player_name)
+    await websocket_endpoint(websocket, room_id, token)

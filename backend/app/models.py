@@ -341,6 +341,20 @@ class ScriptMetadata(BaseModel):
     age_rating: str = "12+"
 
 
+class ScriptTheme(BaseModel):
+    """Visual and narrative theme generated for each script.
+
+    Used by the frontend to apply per-script CSS colour variables and by
+    NarratorAgent to adopt a script-specific DM voice.
+    """
+
+    primary_color: str = "#c4a35a"  # hex colour for accent / primary UI
+    bg_tone: str = "dark"  # "dark" | "warm" | "eerie" | "cold" | "natural"
+    era: str = ""  # e.g. "modern", "Victorian", "ancient China", "sci-fi"
+    setting: str = ""  # e.g. "manor house", "spaceship", "countryside villa"
+    dm_persona: str = ""  # personality hint for NarratorAgent, e.g. "calm and clinical detective"
+
+
 class Script(BaseModel):
     """A complete murder mystery script loaded from data/scripts/.
 
@@ -358,6 +372,7 @@ class Script(BaseModel):
     clues: list[ScriptClue]
     npcs: list[NPC]
     truth: ScriptTruth
+    theme: ScriptTheme = Field(default_factory=ScriptTheme)
 
 
 class VoteRecord(BaseModel):
@@ -366,3 +381,34 @@ class VoteRecord(BaseModel):
     player_id: str
     target_character_id: str
     timestamp: float
+
+
+# ---------------------------------------------------------------------------
+# Script ingestion response
+# ---------------------------------------------------------------------------
+
+
+class ScriptUploadResponse(BaseModel):
+    """Returned by POST /api/scripts/upload on success."""
+
+    script_id: str
+    title: str
+    player_count: int
+    difficulty: str
+    game_mode: str
+    character_names: list[str]
+    phase_count: int
+    clue_count: int
+    warning: str | None = None  # e.g. "text truncated to 24000 chars"
+
+
+class PuzzleUploadResponse(BaseModel):
+    """Returned by POST /api/puzzles/upload on success."""
+
+    puzzle_id: str
+    title: str
+    difficulty: str
+    tags: list[str]
+    clue_count: int
+    key_fact_count: int
+    warning: str | None = None

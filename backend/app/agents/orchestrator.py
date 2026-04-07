@@ -153,6 +153,7 @@ class AgentOrchestrator:
         self._sm = state_machine
         self._player_char_map: dict[str, str] = player_char_map or {}
         self._language: str = language
+        self._dm_persona: str = getattr(script.theme, "dm_persona", "") if hasattr(script, "theme") else ""
 
         # Index clues by id for O(1) lookup
         self._clues_by_id: dict[str, ScriptClue] = {c.id: c for c in script.clues}
@@ -414,6 +415,7 @@ class AgentOrchestrator:
                 phase=phase_val,
                 truth_for_reveal=truth_for_reveal,
                 language=self._language,
+                dm_style=self._dm_persona,
             )
             async for chunk in stream_gen:
                 accumulated += chunk
@@ -663,6 +665,7 @@ class AgentOrchestrator:
                 phase=phase,
                 truth_for_reveal=truth_for_reveal,
                 language=self._language,
+                dm_style=self._dm_persona,
             )
             narrator_usages = drain_usage()
             if trace is not None:
