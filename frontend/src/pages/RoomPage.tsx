@@ -9,6 +9,7 @@ import { PrivateCluePanel } from '../components/PrivateCluePanel';
 import { PhaseBar } from '../components/PhaseBar';
 import { ReconstructionPanel } from '../components/ReconstructionPanel';
 import { ScriptCard } from '../components/ScriptCard';
+import { TraceFeed } from '../components/TraceFeed';
 import { TracePanel } from '../components/TracePanel';
 import { VotePanel } from '../components/VotePanel';
 import { LanguageToggle } from '../components/LanguageToggle';
@@ -746,6 +747,8 @@ export function RoomPage() {
             )}
           </aside>
         </div>
+
+        <TraceFeed roomId={roomId} showTraces={showTraces} />
       </div>
     );
   }
@@ -892,6 +895,8 @@ export function RoomPage() {
         <div className="game-bottom">
           <HintBar hints={[]} progress={progress} />
         </div>
+
+        <TraceFeed roomId={roomId} showTraces={showTraces} />
       </div>
 
       <aside className="game-sidebar room-sidebar">

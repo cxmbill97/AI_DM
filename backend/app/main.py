@@ -5,9 +5,12 @@ from __future__ import annotations
 import uuid
 
 import httpx
+import asyncio
+import json as _json
+
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from openai import APIError
 from pydantic import BaseModel
 
@@ -49,6 +52,7 @@ from app.puzzle_loader import (
     save_puzzle,
     save_script,
 )
+from app.agents.trace_store import get_traces, subscribe, unsubscribe
 from app.room import room_manager
 from app.ws import websocket_endpoint
 
@@ -787,6 +791,60 @@ async def like_script_endpoint(script_id: str) -> dict:
     """Increment like count for a script. Returns new count."""
     new_count = like_script(script_id)
     return {"script_id": script_id, "likes": new_count}
+
+
+# ---------------------------------------------------------------------------
+# Agent Trace — REST + SSE endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/rooms/{room_id}/traces")
+async def get_room_traces(room_id: str) -> list[dict]:
+    """Return the last 20 agent traces for a room (newest first).
+
+    Traces are produced by the multi-agent pipeline on each player message
+    and stored in memory (last 50 per room, no persistence).
+    """
+    if room_manager.get_room(room_id) is None:
+        raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
+    return get_traces(room_id, limit=20)
+
+
+@app.get("/api/rooms/{room_id}/traces/live")
+async def stream_room_traces(room_id: str) -> StreamingResponse:
+    """SSE stream — emits one DMTrace JSON object per event as new traces arrive.
+
+    Clients connect with EventSource and receive:
+        data: {"message_id": "...", "steps": [...], ...}\n\n
+
+    The stream stays open until the client disconnects.
+    """
+    if room_manager.get_room(room_id) is None:
+        raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
+
+    q = subscribe(room_id)
+
+    async def event_generator():
+        # Send a keep-alive comment immediately so the browser confirms the connection
+        yield ": connected\n\n"
+        try:
+            while True:
+                try:
+                    trace_dict = await asyncio.wait_for(q.get(), timeout=25.0)
+                    yield f"data: {_json.dumps(trace_dict, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        finally:
+            unsubscribe(room_id, q)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # disable nginx buffering
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
