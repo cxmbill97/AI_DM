@@ -60,9 +60,11 @@ from app.puzzle_loader import (
 )
 from app.agents.trace_store import get_traces, subscribe, unsubscribe
 from app.room import room_manager
+from app.routers.economy_router import router as economy_router
 from app.ws import websocket_endpoint
 
 app = FastAPI(title="AI DM — 海龟汤")
+app.include_router(economy_router)
 
 
 @app.on_event("startup")
