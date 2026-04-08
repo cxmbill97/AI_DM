@@ -17,6 +17,8 @@ PRICING: dict[str, dict[str, float]] = {
     }
 }
 
+HINTS_PER_GAME = 3  # default hint budget per turtle-soup puzzle
+
 
 # ---------------------------------------------------------------------------
 # Agent trace models (Pydantic — for JSON serialisation in API responses)
@@ -144,6 +146,7 @@ class Player(BaseModel):
     id: str
     name: str
     connected: bool = True
+    role: str = "player"  # "player" | "spectator"
 
 
 class RoomState(BaseModel):
@@ -154,8 +157,11 @@ class RoomState(BaseModel):
     title: str
     surface: str  # 汤面 — safe to expose
     players: list[Player]
+    spectators: list[Player] = []  # read-only observers
     phase: str  # "waiting" | "playing" | "finished"
     game_type: str = "turtle_soup"  # "turtle_soup" | "murder_mystery"
+    hints_remaining: int = HINTS_PER_GAME  # hint budget for current puzzle
+    skip_votes: int = 0  # current skip vote count
 
 
 # ---------------------------------------------------------------------------
