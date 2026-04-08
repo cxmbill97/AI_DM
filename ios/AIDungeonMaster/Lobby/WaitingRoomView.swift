@@ -44,7 +44,10 @@ struct WaitingRoomView: View {
         .onDisappear { tabBarState.isHidden = false }
         .task { await vm.connect() }
         .onChange(of: vm.started) { _ in
-            if vm.started { navigateToGame = true }
+            if vm.started {
+                vm.disconnect()   // release lobby WS before game room connects
+                navigateToGame = true
+            }
         }
         .alert("Error", isPresented: Binding(
             get: { vm.errorMessage != nil },

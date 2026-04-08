@@ -1070,9 +1070,9 @@ async def websocket_endpoint(
     if existing_id is not None:
         slot = room.players[existing_id]
         if slot["connected"]:
-            await websocket.send_json({"type": "error", "text": f"名字「{player_name}」已被使用"})
-            await websocket.close(code=4409)
-            return
+            # Same player reconnecting (e.g. navigating from lobby→game room on mobile).
+            # Force-take the slot: mark old connection dead, treat as immediate reconnect.
+            room.disconnect_player(existing_id)
         gap = time.time() - slot["last_seen"]
         if gap <= RECONNECT_WINDOW_SECS:
             is_reconnect = True
@@ -1558,14 +1558,19 @@ async def websocket_endpoint(
     except Exception as exc:
         logger.exception("Unexpected error in WebSocket handler for %s: %s", player_name, exc)
     finally:
-        room.disconnect_player(player_id)
-        leave_notice = {
-            "type": "system",
-            "text": f"{player_name} 断开连接",
-            "timestamp": time.time(),
-        }
-        room.message_history.append(leave_notice)
-        await room.broadcast(leave_notice)
+        # Only mark as disconnected if this websocket still owns the player slot.
+        # A newer connection (e.g. navigating lobby→game room) may have already
+        # taken over the slot; in that case, leave it untouched.
+        _slot = room.players.get(player_id)
+        if _slot is not None and _slot["websocket"] is websocket:
+            room.disconnect_player(player_id)
+            leave_notice = {
+                "type": "system",
+                "text": f"{player_name} 断开连接",
+                "timestamp": time.time(),
+            }
+            room.message_history.append(leave_notice)
+            await room.broadcast(leave_notice)
         # Broadcast updated player list so other players' banners update
         players_update = {
             "type": "players_update",
