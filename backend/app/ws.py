@@ -28,9 +28,71 @@ logger = logging.getLogger(__name__)
 
 from app.auth import add_history, decode_jwt, get_user_by_id  # noqa: E402
 from app.dm import dm_proactive_message, dm_turn, dm_turn_private  # noqa: E402
-from app.room import RECONNECT_WINDOW_SECS, Room, room_manager  # noqa: E402
+from app.room import RECONNECT_WINDOW_SECS, TURN_HINT_SECS, TURN_TIMEOUT_SECS, Room, room_manager  # noqa: E402
 from app.visibility import VisibilityRegistry  # noqa: E402
 from app.voting import VoteError, VotingModule  # noqa: E402
+
+# _PROGRESS_JUDGMENTS imported lazily from dm.py where needed to avoid circular import
+_PROGRESS_JUDGMENTS = {"是", "部分正确", "Yes", "Partially correct"}
+
+# ---------------------------------------------------------------------------
+# Phase 1: Anomaly detection (fire-and-forget helper)
+# ---------------------------------------------------------------------------
+
+
+async def _check_anomaly(
+    room: Room,
+    player_id: str,
+    player_name: str,
+    text: str,
+    judgment: str,
+    truth_progress: float,
+) -> None:
+    """Run anomaly detection in the background; never raises."""
+    try:
+        detector = room.get_anomaly_detector()
+        if detector is None:
+            return
+        anomaly = await detector.check(text, judgment, truth_progress)
+        import time as _t  # noqa: PLC0415
+        room._anomaly_flags.append({
+            "player_id": player_id,
+            "player_name": player_name,
+            "message": text,
+            "judgment": judgment,
+            "truth_progress": truth_progress,
+            "suspicious": anomaly["suspicious"],
+            "confidence": anomaly["confidence"],
+            "reason": anomaly["reason"],
+            "timestamp": _t.time(),
+        })
+        if anomaly["suspicious"] and anomaly["confidence"] >= 0.8:
+            logger.warning(
+                "[ANOMALY] room=%s player=%s confidence=%.0f%% reason=%s",
+                room.room_id, player_name, anomaly["confidence"] * 100, anomaly["reason"],
+            )
+    except Exception as exc:
+        logger.debug("Anomaly check error (suppressed): %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Per-turn scoring
+# ---------------------------------------------------------------------------
+
+_SCORE_MAP: dict[str, int] = {
+    "是": 3, "Yes": 3,
+    "部分正确": 2, "Partially correct": 2,
+    "不是": 1, "No": 1,
+    "无关": 0, "Irrelevant": 0,
+}
+
+
+def _compute_turn_score(judgment: str, clue_unlocked: bool) -> int:
+    """Return 0-4 points for a single turn based on judgment and clue bonus."""
+    base = _SCORE_MAP.get(judgment, 0)
+    bonus = 1 if clue_unlocked else 0
+    return min(base + bonus, 4)
+
 
 # ---------------------------------------------------------------------------
 # Phase display helpers
@@ -769,10 +831,67 @@ async def _mm_tick(room: Room) -> None:
 
 
 async def _ts_tick(room: Room) -> None:
-    """Tick logic for turtle soup rooms (unchanged from Phase 3)."""
+    """Tick logic for turtle soup rooms."""
     if not room.game_session or room.game_session.finished:
         return
 
+    # ---- Phase 0: per-turn timeout (turn_mode only) ----
+    if room.turn_mode and room.turn_started_at is not None:
+        elapsed = room.turn_elapsed()
+        current_pid = room.current_turn_player_id()
+        current_name = room.players[current_pid]["name"] if current_pid and current_pid in room.players else "?"
+
+        if elapsed >= TURN_TIMEOUT_SECS:
+            # Auto-skip: advance to next player
+            next_pid = room.advance_turn()
+            next_name = room.players[next_pid]["name"] if next_pid and next_pid in room.players else "?"
+            lang = room.language
+            skip_text = (
+                f"{current_name}'s turn timed out. {next_name}, it's your turn now."
+                if lang == "en"
+                else f"{current_name} 超时跳过，轮到 {next_name} 提问了。"
+            )
+            skip_msg: dict[str, Any] = {
+                "type": "turn_skipped",
+                "skipped_player_id": current_pid,
+                "skipped_player_name": current_name,
+                "next_player_id": next_pid,
+                "next_player_name": next_name,
+                "text": skip_text,
+                "timestamp": time.time(),
+            }
+            room.message_history.append(skip_msg)
+            await room.broadcast(skip_msg)
+            room.intervention.record_dm_spoke()
+            return  # skip the normal silence check this tick
+
+        if elapsed >= TURN_HINT_SECS and not room._turn_hint_sent:
+            # Warn the current player: time is running out
+            room._turn_hint_sent = True
+            lang = room.language
+            warn_text = (
+                f"{current_name}, 10 seconds remaining — ask your question or your turn will be skipped."
+                if lang == "en"
+                else f"{current_name}，还剩10秒，请提问，否则将自动跳过。"
+            )
+            # Offer the next hint if available
+            hint_text: str | None = None
+            session = room.game_session
+            if session and session.hint_index < len(session.puzzle.hints):
+                hint_text = session.puzzle.hints[session.hint_index]
+            warn_msg: dict[str, Any] = {
+                "type": "turn_timeout_warning",
+                "player_id": current_pid,
+                "player_name": current_name,
+                "text": warn_text,
+                "hint": hint_text,
+                "timestamp": time.time(),
+            }
+            room.message_history.append(warn_msg)
+            await room.broadcast(warn_msg)
+            return
+
+    # ---- Normal silence-intervention check ----
     trigger = room.intervention.on_tick()
     if trigger is None:
         return
@@ -817,6 +936,85 @@ def _maybe_cancel_tick(room: Room) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Phase 1: Spectator session helper
+# ---------------------------------------------------------------------------
+
+
+async def _spectator_session(
+    websocket: WebSocket,
+    room: Room,
+    room_id: str,
+    player_name: str,
+    user_id: str | None,
+) -> None:
+    """Handle a read-only spectator WebSocket connection."""
+    spectator_id = str(uuid.uuid4())
+    _lang = getattr(room, "language", "zh")
+
+    # Register spectator
+    room.add_spectator(spectator_id, player_name, websocket)
+
+    # Broadcast join notice
+    join_msg: dict[str, Any] = {
+        "type": "spectator_joined",
+        "spectator_name": player_name,
+        "spectator_count": room.spectator_count,
+        "timestamp": time.time(),
+    }
+    await room.broadcast(join_msg)
+
+    # Send room snapshot with spectator role
+    snapshot: dict[str, Any] = {
+        "type": "room_snapshot",
+        "role": "spectator",
+        "game_type": room.game_type,
+        "room_id": room_id,
+        "spectator_count": room.spectator_count,
+        "players": [
+            {"id": pid, "name": p["name"], "connected": p["connected"]}
+            for pid, p in room.players.items()
+        ],
+        "started": room.started,
+        "phase": room.phase,
+    }
+    if room.game_type == "turtle_soup" and room.puzzle:
+        snapshot["puzzle_id"] = room.puzzle.id
+        snapshot["title"] = room.puzzle.title
+        snapshot["surface"] = room.puzzle.surface
+    await room._send_to_slot(room.spectators[spectator_id], snapshot)
+
+    # Replay message history
+    for msg in room.message_history:
+        await room._send_to_slot(room.spectators[spectator_id], msg)
+
+    # Receive loop — spectators may not chat or vote
+    try:
+        while True:
+            try:
+                data = await websocket.receive_json()
+            except Exception:
+                break
+            msg_type = data.get("type", "")
+            if msg_type in ("chat", "vote", "skip"):
+                _err_text = "Spectators cannot participate in the game" if _lang == "en" else "观众不能参与游戏操作"
+                await room._send_to_slot(room.spectators[spectator_id], {"type": "error", "text": _err_text})
+            elif msg_type == "leave":
+                break
+            # Other message types (ping, etc.) are silently ignored
+    except WebSocketDisconnect:
+        pass
+    finally:
+        room.disconnect_spectator(spectator_id)
+        leave_msg: dict[str, Any] = {
+            "type": "spectator_left",
+            "spectator_name": player_name,
+            "spectator_count": room.spectator_count,
+            "timestamp": time.time(),
+        }
+        await room.broadcast(leave_msg)
+
+
+# ---------------------------------------------------------------------------
 # WebSocket endpoint
 # ---------------------------------------------------------------------------
 
@@ -825,6 +1023,7 @@ async def websocket_endpoint(
     websocket: WebSocket,
     room_id: str,
     token: str,
+    spectate: bool = False,
 ) -> None:
     """Entry point called from main.py's @app.websocket route."""
 
@@ -854,6 +1053,13 @@ async def websocket_endpoint(
         return
 
     # ----------------------------------------------------------------
+    # Spectator path
+    # ----------------------------------------------------------------
+    if spectate:
+        await _spectator_session(websocket, room, room_id, player_name, user_id)
+        return
+
+    # ----------------------------------------------------------------
     # Determine join / reconnect / reject
     # ----------------------------------------------------------------
     player_id: str
@@ -875,7 +1081,7 @@ async def websocket_endpoint(
             room.reconnect_player(player_id, websocket)
         else:
             if room.is_full():
-                _full_msg = "Room is full (max 4 players)" if getattr(room, "language", "zh") == "en" else "房间已满（最多4人）"
+                _full_msg = "Room is full (max 6 players)" if getattr(room, "language", "zh") == "en" else "房间已满（最多6人）"
                 await websocket.send_json({"type": "error", "text": _full_msg})
                 await websocket.close(code=4429)
                 return
@@ -883,7 +1089,7 @@ async def websocket_endpoint(
             room.add_player(player_id, player_name, websocket)
     else:
         if room.is_full():
-            _full_msg = "Room is full (max 4 players)" if getattr(room, "language", "zh") == "en" else "房间已满（最多4人）"
+            _full_msg = "Room is full (max 6 players)" if getattr(room, "language", "zh") == "en" else "房间已满（最多6人）"
             await websocket.send_json({"type": "error", "text": _full_msg})
             await websocket.close(code=4429)
             return
@@ -967,6 +1173,7 @@ async def websocket_endpoint(
             "max_players": room.max_players,
             "host_player_id": room.host_player_id,
             "my_player_id": player_id,
+            "spectator_count": room.spectator_count,
         }
         await room.send_to(player_id, snapshot)
         # Broadcast updated player list to all other players
@@ -1223,6 +1430,19 @@ async def websocket_endpoint(
                 await room.send_to(player_id, {"type": "system", "text": "游戏已结束，无法继续提问"})
                 continue
 
+            # ---- Phase 0: turn gating ----
+            if room.turn_mode:
+                expected = room.current_turn_player_id()
+                if expected is not None and player_id != expected:
+                    expected_name = room.players[expected]["name"] if expected in room.players else "?"
+                    not_your_turn_text = (
+                        f"It's {expected_name}'s turn, please wait."
+                        if _lang == "en"
+                        else f"现在是 {expected_name} 的回合，请等待。"
+                    )
+                    await room.send_to(player_id, {"type": "error", "text": not_your_turn_text})
+                    continue
+
             # Anti-leak check
             if room.puzzle.private_clues:
                 registry = VisibilityRegistry(room.game_session)
@@ -1263,6 +1483,18 @@ async def websocket_endpoint(
                 continue
             await room.broadcast({"type": "dm_typing", "typing": False, "timestamp": time.time()})
 
+            # ---- Phase 0: record winner and advance turn ----
+            winner_name: str | None = None
+            if result.truth is not None and room.game_session and room.game_session.winner_player_id is None:
+                room.game_session.winner_player_id = player_id
+                winner_name = player_name
+                if room.turn_mode:
+                    room.turn_started_at = None  # stop the turn timer on win
+
+            # ---- Phase 2: per-turn scoring ----
+            turn_score = _compute_turn_score(result.judgment, result.clue_unlocked is not None)
+            room.record_score(player_id, turn_score)
+
             dm_msg_ts: dict[str, Any] = {
                 "type": "dm_response",
                 "player_name": player_name,
@@ -1272,11 +1504,54 @@ async def websocket_endpoint(
                 "clue_unlocked": result.clue_unlocked.model_dump() if result.clue_unlocked else None,
                 "hint": result.hint,
                 "truth": result.truth,
+                "winner_name": winner_name,
+                "turn_score": turn_score,
+                "leaderboard": room.get_leaderboard(),
                 "timestamp": time.time(),
             }
             room.message_history.append(dm_msg_ts)
             await room.broadcast(dm_msg_ts)
             room.intervention.record_dm_spoke()
+
+            # ---- Phase 2: game_over broadcast with MVP ----
+            if winner_name is not None:
+                mvp = room.compute_mvp()
+                game_over_msg: dict[str, Any] = {
+                    "type": "game_over",
+                    "winner_name": winner_name,
+                    "mvp": mvp,
+                    "final_scores": room.get_leaderboard(),
+                    "timestamp": time.time(),
+                }
+                room.message_history.append(game_over_msg)
+                await room.broadcast(game_over_msg)
+
+            # ---- Phase 1: anomaly detection (fire-and-forget) ----
+            if result.judgment in _PROGRESS_JUDGMENTS and result.truth_progress >= 0.6:
+                asyncio.create_task(
+                    _check_anomaly(room, player_id, player_name, text, result.judgment, result.truth_progress)
+                )
+
+            # Advance to next player after a successful turn (turn_mode only, game not yet over)
+            if room.turn_mode and result.truth is None:
+                next_pid = room.advance_turn()
+                if next_pid and next_pid in room.players:
+                    next_name = room.players[next_pid]["name"]
+                    lang = room.language
+                    next_turn_text = (
+                        f"It's {next_name}'s turn now."
+                        if lang == "en"
+                        else f"轮到 {next_name} 提问了。"
+                    )
+                    turn_msg: dict[str, Any] = {
+                        "type": "turn_change",
+                        "player_id": next_pid,
+                        "player_name": next_name,
+                        "text": next_turn_text,
+                        "timestamp": time.time(),
+                    }
+                    room.message_history.append(turn_msg)
+                    await room.broadcast(turn_msg)
 
     except WebSocketDisconnect:
         pass

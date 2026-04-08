@@ -54,6 +54,20 @@ def init_auth_db() -> None:
                 outcome      TEXT
             );
         """)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS player_reports (
+                id           TEXT PRIMARY KEY,
+                room_id      TEXT NOT NULL,
+                reporter_id  TEXT NOT NULL,
+                reported_id  TEXT NOT NULL,
+                reason       TEXT NOT NULL,
+                detail       TEXT NOT NULL DEFAULT '',
+                message_text TEXT NOT NULL DEFAULT '',
+                status       TEXT NOT NULL DEFAULT 'pending',
+                created_at   TEXT NOT NULL,
+                reviewed_at  TEXT
+            );
+        """)
         # Idempotent migration: rename google_sub → provider_sub on existing DBs
         cols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
         if "google_sub" in cols and "provider_sub" not in cols:
@@ -166,5 +180,70 @@ def complete_history(user_id: str, room_id: str, outcome: str) -> None:
         conn.execute(
             "UPDATE room_history SET outcome=? WHERE user_id=? AND room_id=?",
             (outcome, user_id, room_id),
+        )
+        conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Player reports
+# ---------------------------------------------------------------------------
+
+def submit_report(
+    room_id: str,
+    reporter_id: str,
+    reported_id: str,
+    reason: str,
+    detail: str = "",
+    message_text: str = "",
+) -> str:
+    """Insert a new report and return its id."""
+    report_id = str(uuid.uuid4())
+    now = datetime.now(UTC).isoformat()
+    with _lock, _conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO player_reports
+                (id, room_id, reporter_id, reported_id, reason, detail, message_text, status, created_at)
+            VALUES (?,?,?,?,?,?,?,'pending',?)
+            """,
+            (report_id, room_id, reporter_id, reported_id, reason, detail, message_text[:500], now),
+        )
+        conn.commit()
+    return report_id
+
+
+def has_pending_report(reporter_id: str, reported_id: str, room_id: str) -> bool:
+    """Return True if a pending report already exists for this reporter/reported/room triple."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM player_reports WHERE reporter_id=? AND reported_id=? AND room_id=? AND status='pending'",
+            (reporter_id, reported_id, room_id),
+        ).fetchone()
+    return row is not None
+
+
+def list_reports(status: str | None = None, limit: int = 100) -> list[dict]:
+    """Return reports filtered by status (all if None), most recent first."""
+    with _conn() as conn:
+        if status is not None:
+            rows = conn.execute(
+                "SELECT * FROM player_reports WHERE status=? ORDER BY created_at DESC LIMIT ?",
+                (status, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM player_reports ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_report_status(report_id: str, status: str) -> None:
+    """Update the status of a report (e.g. 'reviewed' or 'dismissed')."""
+    now = datetime.now(UTC).isoformat()
+    with _lock, _conn() as conn:
+        conn.execute(
+            "UPDATE player_reports SET status=?, reviewed_at=? WHERE id=?",
+            (status, now, report_id),
         )
         conn.commit()

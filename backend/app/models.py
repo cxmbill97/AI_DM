@@ -203,6 +203,7 @@ class WsDMResponse(BaseModel):
     clue_unlocked: Clue | None = None
     hint: str | None = None
     truth: str | None = None  # populated when game is won
+    winner_name: str | None = None  # populated when a player wins (Phase 0 turn mode)
     timestamp: float
 
 
@@ -241,6 +242,7 @@ class GameSession(BaseModel):
     unlocked_clue_ids: set[str] = set()  # ids of clues the player has earned so far
     player_slot_map: dict[str, str] = {}  # player_id → "player_1" / "player_2" …
     language: str = "zh"  # "zh" | "en" — DM prompt language
+    winner_player_id: str | None = None  # player_id who solved the puzzle (Phase 0)
 
 
 # ---------------------------------------------------------------------------
