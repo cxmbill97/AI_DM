@@ -168,6 +168,7 @@ class TestRoomStateMachine:
         assert not icicle_room.is_full()
 
     def test_full_after_four_players(self, icicle_room):
+        # turtle_soup max_players is now 4
         ws = MagicMock()
         for i in range(4):
             icicle_room.add_player(f"pid-{i}", f"Player{i}", ws)
@@ -333,27 +334,26 @@ class TestCreateAndJoinRoom:
 
 
 class TestRoomCapacityLimit:
-    def test_fifth_player_rejected(self, mock_llm):
-        """Fill 4 slots via add_player, then try 5th via WebSocket."""
-        # Create room and fill it directly to avoid multi-WS management complexity
+    def test_seventh_player_rejected(self, mock_llm):
+        """Fill 6 slots via add_player, then try 7th via WebSocket."""
         room_id = room_manager.create_room(load_puzzle("icicle_murder"))
         room = room_manager.get_room(room_id)
         mock_ws = MagicMock()
-        for i in range(4):
+        for i in range(6):
             room.add_player(f"pid-{i}", f"Player{i}", mock_ws)
         assert room.is_full()
 
         with TestClient(app) as client:
-            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Eve')}") as ws:
+            with client.websocket_connect(f"/ws/{room_id}?token={_make_token('Extra')}") as ws:
                 msg = ws.receive_json()
                 assert msg["type"] == "error"
                 assert "满" in msg["text"]
 
-    def test_room_not_full_with_three(self):
+    def test_room_not_full_with_five(self):
         room_id = room_manager.create_room(load_puzzle("icicle_murder"))
         room = room_manager.get_room(room_id)
         mock_ws = MagicMock()
-        for i in range(3):
+        for i in range(5):
             room.add_player(f"pid-{i}", f"Player{i}", mock_ws)
         assert not room.is_full()
 

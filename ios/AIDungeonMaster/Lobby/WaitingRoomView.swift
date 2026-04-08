@@ -40,11 +40,23 @@ struct WaitingRoomView: View {
         .navigationDestination(isPresented: $navigateToGame) {
             RoomView(roomId: vm.roomId)
         }
-        .onAppear { tabBarState.isHidden = true }
-        .onDisappear { tabBarState.isHidden = false }
+        // If we return to this view after the game already started (user left RoomView),
+        // dismiss WaitingRoom entirely so they go back to the home screen.
+        .onAppear {
+            if vm.started {
+                dismiss()
+                return
+            }
+            tabBarState.isHidden = true
+        }
+        .onDisappear {
+            // Only restore the tab bar when going BACK to the lobby,
+            // not when pushing forward to RoomView.
+            if !navigateToGame { tabBarState.isHidden = false }
+        }
         .task { await vm.connect() }
         .onChange(of: vm.started) { _ in
-            if vm.started {
+            if vm.started && !navigateToGame {
                 vm.disconnect()   // release lobby WS before game room connects
                 navigateToGame = true
             }

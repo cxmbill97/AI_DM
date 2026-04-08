@@ -104,9 +104,9 @@ class Room:
         self.host_user_id: str | None = None   # set by main.py after creation
         self.host_player_id: str | None = None  # set to first player that joins
         self.ready_players: set[str] = set()    # player_ids who clicked Ready
-        # max_players: script specifies it for murder_mystery, turtle_soup defaults 6
+        # max_players: script specifies it for murder_mystery, turtle_soup caps at 4
         self.max_players: int = (
-            script.metadata.player_count if script is not None else 6
+            script.metadata.player_count if script is not None else 4
         )
 
         # ---- Phase 0: Turn-based system ----

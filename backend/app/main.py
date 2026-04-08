@@ -570,7 +570,7 @@ async def list_scripts(lang: str = "zh") -> list[dict]:
 
 @app.get("/api/rooms")
 async def list_active_rooms() -> list[dict]:
-    """List all currently active (non-empty) rooms for the lobby browser."""
+    """List public rooms that are in the lobby (not yet started) and have at least one player."""
     import time as _time  # noqa: PLC0415
 
     now = _time.time()
@@ -578,7 +578,13 @@ async def list_active_rooms() -> list[dict]:
     for room_id, room in room_manager.rooms.items():
         if not getattr(room, "is_public", True):
             continue
+        # Exclude rooms that have already started
+        if room.started:
+            continue
         connected = sum(1 for p in room.players.values() if p.get("connected"))
+        # Exclude empty rooms (all players left)
+        if connected == 0:
+            continue
         total = sum(
             1 for p in room.players.values()
             if p.get("connected") or (now - p.get("last_seen", 0)) < 60
@@ -594,6 +600,7 @@ async def list_active_rooms() -> list[dict]:
             "title": title,
             "player_count": total,
             "connected_count": connected,
+            "max_players": room.max_players,
             "language": room.language,
         })
     return result

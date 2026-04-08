@@ -48,6 +48,7 @@ struct ActiveRoom: Codable, Identifiable {
     let title: String
     let player_count: Int
     let connected_count: Int
+    let max_players: Int?
     let language: String
     var id: String { room_id }
 }
@@ -139,6 +140,17 @@ struct RoomSnapshotPayload: Codable {
     let max_players: Int?
     let host_player_id: String?
     let my_player_id: String?
+    // Phase 3: turn system
+    let turn_mode: Bool?
+    let current_turn_player_id: String?
+    let current_turn_player_name: String?
+}
+
+struct TurnChangePayload: Codable {
+    let player_id: String
+    let player_name: String
+    let text: String
+    let timestamp: Double
 }
 
 struct LobbyPlayerJoinedPayload: Codable {
@@ -173,6 +185,7 @@ enum GameMessage {
     case lobbyPlayerJoined(LobbyPlayerJoinedPayload)
     case lobbyPlayerReady(LobbyPlayerReadyPayload)
     case gameStarted(GameStartedPayload)
+    case turnChange(TurnChangePayload)   // Phase 3: turn-based highlight
     case unknown(String)
 }
 
@@ -199,6 +212,8 @@ extension GameMessage: Decodable {
             self = .lobbyPlayerReady(try container.decode(LobbyPlayerReadyPayload.self))
         case "game_started":
             self = .gameStarted(try container.decode(GameStartedPayload.self))
+        case "turn_change":
+            self = .turnChange(try container.decode(TurnChangePayload.self))
         default:
             self = .unknown(wrapper.type)
         }

@@ -1160,6 +1160,7 @@ async def websocket_endpoint(
                 await room.send_to(pid, players_update)
     else:
         players_list = [_lobby_player(pid, p) for pid, p in room.players.items()]
+        _cur_turn_pid = room.current_turn_player_id()
         snapshot = {
             "type": "room_snapshot",
             "game_type": "turtle_soup",
@@ -1174,6 +1175,9 @@ async def websocket_endpoint(
             "host_player_id": room.host_player_id,
             "my_player_id": player_id,
             "spectator_count": room.spectator_count,
+            "turn_mode": room.turn_mode,
+            "current_turn_player_id": _cur_turn_pid,
+            "current_turn_player_name": room.players[_cur_turn_pid]["name"] if _cur_turn_pid and _cur_turn_pid in room.players else None,
         }
         await room.send_to(player_id, snapshot)
         # Broadcast updated player list to all other players
