@@ -26,6 +26,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
+from app.agents.trace_store import store_trace  # noqa: E402
 from app.auth import add_history, decode_jwt, get_user_by_id  # noqa: E402
 from app.dm import dm_proactive_message, dm_turn, dm_turn_private  # noqa: E402
 from app.room import RECONNECT_WINDOW_SECS, TURN_HINT_SECS, TURN_TIMEOUT_SECS, Room, room_manager  # noqa: E402
@@ -731,6 +732,9 @@ async def _handle_mm_chat(room: Room, player_id: str, player_name: str, text: st
                     room.message_history.append(final_msg)
                     await room.broadcast(final_msg)
                     room.intervention.record_dm_spoke()
+                    # Store trace for REST/SSE endpoints
+                    if event.get("trace"):
+                        store_trace(room_id, event["trace"])
                     replaced = "replace" in event
                     logger.info(
                         "[MM-CHAT] dm_stream_end clue=%s replaced=%s",
