@@ -6,8 +6,6 @@ This roadmap outlines the planned evolution of AI DM from core gameplay validati
 
 ## Phase 0: Core Validation (MVP Gameplay)
 
-**Status: ✅ Complete**
-
 **Goal:** Validate whether "Lateral Thinking Puzzle (Sea Turtle Soup) + turn-based speaking" is fun
 
 ### Core Features
@@ -26,8 +24,6 @@ This roadmap outlines the planned evolution of AI DM from core gameplay validati
 
 ## Phase 1: Gameplay Improvements
 
-**Status: ✅ Complete**
-
 **Goal:** Make the game engaging and prevent stagnation
 
 ### Mechanics Enhancements
@@ -45,8 +41,6 @@ This roadmap outlines the planned evolution of AI DM from core gameplay validati
 
 ## Phase 2: Lightweight AI Integration
 
-**Status: ✅ Complete**
-
 **Goal:** Use AI as an assistive layer, not a core dependency
 
 ### AI Features
@@ -57,8 +51,6 @@ This roadmap outlines the planned evolution of AI DM from core gameplay validati
 ---
 
 ## Phase 3: Visual & Social Layer
-
-**Status: ✅ Complete**
 
 **Goal:** Improve retention and user engagement
 
@@ -73,7 +65,7 @@ This roadmap outlines the planned evolution of AI DM from core gameplay validati
 
 ---
 
-## Phase 4: Economy System (Monetization Foundation)
+## Phase 4: Economy System (Monetization Foundation) ✅ Complete
 
 **Goal:** Introduce gacha + cosmetics
 
