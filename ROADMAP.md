@@ -45,7 +45,7 @@ This roadmap outlines the planned evolution of AI DM from core gameplay validati
 
 ## Phase 2: Lightweight AI Integration
 
-**Status: 🚧 In Progress**
+**Status: ✅ Complete**
 
 **Goal:** Use AI as an assistive layer, not a core dependency
 
@@ -57,6 +57,8 @@ This roadmap outlines the planned evolution of AI DM from core gameplay validati
 ---
 
 ## Phase 3: Visual & Social Layer
+
+**Status: ✅ Complete**
 
 **Goal:** Improve retention and user engagement
 
