@@ -57,8 +57,13 @@ from app.puzzle_loader import (
 )
 from app.room import room_manager
 from app.ws import websocket_endpoint
+from app.routers import economy_router, pet_router
 
 app = FastAPI(title="AI DM — 海龟汤")
+
+
+app.include_router(economy_router.router)
+app.include_router(pet_router.router)
 
 
 @app.on_event("startup")
