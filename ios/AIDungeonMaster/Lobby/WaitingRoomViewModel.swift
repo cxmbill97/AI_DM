@@ -21,9 +21,7 @@ final class WaitingRoomViewModel: ObservableObject {
         return myId == hostId
     }
 
-    var canStart: Bool {
-        isHost && players.count >= 1
-    }
+    var canStart: Bool { isHost && players.count >= 1 }
 
     /// Player IDs that have clicked Ready
     @Published var readyPlayerIds: Set<String> = []
@@ -31,6 +29,25 @@ final class WaitingRoomViewModel: ObservableObject {
     init(roomId: String, gameType: String) {
         self.roomId = roomId
         self.gameType = gameType
+        // Derive our player_id from the stored JWT — the backend sets player_id = JWT sub
+        myPlayerId = Self.playerIdFromToken()
+    }
+
+    /// Decode the JWT sub claim (no signature check needed — just for UI logic).
+    private static func playerIdFromToken() -> String? {
+        guard let token = KeychainService.loadToken() else { return nil }
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        var b64 = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        // Pad to multiple of 4
+        let pad = (4 - b64.count % 4) % 4
+        b64 += String(repeating: "=", count: pad)
+        guard let data = Data(base64Encoded: b64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let sub = json["sub"] as? String else { return nil }
+        return sub
     }
 
     func connect() async {
@@ -80,16 +97,9 @@ final class WaitingRoomViewModel: ObservableObject {
             players = snap.players
             maxPlayers = snap.max_players ?? 4
             hostPlayerId = snap.host_player_id
-            isPublic = false  // default; patch endpoint controls this
-            if snap.started == true {
-                started = true
-            }
-            // Derive our own player_id from the first snapshot's player list
-            // by matching the token's sub; fallback: we are the host if host_player_id is unset
-            if myPlayerId == nil, let myId = snap.host_player_id, players.count == 1 {
-                myPlayerId = myId
-            }
-            // Sync ready state
+            // my_player_id from snapshot is authoritative; fall back to JWT decode
+            if let id = snap.my_player_id { myPlayerId = id }
+            if snap.started == true { started = true }
             readyPlayerIds = Set(snap.players.compactMap { $0.is_ready == true ? $0.id : nil })
 
         case .lobbyPlayerJoined(let p):
@@ -129,12 +139,4 @@ final class WaitingRoomViewModel: ObservableObject {
         }
     }
 
-    /// Called from WaitingRoomView after WS connects and first snapshot arrives.
-    /// We identify our own player slot by matching against the snapshot host logic:
-    /// the room sets host_player_id = first joiner, so if we just created this room,
-    /// we're the host. For joiners, we can't derive player_id from REST — it's set
-    /// server-side from the JWT sub. We store it from the snapshot when possible.
-    func identifyMe(playerId: String) {
-        myPlayerId = playerId
-    }
 }

@@ -101,6 +101,7 @@ def _mm_snapshot(room: Room, player_id: str) -> dict[str, Any]:
         ],
         "started": room.started,
         "max_players": room.max_players,
+        "host_player_id": room.host_player_id,
         # Public character list — no secret_bio, no is_culprit
         "characters": [{"id": c.id, "name": c.name, "public_bio": c.public_bio} for c in room.script.characters],
         "game_mode": room.script.game_mode,
@@ -964,6 +965,8 @@ async def websocket_endpoint(
             "phase": room.phase,
             "started": room.started,
             "max_players": room.max_players,
+            "host_player_id": room.host_player_id,
+            "my_player_id": player_id,
         }
         await room.send_to(player_id, snapshot)
         # Broadcast updated player list to all other players
