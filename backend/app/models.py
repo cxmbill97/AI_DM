@@ -162,6 +162,7 @@ class RoomState(BaseModel):
     game_type: str = "turtle_soup"  # "turtle_soup" | "murder_mystery"
     hints_remaining: int = HINTS_PER_GAME  # hint budget for current puzzle
     skip_votes: int = 0  # current skip vote count
+    mvp_player_id: str | None = None  # set after compute_mvp()
 
 
 # ---------------------------------------------------------------------------

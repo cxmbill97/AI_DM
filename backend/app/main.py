@@ -624,6 +624,7 @@ async def get_room(room_id: str) -> RoomState:
             players=players,
             phase=room.phase,
             game_type="murder_mystery",
+            mvp_player_id=room.mvp_player_id,
         )
     assert room.puzzle is not None
     return RoomState(
@@ -634,6 +635,7 @@ async def get_room(room_id: str) -> RoomState:
         players=players,
         phase=room.phase,
         game_type="turtle_soup",
+        mvp_player_id=room.mvp_player_id,
     )
 
 

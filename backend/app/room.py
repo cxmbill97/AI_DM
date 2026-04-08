@@ -145,6 +145,8 @@ class Room:
         # ---- Phase 2: Per-turn scoring ----
         self.player_scores: dict[str, int] = {}
         self.player_turn_counts: dict[str, int] = {}
+        self._scores: dict[str, int] = {}  # verdict-based scores (record_turn_score)
+        self.mvp_player_id: str | None = None
 
         # Initialise type-specific components
         if puzzle is not None:
@@ -320,6 +322,28 @@ class Room:
         self.player_scores[player_id] = self.player_scores.get(player_id, 0) + points
         self.player_turn_counts[player_id] = self.player_turn_counts.get(player_id, 0) + 1
 
+    def record_turn_score(
+        self,
+        player_id: str,
+        verdict: str,
+        hints_used: int = 0,
+        elapsed_seconds: float = 30,
+    ) -> int:
+        """Score one turn by verdict, applying hint penalty and speed bonus.
+
+        Returns the points awarded this turn.
+        """
+        base = {"irrelevant": 0, "relevant": 1, "close": 3, "correct": 10}.get(verdict, 0)
+        penalty = hints_used  # −1 per hint
+        bonus = 1 if elapsed_seconds < 10 else 0
+        points = max(0, base - penalty) + bonus
+        self._scores[player_id] = self._scores.get(player_id, 0) + points
+        return points
+
+    def get_player_scores(self) -> dict[str, int]:
+        """Return verdict-based scores for all players."""
+        return dict(self._scores)
+
     def get_leaderboard(self) -> list[dict[str, Any]]:
         """Return players sorted by total score desc (ties broken by fewest turns)."""
         rows = []
@@ -332,17 +356,30 @@ class Room:
         return rows
 
     def compute_mvp(self) -> dict[str, Any] | None:
-        """Return the player with the highest score (fewest turns on tie), or None."""
-        if not self.player_scores:
+        """Return the player with the highest score (fewest turns on tie), or None.
+
+        Uses _scores (verdict-based) for tiebreaking when player_scores are equal.
+        Stores the winner's player_id in self.mvp_player_id.
+        """
+        all_scores = {**self.player_scores}
+        for pid in self._scores:
+            if pid not in all_scores:
+                all_scores[pid] = 0
+        if not all_scores:
             return None
         best_id = max(
-            self.player_scores,
-            key=lambda pid: (self.player_scores[pid], -self.player_turn_counts.get(pid, 0)),
+            all_scores,
+            key=lambda pid: (
+                all_scores[pid],
+                self._scores.get(pid, 0),
+                -self.player_turn_counts.get(pid, 0),
+            ),
         )
+        self.mvp_player_id = best_id
         return {
             "player_id": best_id,
             "player_name": self.players.get(best_id, {}).get("name", best_id),
-            "score": self.player_scores[best_id],
+            "score": all_scores[best_id],
             "turns": self.player_turn_counts.get(best_id, 0),
         }
 
