@@ -138,6 +138,7 @@ struct RoomSnapshotPayload: Codable {
     let started: Bool?
     let max_players: Int?
     let host_player_id: String?
+    let my_player_id: String?
 }
 
 struct LobbyPlayerJoinedPayload: Codable {

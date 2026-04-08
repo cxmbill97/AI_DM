@@ -14,16 +14,22 @@ from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from openai import APIError
 from pydantic import BaseModel
 
+import os
+
 from app.auth import (
     add_favorite,
     complete_history,
     create_jwt,
     decode_jwt,
     get_user_by_id,
+    has_pending_report,
     init_auth_db,
     list_favorites,
     list_history,
+    list_reports,
     remove_favorite,
+    submit_report,
+    update_report_status,
     upsert_user,
 )
 from app.community import init_db, like_script, list_community_scripts, upsert_script
@@ -511,6 +517,7 @@ class CreateRoomRequest(BaseModel):
     language: str = "zh"  # "zh" | "en"
     is_public: bool = True
     lobby_mode: bool = False  # True → room stays in lobby until host starts; False → start immediately (backward compat)
+    turn_mode: bool = False  # Phase 0: enable turn-based speaking (turtle_soup only)
 
 
 @app.post("/api/rooms")
@@ -548,11 +555,12 @@ async def create_room(body: CreateRoomRequest = CreateRoomRequest(), user: dict 
     room_id = room_manager.create_room(puzzle=puzzle, language=lang)
     room = room_manager.rooms[room_id]
     room.is_public = body.is_public
+    room.turn_mode = body.turn_mode
     if user:
         room.host_user_id = str(user["id"])
     if not body.lobby_mode:
         room.started = True
-    return {"room_id": room_id, "game_type": "turtle_soup", "puzzle_id": puzzle.id}
+    return {"room_id": room_id, "game_type": "turtle_soup", "puzzle_id": puzzle.id, "turn_mode": body.turn_mode}
 
 
 @app.get("/api/scripts")
@@ -649,8 +657,21 @@ async def start_room(room_id: str, user: dict | None = Depends(_optional_user)) 
     # Verify the caller is the host (if authenticated)
     if user and room.host_user_id and str(user["id"]) != room.host_user_id:
         raise HTTPException(status_code=403, detail="Only the host can start the game")
+    # Phase 0: require at least 2 players for turn-mode games
+    if room.turn_mode and room.game_type == "turtle_soup":
+        active = sum(1 for p in room.players.values() if p["connected"])
+        if active < 2:
+            raise HTTPException(status_code=422, detail="Turn mode requires at least 2 players to start")
     room.started = True
-    event = {"type": "game_started", "room_id": room_id}
+    if room.turn_mode and room.game_type == "turtle_soup":
+        room.start_turns()
+    event: dict = {"type": "game_started", "room_id": room_id}
+    if room.turn_mode and room.turn_order:
+        first_pid = room.current_turn_player_id()
+        first_name = room.players[first_pid]["name"] if first_pid and first_pid in room.players else ""
+        event["turn_mode"] = True
+        event["first_player_id"] = first_pid
+        event["first_player_name"] = first_name
     _asyncio.get_event_loop().call_soon(
         lambda: _asyncio.ensure_future(room.broadcast(event))
     )
@@ -800,11 +821,7 @@ async def like_script_endpoint(script_id: str) -> dict:
 
 @app.get("/api/rooms/{room_id}/traces")
 async def get_room_traces(room_id: str) -> list[dict]:
-    """Return the last 20 agent traces for a room (newest first).
-
-    Traces are produced by the multi-agent pipeline on each player message
-    and stored in memory (last 50 per room, no persistence).
-    """
+    """Return the last 20 agent traces for a room (newest first)."""
     if room_manager.get_room(room_id) is None:
         raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
     return get_traces(room_id, limit=20)
@@ -812,20 +829,13 @@ async def get_room_traces(room_id: str) -> list[dict]:
 
 @app.get("/api/rooms/{room_id}/traces/live")
 async def stream_room_traces(room_id: str) -> StreamingResponse:
-    """SSE stream — emits one DMTrace JSON object per event as new traces arrive.
-
-    Clients connect with EventSource and receive:
-        data: {"message_id": "...", "steps": [...], ...}\n\n
-
-    The stream stays open until the client disconnects.
-    """
+    """SSE stream — emits one AgentTrace JSON per event as new traces arrive."""
     if room_manager.get_room(room_id) is None:
         raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
 
     q = subscribe(room_id)
 
     async def event_generator():
-        # Send a keep-alive comment immediately so the browser confirms the connection
         yield ": connected\n\n"
         try:
             while True:
@@ -840,11 +850,94 @@ async def stream_room_traces(room_id: str) -> StreamingResponse:
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # disable nginx buffering
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Player reporting endpoints
+# ---------------------------------------------------------------------------
+
+_ADMIN_USER_IDS: set[str] = set(filter(None, os.environ.get("ADMIN_USER_IDS", "").split(",")))
+
+
+def _require_admin(user: dict = Depends(_require_user)) -> dict:
+    if _ADMIN_USER_IDS and user["id"] not in _ADMIN_USER_IDS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+class ReportRequest(BaseModel):
+    room_id: str
+    reported_player_name: str
+    reason: str  # "cheating" | "harassment" | "spoiler" | "other"
+    detail: str = ""
+    message_text: str = ""
+
+
+@app.post("/api/reports")
+async def create_report(body: ReportRequest, user: dict = Depends(_require_user)) -> dict:
+    """Submit a report about another player."""
+    room = room_manager.get_room(body.room_id)
+    if room is None:
+        raise HTTPException(status_code=404, detail=f"Room not found: {body.room_id!r}")
+    reported_id = room.find_player_by_name(body.reported_player_name)
+    if reported_id is None:
+        raise HTTPException(status_code=404, detail=f"Player '{body.reported_player_name}' not found in room")
+    if reported_id == user["id"]:
+        raise HTTPException(status_code=422, detail="Cannot report yourself")
+    if has_pending_report(user["id"], reported_id, body.room_id):
+        raise HTTPException(status_code=429, detail="You already have a pending report for this player in this room")
+    report_id = submit_report(
+        room_id=body.room_id,
+        reporter_id=user["id"],
+        reported_id=reported_id,
+        reason=body.reason,
+        detail=body.detail,
+        message_text=body.message_text,
+    )
+    return {"report_id": report_id, "status": "pending"}
+
+
+@app.get("/api/reports")
+async def get_reports(
+    status: str | None = None,
+    limit: int = 50,
+    _admin: dict = Depends(_require_admin),
+) -> list[dict]:
+    """List reports (admin only)."""
+    return list_reports(status=status, limit=limit)
+
+
+class PatchReportRequest(BaseModel):
+    status: str  # "reviewed" | "dismissed"
+
+
+@app.patch("/api/reports/{report_id}")
+async def patch_report(
+    report_id: str,
+    body: PatchReportRequest,
+    _admin: dict = Depends(_require_admin),
+) -> dict:
+    """Update a report's status (admin only)."""
+    if body.status not in ("reviewed", "dismissed"):
+        raise HTTPException(status_code=422, detail="status must be 'reviewed' or 'dismissed'")
+    update_report_status(report_id, body.status)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Anomaly detection endpoint (admin)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/rooms/{room_id}/anomalies")
+async def get_anomalies(room_id: str, _admin: dict = Depends(_require_admin)) -> list[dict]:
+    """Return anomaly flags for a room (admin only)."""
+    room = room_manager.get_room(room_id)
+    if room is None:
+        raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
+    return room._anomaly_flags
 
 
 # ---------------------------------------------------------------------------
@@ -857,14 +950,16 @@ async def ws_endpoint(
     websocket: WebSocket,
     room_id: str,
     token: str = "",
+    spectate: bool = False,
 ) -> None:
     """WebSocket connection for multiplayer rooms.
 
     Query params:
-      token  — JWT issued by /auth/google/callback (required)
+      token    — JWT issued by /auth/google/callback (required)
+      spectate — pass ?spectate=true to join as a read-only spectator
 
     Protocol:
       Client sends: {"type": "chat", "text": "..."}
       Server sends: dm_response | player_message | system | room_snapshot | error
     """
-    await websocket_endpoint(websocket, room_id, token)
+    await websocket_endpoint(websocket, room_id, token, spectate=spectate)

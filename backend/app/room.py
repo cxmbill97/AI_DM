@@ -14,7 +14,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.intervention import InterventionEngine
-from app.models import GameSession, Puzzle, Script
+from app.models import HINTS_PER_GAME, GameSession, Puzzle, Script
 
 if TYPE_CHECKING:
     from fastapi import WebSocket
@@ -27,8 +27,13 @@ if TYPE_CHECKING:
 # Constants
 # ---------------------------------------------------------------------------
 
-MAX_PLAYERS = 4
+MAX_PLAYERS = 6
 RECONNECT_WINDOW_SECS = 60  # grace period to reclaim a disconnected seat
+# HINTS_PER_GAME is defined in models.py (imported above) so RoomState can reference it
+
+# Turn-based timing constants (Phase 0)
+TURN_HINT_SECS = 20    # warn + offer hint after this many seconds of inactivity
+TURN_TIMEOUT_SECS = 30  # auto-skip after this many seconds of inactivity
 
 
 # ---------------------------------------------------------------------------
@@ -99,10 +104,47 @@ class Room:
         self.host_user_id: str | None = None   # set by main.py after creation
         self.host_player_id: str | None = None  # set to first player that joins
         self.ready_players: set[str] = set()    # player_ids who clicked Ready
-        # max_players: script specifies it for murder_mystery, turtle_soup defaults 4
+        # max_players: script specifies it for murder_mystery, turtle_soup defaults 6
         self.max_players: int = (
-            script.metadata.player_count if script is not None else 4
+            script.metadata.player_count if script is not None else 6
         )
+
+        # ---- Phase 0: Turn-based system ----
+        # Enabled by passing turn_mode=True when creating the room.
+        self.turn_mode: bool = False
+        # Ordered list of player_ids for turn rotation (populated on game start).
+        self.turn_order: list[str] = []
+        # Index into turn_order pointing at the player whose turn it is.
+        self.current_turn_index: int = 0
+        # Wall-clock timestamp when the current turn began (None = not started).
+        self.turn_started_at: float | None = None
+        # Whether the 20-second hint warning has already been sent this turn.
+        self._turn_hint_sent: bool = False
+        # player_id of the player who solved the puzzle (None until game over).
+        self.winner_player_id: str | None = None
+
+        # ---- Phase 1: Hint system ----
+        self.hints_remaining: int = HINTS_PER_GAME
+
+        # ---- Phase 1: Skip system ----
+        # player_ids who voted to skip the current turtle-soup puzzle
+        self._puzzle_skip_votes: set[str] = set()
+
+        # ---- Phase 1: Spectators ----
+        self.spectators: dict[str, dict[str, Any]] = {}  # player_id → slot dict
+
+        # ---- Phase 1: Player reporting (in-memory, per room) ----
+        self.reports: list[dict[str, Any]] = []
+
+        # ---- Phase 1: Anomaly detection ----
+        # Simple substring flags (per player) and LLM-based detector
+        self.suspicious_flags: dict[str, list[dict[str, Any]]] = {}
+        self._anomaly_flags: list[dict[str, Any]] = []
+        self._anomaly_detector: Any | None = None  # AnomalyDetector, lazily initialised
+
+        # ---- Phase 2: Per-turn scoring ----
+        self.player_scores: dict[str, int] = {}
+        self.player_turn_counts: dict[str, int] = {}
 
         # Initialise type-specific components
         if puzzle is not None:
@@ -220,14 +262,137 @@ class Room:
             pass
 
     async def broadcast(self, message: dict[str, Any]) -> None:
-        """Send *message* as JSON to every currently-connected player."""
-        await asyncio.gather(*(self._send_to_slot(slot, message) for slot in self.players.values()))
+        """Send *message* as JSON to every currently-connected player and spectator."""
+        all_slots = list(self.players.values()) + list(self.spectators.values())
+        await asyncio.gather(*(self._send_to_slot(slot, message) for slot in all_slots))
 
     async def send_to(self, player_id: str, message: dict[str, Any]) -> None:
         """Send *message* to a single player only."""
         slot = self.players.get(player_id)
         if slot:
             await self._send_to_slot(slot, message)
+
+    # ------------------------------------------------------------------
+    # Phase 0: Turn-based helpers
+    # ------------------------------------------------------------------
+
+    def current_turn_player_id(self) -> str | None:
+        """Return the player_id whose turn it currently is, or None if turn mode is off."""
+        if not self.turn_mode or not self.turn_order:
+            return None
+        return self.turn_order[self.current_turn_index % len(self.turn_order)]
+
+    def start_turns(self) -> None:
+        """Initialise the turn order from currently-connected players and start the first turn.
+
+        Must be called once when the host starts the game in turn_mode.
+        Players are added in join order (dict insertion order, Python 3.7+).
+        """
+        self.turn_order = list(self.players.keys())
+        self.current_turn_index = 0
+        self.turn_started_at = time.time()
+        self._turn_hint_sent = False
+
+    def advance_turn(self) -> str | None:
+        """Advance to the next player in the rotation and reset the turn timer.
+
+        Returns the new current player_id, or None if turn_order is empty.
+        """
+        if not self.turn_order:
+            return None
+        self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
+        self.turn_started_at = time.time()
+        self._turn_hint_sent = False
+        return self.current_turn_player_id()
+
+    def turn_elapsed(self) -> float:
+        """Seconds elapsed since the current turn started (0.0 if not started)."""
+        if self.turn_started_at is None:
+            return 0.0
+        return time.time() - self.turn_started_at
+
+    # ------------------------------------------------------------------
+    # Phase 2: Per-turn scoring
+    # ------------------------------------------------------------------
+
+    def record_score(self, player_id: str, points: int) -> None:
+        """Add *points* to *player_id*'s total and increment their turn count."""
+        self.player_scores[player_id] = self.player_scores.get(player_id, 0) + points
+        self.player_turn_counts[player_id] = self.player_turn_counts.get(player_id, 0) + 1
+
+    def get_leaderboard(self) -> list[dict[str, Any]]:
+        """Return players sorted by total score desc (ties broken by fewest turns)."""
+        rows = []
+        for pid, score in self.player_scores.items():
+            turns = self.player_turn_counts.get(pid, 0)
+            name = self.players.get(pid, {}).get("name", pid)
+            avg = round(score / turns, 2) if turns else 0.0
+            rows.append({"player_id": pid, "player_name": name, "score": score, "turns": turns, "avg": avg})
+        rows.sort(key=lambda r: (-r["score"], r["turns"]))
+        return rows
+
+    def compute_mvp(self) -> dict[str, Any] | None:
+        """Return the player with the highest score (fewest turns on tie), or None."""
+        if not self.player_scores:
+            return None
+        best_id = max(
+            self.player_scores,
+            key=lambda pid: (self.player_scores[pid], -self.player_turn_counts.get(pid, 0)),
+        )
+        return {
+            "player_id": best_id,
+            "player_name": self.players.get(best_id, {}).get("name", best_id),
+            "score": self.player_scores[best_id],
+            "turns": self.player_turn_counts.get(best_id, 0),
+        }
+
+    # ------------------------------------------------------------------
+    # Phase 1: Spectators
+    # ------------------------------------------------------------------
+
+    def add_spectator(self, player_id: str, name: str, websocket: Any) -> None:
+        self.spectators[player_id] = {
+            "name": name,
+            "websocket": websocket,
+            "connected": True,
+            "last_seen": time.time(),
+            "send_lock": asyncio.Lock(),
+        }
+
+    def disconnect_spectator(self, player_id: str) -> None:
+        slot = self.spectators.get(player_id)
+        if slot:
+            slot["connected"] = False
+            slot["websocket"] = None
+            slot["last_seen"] = time.time()
+
+    def reconnect_spectator(self, player_id: str, websocket: Any) -> None:
+        slot = self.spectators.get(player_id)
+        if slot:
+            slot["websocket"] = websocket
+            slot["connected"] = True
+            slot["last_seen"] = time.time()
+
+    @property
+    def spectator_count(self) -> int:
+        return sum(1 for s in self.spectators.values() if s["connected"])
+
+    # ------------------------------------------------------------------
+    # Phase 1: Anomaly detection
+    # ------------------------------------------------------------------
+
+    def get_anomaly_detector(self) -> Any | None:
+        """Lazily create and return an AnomalyDetector for this room (turtle soup only)."""
+        if self._anomaly_detector is not None:
+            return self._anomaly_detector
+        if self.puzzle is None or self.game_session is None:
+            return None
+        from app.anomaly import AnomalyDetector  # avoid circular import at module level
+        self._anomaly_detector = AnomalyDetector(
+            key_facts=self.puzzle.key_facts,
+            truth=self.puzzle.truth,
+        )
+        return self._anomaly_detector
 
     # ------------------------------------------------------------------
     # Phase helpers (murder mystery)
@@ -244,6 +409,124 @@ class Room:
         if self.state_machine is not None:
             return self.state_machine.is_terminal()
         return False
+
+    # ------------------------------------------------------------------
+    # Phase 1: Hint system
+    # ------------------------------------------------------------------
+
+    def use_hint(self, player_id: str) -> str | None:
+        """Consume one hint token and return the next hint text.
+
+        Returns None if the hint budget is exhausted, the puzzle has no hints,
+        or all hints have already been given.
+        Only valid for turtle_soup rooms.
+        """
+        if self.game_type != "turtle_soup":
+            return None
+        if self.hints_remaining <= 0:
+            return None
+        if self.puzzle is None or not self.puzzle.hints:
+            return None
+        idx = self.game_session.hint_index if self.game_session else 0
+        if idx >= len(self.puzzle.hints):
+            return None
+        hint_text = self.puzzle.hints[idx]
+        self.hints_remaining -= 1
+        if self.game_session:
+            self.game_session.hint_index = idx + 1
+        return hint_text
+
+    # ------------------------------------------------------------------
+    # Phase 1: Skip system
+    # ------------------------------------------------------------------
+
+    def vote_skip_puzzle(self, player_id: str) -> bool:
+        """Record a skip vote from *player_id*.
+
+        Returns True when a majority (>50%) of active players have voted to
+        skip and clears the vote set.  Only active players may vote; the call
+        is idempotent (duplicate votes from the same player are ignored).
+        """
+        if player_id not in self.players:
+            return False
+        self._puzzle_skip_votes.add(player_id)
+        active = self._active_player_count()
+        if active > 0 and len(self._puzzle_skip_votes) > active / 2:
+            self._puzzle_skip_votes.clear()
+            return True
+        return False
+
+    def skip_votes_count(self) -> int:
+        """Return current number of skip votes for the active puzzle."""
+        return len(self._puzzle_skip_votes)
+
+    def reset_to_puzzle(self, puzzle: Puzzle) -> None:
+        """Swap in a new puzzle and reset all turtle-soup state.
+
+        Called by ws.py after a successful skip vote.  Resets hint budget,
+        skip votes, and the game session so the new puzzle starts fresh.
+        """
+        if self.game_type != "turtle_soup":
+            return
+        self.puzzle = puzzle
+        self.game_session = GameSession(
+            session_id=self.room_id,
+            puzzle=puzzle,
+            history=[],
+            language=self.language,
+        )
+        for pid in self.players:
+            self._assign_player_slot(pid)
+        self.hints_remaining = HINTS_PER_GAME
+        self._puzzle_skip_votes.clear()
+
+    # ------------------------------------------------------------------
+    # Phase 1: Player reporting
+    # ------------------------------------------------------------------
+
+    def report_player(self, reporter_id: str, target_id: str, reason: str) -> dict[str, Any]:
+        """Store a report from *reporter_id* against *target_id*.
+
+        Returns the stored report dict.
+        """
+        report: dict[str, Any] = {
+            "reporter_id": reporter_id,
+            "target_id": target_id,
+            "reason": reason,
+            "timestamp": time.time(),
+        }
+        self.reports.append(report)
+        return report
+
+    def get_reports(self, requester_id: str) -> list[dict[str, Any]]:
+        """Return all reports.  Only the room host receives them; others get []."""
+        if requester_id != self.host_player_id:
+            return []
+        return list(self.reports)
+
+    # ------------------------------------------------------------------
+    # Phase 1: Anomaly detection
+    # ------------------------------------------------------------------
+
+    def check_anomaly(self, player_id: str, text: str) -> list[str]:
+        """Check whether *text* contains key phrases from the puzzle solution.
+
+        Uses simple case-insensitive substring matching against puzzle.key_facts.
+        Matched phrases are stored in suspicious_flags[player_id] and returned.
+        Returns an empty list when no anomaly is detected or the room has no puzzle.
+        """
+        if self.puzzle is None:
+            return []
+        matched = [fact for fact in self.puzzle.key_facts if fact.lower() in text.lower()]
+        if matched:
+            if player_id not in self.suspicious_flags:
+                self.suspicious_flags[player_id] = []
+            self.suspicious_flags[player_id].append({
+                "text": text,
+                "matched_phrases": matched,
+                "timestamp": time.time(),
+            })
+        return matched
 
     # ------------------------------------------------------------------
     # Helpers
