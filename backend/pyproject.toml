@@ -17,6 +17,7 @@ dependencies = [
     "PyJWT>=2.8.0",
     "httpx>=0.28.1",
     "cryptography>=42.0.0",
+    "edge-tts>=6.1.9",
 ]
 
 [dependency-groups]

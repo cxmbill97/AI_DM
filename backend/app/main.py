@@ -10,7 +10,7 @@ import json as _json
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from openai import APIError
 from pydantic import BaseModel
 
@@ -59,15 +59,12 @@ from app.puzzle_loader import (
     save_script,
 )
 from app.agents.trace_store import get_traces, subscribe, unsubscribe
+from app.tts import synthesize as tts_synthesize
 from app.room import room_manager
-from app.routers.economy_router import router as economy_router
-from app.ws import websocket_endpoint
 from app.routers import economy_router, pet_router
+from app.ws import websocket_endpoint
 
 app = FastAPI(title="AI DM — 海龟汤")
-app.include_router(economy_router)
-
-
 app.include_router(economy_router.router)
 app.include_router(pet_router.router)
 
@@ -952,6 +949,29 @@ async def get_anomalies(room_id: str, _admin: dict = Depends(_require_admin)) ->
     if room is None:
         raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
     return room._anomaly_flags
+
+
+# ---------------------------------------------------------------------------
+# TTS endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/tts")
+async def tts_endpoint(text: str = "", lang: str = "zh") -> Response:
+    """GET /api/tts?text=…&lang=zh|en
+
+    Returns audio/mpeg (MP3).  Max text length is enforced inside synthesize().
+    No auth required — audio content is the DM's public narration text.
+    Cached responses carry a 1-hour public cache header.
+    """
+    if not text or not text.strip():
+        return Response(status_code=400)
+    mp3 = await tts_synthesize(text, language=lang)
+    return Response(
+        content=mp3,
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 # ---------------------------------------------------------------------------
