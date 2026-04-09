@@ -12,6 +12,8 @@ final class WebSocketService: ObservableObject {
     private var token: String = ""
     private var retryCount = 0
     private let maxRetries = 3
+    private var pingTask: Task<Void, Never>?
+    private var currentConnectionId = UUID()
 
     init() {
         resetStream()
@@ -24,13 +26,38 @@ final class WebSocketService: ObservableObject {
     }
 
     func connect(roomId: String, token: String) {
+        // Prevent double-connecting to the same room (e.g. SwiftUI .task firing twice)
+        if isConnected && self.roomId == roomId { return }
         self.roomId = roomId
-        self.token = token
+        // If no JWT, use a stable guest token so reconnects keep the same identity
+        self.token = token.isEmpty ? Self.stableGuestToken() : token
         self.retryCount = 0
         openConnection()
     }
 
+    private static func stableGuestToken() -> String {
+        let key = "ws_guest_stable_id"
+        let stored = UserDefaults.standard.string(forKey: key) ?? ""
+        let guestId: String
+        if stored.count >= 12 {
+            guestId = stored
+        } else {
+            guestId = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+            UserDefaults.standard.set(guestId, forKey: key)
+        }
+        return "guest:\(guestId)"
+    }
+
     private func openConnection() {
+        // Rotate connection ID first — any pending receive closure from the old
+        // task will see a stale ID and exit without calling handleDisconnect.
+        let connId = UUID()
+        currentConnectionId = connId
+
+        pingTask?.cancel()
+        pingTask = nil
+        task?.cancel(with: .goingAway, reason: nil)
+
         let encodedToken = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? token
         let urlString = "\(AppConfig.wsBaseURL)/ws/\(roomId)?token=\(encodedToken)"
         guard let url = URL(string: urlString) else { return }
@@ -38,12 +65,23 @@ final class WebSocketService: ObservableObject {
         task?.resume()
         isConnected = true
         reconnecting = false
-        listen()
+        listen(connectionId: connId)
+        startPingLoop()
     }
 
-    private func listen() {
+    private func startPingLoop() {
+        pingTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 20_000_000_000) // ping every 20s
+                guard !Task.isCancelled, let t = task else { break }
+                t.sendPing { _ in } // keep-alive; ignore pong result
+            }
+        }
+    }
+
+    private func listen(connectionId: UUID) {
         task?.receive { [weak self] result in
-            guard let self else { return }
+            guard let self, connectionId == self.currentConnectionId else { return }
             switch result {
             case .success(let msg):
                 if case .string(let text) = msg,
@@ -53,7 +91,7 @@ final class WebSocketService: ObservableObject {
                         self.continuation?.yield(gameMsg)
                     }
                 }
-                self.listen()
+                self.listen(connectionId: connectionId)
             case .failure:
                 Task { @MainActor in
                     self.handleDisconnect()
@@ -84,6 +122,8 @@ final class WebSocketService: ObservableObject {
     }
 
     func disconnect() {
+        pingTask?.cancel()
+        pingTask = nil
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
         isConnected = false

@@ -18,6 +18,8 @@ interface DMMessage {
   text: string;
   judgment: string;
   trace?: AgentTrace | null;
+  streaming?: boolean;
+  streamId?: string;
 }
 
 interface ClueNoticeMessage {
@@ -62,6 +64,7 @@ interface ChatPanelProps {
   onFinish: (truth: string) => void;
   onQuestionAsked: () => void;
   onClueUnlocked?: (clue: Clue) => void;
+  onDmResponse?: (text: string) => void;
   cluePanelRef?: React.RefObject<HTMLDivElement | null>;
   showTraces?: boolean;
 }
@@ -74,6 +77,7 @@ export function ChatPanel({
   onFinish,
   onQuestionAsked,
   onClueUnlocked,
+  onDmResponse,
   cluePanelRef,
   showTraces = false,
 }: ChatPanelProps) {
@@ -83,6 +87,8 @@ export function ChatPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const streamingIdRef = useRef<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Auto-scroll to latest message
   useEffect(() => {
@@ -99,31 +105,92 @@ export function ChatPanel({
     setMessages((prev) => [...prev, { role: 'player', text }]);
     onQuestionAsked();
 
+    // Insert streaming placeholder bubble
+    const sid = crypto.randomUUID();
+    streamingIdRef.current = sid;
+    setMessages((prev) => [...prev, { role: 'dm', text: '', judgment: '', streaming: true, streamId: sid }]);
+
+    abortRef.current?.abort();
+    const abort = new AbortController();
+    abortRef.current = abort;
+
+    let fullText = '';
+
     try {
-      const res: ChatResponse = await sendMessage(sessionId, text);
+      const resp = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, message: text }),
+        signal: abort.signal,
+      });
 
-      setMessages((prev) => [
-        ...prev,
-        { role: 'dm', text: res.response, judgment: res.judgment, trace: res.trace ?? null },
-      ]);
-      onProgress(res.truth_progress);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-      if (res.clue_unlocked) {
-        onClueUnlocked?.(res.clue_unlocked);
-        setMessages((prev) => [
-          ...prev,
-          { role: 'clue', clueId: res.clue_unlocked!.id, clueTitle: res.clue_unlocked!.title },
-        ]);
+      const reader = resp.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (raw === '[DONE]') break;
+
+          let payload: Record<string, unknown>;
+          try { payload = JSON.parse(raw) as Record<string, unknown>; }
+          catch { continue; }
+
+          if (payload.event === 'chunk') {
+            fullText += payload.text as string;
+            const snapshot = fullText;
+            // Yield to event loop so React flushes and browser paints between chunks
+            await new Promise<void>((r) => setTimeout(r, 0));
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.role === 'dm' && (m as DMMessage).streamId === sid
+                  ? { ...m, text: snapshot }
+                  : m,
+              ),
+            );
+          } else if (payload.event === 'end') {
+            const judgment = payload.judgment as string;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.role === 'dm' && (m as DMMessage).streamId === sid
+                  ? { ...m, judgment, streaming: false }
+                  : m,
+              ),
+            );
+            streamingIdRef.current = null;
+            // Trigger TTS only now — text is complete, voice and display are aligned
+            onDmResponse?.(fullText);
+            onProgress(payload.truth_progress as number);
+            const clue = payload.clue_unlocked as Clue | null | undefined;
+            if (clue) {
+              onClueUnlocked?.(clue);
+              setMessages((prev) => [...prev, { role: 'clue', clueId: clue.id, clueTitle: clue.title }]);
+            }
+            if (payload.hint) onHint(payload.hint as string);
+            if (payload.truth) onFinish(payload.truth as string);
+          }
+        }
       }
-      if (res.hint) onHint(res.hint);
-      if (res.truth) onFinish(res.truth);
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
       const msg = err instanceof Error ? err.message : t('game.network_error');
       setError(msg);
-      // Remove the optimistically added player message on error
-      setMessages((prev) => prev.slice(0, -1));
+      // Remove the streaming placeholder + player message on error
+      setMessages((prev) => prev.filter((m) => !(m.role === 'dm' && (m as DMMessage).streamId === sid)).slice(0, -1));
     } finally {
       setLoading(false);
+      abortRef.current = null;
     }
   }
 
@@ -161,16 +228,19 @@ export function ChatPanel({
           }
           return (
             <div key={i} className={`message message--${m.role}`}>
-              {m.role === 'dm' && <JudgmentBadge judgment={m.judgment} />}
-              <div className="message-bubble">{m.text}</div>
-              {m.role === 'dm' && showTraces && m.trace && (
+              {m.role === 'dm' && !m.streaming && <JudgmentBadge judgment={m.judgment} />}
+              <div className={`message-bubble${m.role === 'dm' && m.streaming ? ' message-bubble--streaming' : ''}`}>
+                {m.text}
+                {m.role === 'dm' && m.streaming && <span className="dm-cursor" aria-hidden="true" />}
+              </div>
+              {m.role === 'dm' && !m.streaming && showTraces && m.trace && (
                 <TracePanel trace={m.trace} />
               )}
             </div>
           );
         })}
 
-        {loading && (
+        {loading && !streamingIdRef.current && (
           <div className="message message--dm">
             <div className="dm-thinking">{t('game.judge_thinking')}</div>
           </div>

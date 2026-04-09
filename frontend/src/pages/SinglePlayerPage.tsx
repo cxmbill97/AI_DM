@@ -12,6 +12,7 @@ import { HintBar } from '../components/HintBar';
 import { PuzzleCard } from '../components/PuzzleCard';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { useTraceSetting } from '../hooks/useTraceSetting';
+import { useTTS, useTTSSetting } from '../hooks/useTTS';
 import { useT } from '../i18n';
 
 interface GameState {
@@ -100,6 +101,8 @@ function EndScreen({ truth, title, questionCount, hintCount, unlockedClues, onRe
 export function SinglePlayerPage() {
   const { t, lang } = useT();
   const { showTraces, toggleTraces } = useTraceSetting();
+  const { ttsEnabled, toggleTTS } = useTTSSetting();
+  const { speak, stop: stopTTS } = useTTS(lang);
   const navigate = useNavigate();
   const location = useLocation();
   const puzzleId: string | undefined = (location.state as { puzzleId?: string })?.puzzleId;
@@ -109,6 +112,8 @@ export function SinglePlayerPage() {
   const [startError, setStartError] = useState('');
   const [showCluePanel, setShowCluePanel] = useState(false);
   const cluePanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { return () => stopTTS(); }, [stopTTS]);
 
   useEffect(() => {
     startGame(puzzleId, lang)
@@ -184,6 +189,14 @@ export function SinglePlayerPage() {
           <span className="game-header-title">{game.session.title}</span>
           <LanguageToggle />
           <button
+            className="btn btn-ghost"
+            onClick={toggleTTS}
+            title={ttsEnabled ? 'Mute voice' : 'Unmute voice'}
+            style={{ fontSize: 16 }}
+          >
+            {ttsEnabled ? '🔊' : '🔇'}
+          </button>
+          <button
             className={`btn btn-ghost trace-setting-btn${showTraces ? ' trace-setting-btn--on' : ''}`}
             onClick={toggleTraces}
             title={showTraces ? 'Hide agent traces' : 'Show agent traces'}
@@ -220,6 +233,7 @@ export function SinglePlayerPage() {
             setGame((g) => g ? { ...g, questionCount: g.questionCount + 1 } : g)
           }
           onClueUnlocked={handleClueUnlocked}
+          onDmResponse={(text) => { if (ttsEnabled) speak(text); }}
           cluePanelRef={cluePanelRef}
           showTraces={showTraces}
         />

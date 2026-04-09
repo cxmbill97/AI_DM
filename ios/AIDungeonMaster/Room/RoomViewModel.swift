@@ -3,9 +3,11 @@ import Foundation
 struct ChatMessage: Identifiable {
     let id = UUID()
     let sender: String
-    let text: String
+    var text: String
     let type: MessageType
-    var judgment: String? = nil   // Phase 3: "是" / "不是" / "部分正确" / "无关"
+    var judgment: String? = nil
+    var isStreaming: Bool = false
+    var streamId: String? = nil
     enum MessageType { case player, dm, system, error, emote }
 }
 
@@ -31,8 +33,11 @@ final class RoomViewModel: ObservableObject {
     @Published var currentTurnPlayerId: String? = nil
     @Published var myPlayerId: String? = nil
 
+    @Published var ttsEnabled: Bool = UserDefaults.standard.object(forKey: "tts_enabled") as? Bool ?? true
+
     let roomId: String
     private let ws = WebSocketService()
+    private let tts = TTSService()
     private var surfaceShown = false
 
     init(roomId: String) {
@@ -48,7 +53,7 @@ final class RoomViewModel: ObservableObject {
     }
 
     func connect() async {
-        guard let token = KeychainService.loadToken() else { return }
+        let token = KeychainService.loadToken() ?? ""
         ws.connect(roomId: roomId, token: token)
         for await msg in ws.stream {
             handle(msg)
@@ -57,6 +62,13 @@ final class RoomViewModel: ObservableObject {
 
     func disconnect() {
         ws.disconnect()
+        tts.stop()
+    }
+
+    func toggleTTS() {
+        ttsEnabled.toggle()
+        tts.isEnabled = ttsEnabled
+        if !ttsEnabled { tts.stop() }
     }
 
     func send() async {
@@ -90,7 +102,42 @@ final class RoomViewModel: ObservableObject {
         case .dmResponse(let r):
             messages.append(ChatMessage(sender: "DM", text: r.response, type: .dm,
                                         judgment: r.judgment))
+            tts.speak(r.response)
             truthProgress = r.truth_progress
+            if let clue = r.clue_unlocked, !clues.contains(where: { $0.id == clue.id }) {
+                clues.append(clue)
+                messages.append(ChatMessage(sender: "System", text: "🔑 Clue unlocked: \(clue.title)", type: .system))
+            }
+            if let t = r.truth {
+                truth = t
+                gameWon = true
+                messages.append(ChatMessage(sender: "System", text: "🎉 \(t)", type: .system))
+                Task { try? await APIService.shared.completeRoom(roomId: roomId, outcome: "success") }
+            }
+
+        case .dmStreamStart(let r):
+            let placeholder = ChatMessage(sender: "DM", text: "", type: .dm,
+                                          isStreaming: true, streamId: r.stream_id)
+            messages.append(placeholder)
+
+        case .dmStreamChunk(let r):
+            if let idx = messages.lastIndex(where: { $0.streamId == r.stream_id }) {
+                messages[idx].text += r.text
+            }
+
+        case .dmStreamEnd(let r):
+            let sid = r.stream_id
+            let finalText = r.response ?? ""
+            if let idx = messages.lastIndex(where: { $0.streamId == sid }) {
+                messages[idx].text = finalText
+                messages[idx].judgment = r.judgment
+                messages[idx].isStreaming = false
+            } else {
+                // fallback if start/chunk were missed
+                messages.append(ChatMessage(sender: "DM", text: finalText, type: .dm, judgment: r.judgment))
+            }
+            tts.speak(finalText)
+            if let progress = r.truth_progress { truthProgress = progress }
             if let clue = r.clue_unlocked, !clues.contains(where: { $0.id == clue.id }) {
                 clues.append(clue)
                 messages.append(ChatMessage(sender: "System", text: "🔑 Clue unlocked: \(clue.title)", type: .system))

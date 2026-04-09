@@ -400,6 +400,23 @@ button {
 .badge--na      { color: var(--na);      background: var(--na-bg);      border-color: #ccc; }
 .badge--partial { color: var(--partial); background: var(--partial-bg); border-color: var(--partial); }
 
+.dm-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--text-2);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink-cursor 0.8s step-end infinite;
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.message-bubble--streaming { opacity: 0.92; }
+
 .dm-thinking {
   font-size: 13px;
   color: var(--text-3);

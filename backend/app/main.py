@@ -34,7 +34,7 @@ from app.auth import (
 )
 from app.community import init_db, like_script, list_community_scripts, upsert_script
 from app.config import settings
-from app.dm import dm_turn
+from app.dm import dm_turn, dm_turn_stream
 from app.models import (
     ChatRequest,
     ChatResponse,
@@ -489,6 +489,34 @@ async def start_game(body: StartRequest = StartRequest()) -> StartResponse:
         puzzle_id=puzzle.id,
         title=puzzle.title,
         surface=puzzle.surface,
+    )
+
+
+@app.post("/api/chat/stream")
+async def chat_stream_endpoint(body: ChatRequest) -> StreamingResponse:
+    """Streaming version of /api/chat — returns SSE events.
+
+    Events:
+      data: {"event": "start", "timestamp": ...}
+      data: {"event": "chunk", "text": "..."}     ← response tokens as they arrive
+      data: {"event": "end", "judgment": ..., "truth_progress": ..., ...}
+      data: [DONE]
+    """
+    session = _get_session(body.session_id)
+    if session.finished:
+        raise HTTPException(status_code=400, detail="Game is already finished.")
+    if not body.message.strip():
+        raise HTTPException(status_code=422, detail="Message cannot be empty.")
+
+    async def _generate():
+        async for event, data in dm_turn_stream(session, body.message.strip()):
+            yield f"data: {_json.dumps({'event': event, **data}, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

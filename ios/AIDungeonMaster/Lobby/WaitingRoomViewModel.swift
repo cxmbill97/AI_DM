@@ -51,7 +51,7 @@ final class WaitingRoomViewModel: ObservableObject {
     }
 
     func connect() async {
-        guard let token = KeychainService.loadToken() else { return }
+        let token = KeychainService.loadToken() ?? ""
         ws.connect(roomId: roomId, token: token)
         isConnected = true
         for await msg in ws.stream {

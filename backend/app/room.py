@@ -243,9 +243,26 @@ class Room:
             slot["websocket"] = None
             slot["last_seen"] = time.time()
 
+    # Ephemeral presence events that are stale/confusing when replayed on reconnect.
+    _EPHEMERAL_TEXTS = ("加入了房间", "断开连接", "重新连接了", "joined the room", "disconnected", "reconnected")
+
     def messages_since(self, timestamp: float) -> list[dict[str, Any]]:
-        """Return all messages logged after *timestamp* (for reconnect replay)."""
-        return [m for m in self.message_history if m.get("timestamp", 0) > timestamp]
+        """Return game messages logged after *timestamp* for reconnect replay.
+
+        Ephemeral presence events (join/leave/reconnect system messages) are
+        excluded — they describe transient connection state and are confusing
+        when replayed out of context.
+        """
+        def _is_ephemeral(m: dict[str, Any]) -> bool:
+            if m.get("type") != "system":
+                return False
+            text = m.get("text", "")
+            return any(phrase in text for phrase in self._EPHEMERAL_TEXTS)
+
+        return [
+            m for m in self.message_history
+            if m.get("timestamp", 0) > timestamp and not _is_ephemeral(m)
+        ]
 
     # ------------------------------------------------------------------
     # Broadcasting

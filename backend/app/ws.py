@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 from app.agents.trace_store import store_trace  # noqa: E402
 from app.auth import add_history, decode_jwt, get_user_by_id  # noqa: E402
-from app.dm import dm_proactive_message, dm_turn, dm_turn_private  # noqa: E402
+from app.dm import dm_proactive_message, dm_turn, dm_turn_private, dm_turn_stream  # noqa: E402
 from app.room import RECONNECT_WINDOW_SECS, TURN_HINT_SECS, TURN_TIMEOUT_SECS, Room, room_manager  # noqa: E402
 from app.visibility import VisibilityRegistry  # noqa: E402
 from app.voting import VoteError, VotingModule  # noqa: E402
@@ -1046,9 +1046,15 @@ async def websocket_endpoint(
         pass
 
     if not player_name:
-        await websocket.send_json({"type": "error", "text": "Authentication required"})
-        await websocket.close(code=4001)
-        return
+        # Stable guest identity: iOS passes "guest:<hex_id>" so reconnects
+        # are recognised as the same player.  Fall back to random for web.
+        if token.startswith("guest:"):
+            guest_id = token[6:18]  # first 12 hex chars
+            player_name = f"Guest_{guest_id[:6]}"
+            user_id = f"guest_{guest_id}"   # stable player_id for reconnect detection
+        else:
+            import uuid as _uuid  # noqa: PLC0415
+            player_name = f"Guest_{_uuid.uuid4().hex[:6]}"
 
     room = room_manager.get_room(room_id)
     if room is None:
@@ -1477,49 +1483,70 @@ async def websocket_endpoint(
             room.message_history.append(player_msg_ts)
             await room.broadcast(player_msg_ts)
 
-            await room.broadcast({"type": "dm_typing", "typing": True, "timestamp": time.time()})
+            # ---- Turtle soup: streaming DM response ----
+            stream_id = str(uuid.uuid4())
+            end_data: dict[str, Any] = {}
             try:
                 async with room._lock:
-                    result = await dm_turn(room.game_session, text, player_id=player_id)
+                    async for event, data in dm_turn_stream(room.game_session, text, player_id=player_id):
+                        if event == "start":
+                            await room.broadcast({
+                                "type": "dm_stream_start",
+                                "player_name": player_name,
+                                "stream_id": stream_id,
+                                "timestamp": data["timestamp"],
+                            })
+                        elif event == "chunk":
+                            await room.broadcast({
+                                "type": "dm_stream_chunk",
+                                "text": data["text"],
+                                "stream_id": stream_id,
+                            })
+                        elif event == "end":
+                            end_data = data
             except Exception as exc:
-                logger.exception("dm_turn failed for %s: %s", player_name, exc)
+                logger.exception("dm_turn_stream failed for %s: %s", player_name, exc)
                 await room.broadcast({"type": "dm_typing", "typing": False, "timestamp": time.time()})
                 await room.send_to(
                     player_id,
                     {"type": "error", "text": "DM 暂时无法回应，请稍后再试"},
                 )
                 continue
-            await room.broadcast({"type": "dm_typing", "typing": False, "timestamp": time.time()})
 
             # ---- Phase 0: record winner and advance turn ----
             winner_name: str | None = None
-            if result.truth is not None and room.game_session and room.game_session.winner_player_id is None:
+            if end_data.get("truth") is not None and room.game_session and room.game_session.winner_player_id is None:
                 room.game_session.winner_player_id = player_id
                 winner_name = player_name
                 if room.turn_mode:
-                    room.turn_started_at = None  # stop the turn timer on win
+                    room.turn_started_at = None
 
             # ---- Phase 2: per-turn scoring ----
-            turn_score = _compute_turn_score(result.judgment, result.clue_unlocked is not None)
+            turn_score = _compute_turn_score(end_data.get("judgment", ""), end_data.get("clue_unlocked") is not None)
             room.record_score(player_id, turn_score)
 
-            dm_msg_ts: dict[str, Any] = {
-                "type": "dm_response",
+            # Finalize the streaming bubble with all metadata
+            dm_end_msg: dict[str, Any] = {
+                "type": "dm_stream_end",
+                "stream_id": stream_id,
                 "player_name": player_name,
-                "judgment": result.judgment,
-                "response": result.response,
-                "truth_progress": result.truth_progress,
-                "clue_unlocked": result.clue_unlocked.model_dump() if result.clue_unlocked else None,
-                "hint": result.hint,
-                "truth": result.truth,
+                "judgment": end_data.get("judgment"),
+                "response": end_data.get("response"),
+                "truth_progress": end_data.get("truth_progress"),
+                "clue_unlocked": end_data.get("clue_unlocked"),
+                "hint": end_data.get("hint"),
+                "truth": end_data.get("truth"),
                 "winner_name": winner_name,
                 "turn_score": turn_score,
                 "leaderboard": room.get_leaderboard(),
                 "timestamp": time.time(),
             }
-            room.message_history.append(dm_msg_ts)
-            await room.broadcast(dm_msg_ts)
+            room.message_history.append(dm_end_msg)
+            await room.broadcast(dm_end_msg)
             room.intervention.record_dm_spoke()
+
+            # Also store trace in trace_store (compatible with existing store_trace call)
+            store_trace(room.room_id, {})
 
             # ---- Phase 2: game_over broadcast with MVP ----
             if winner_name is not None:
@@ -1535,9 +1562,11 @@ async def websocket_endpoint(
                 await room.broadcast(game_over_msg)
 
             # ---- Phase 1: anomaly detection (fire-and-forget) ----
-            if result.judgment in _PROGRESS_JUDGMENTS and result.truth_progress >= 0.6:
+            judgment_val = end_data.get("judgment", "")
+            truth_progress_val = end_data.get("truth_progress", 0.0)
+            if judgment_val in _PROGRESS_JUDGMENTS and truth_progress_val >= 0.6:
                 asyncio.create_task(
-                    _check_anomaly(room, player_id, player_name, text, result.judgment, result.truth_progress)
+                    _check_anomaly(room, player_id, player_name, text, judgment_val, truth_progress_val)
                 )
 
             # Advance to next player after a successful turn (turn_mode only, game not yet over)
