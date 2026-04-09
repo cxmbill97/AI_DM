@@ -1,238 +1,300 @@
-# AI DM — 海龟汤 & 剧本杀
+# AI_DM — Multi-Agent Coordination System under Partial Observability
 
-> **AI-powered game master for Chinese social deduction games, built with a multi-agent LLM pipeline, real-time WebSocket multiplayer, a React web frontend, and a native iOS app. Supports bilingual (zh/en) gameplay with streaming DM responses, per-player secret isolation, and an automated evaluation harness.**
+A multi-agent LLM orchestration system built around a non-trivial coordination problem: **running a real-time multiplayer social deduction game where agents must collaborate without sharing forbidden context**. The game domain (海龟汤 / 剧本杀) is the environment; the system under development is the agent pipeline, safety layer, evaluation harness, and observability infrastructure.
 
----
+Four role-specialized agents — Router, Judge, Narrator, Safety — execute in a fixed pipeline per player message. Each agent receives only the minimum context its role requires. A deterministic state machine governs what actions are legal in any given phase; LLMs have no authority over state transitions.
 
-## Project Overview
-
-AI DM is a full-stack multiplayer game platform that uses large language models to host two classic Chinese deduction games entirely autonomously — no human game master needed. Players connect from any device on the same network (or remotely via ngrok/Cloudflare) and interact with an AI DM in real time.
-
-### What it does
-
-**海龟汤 / Turtle Soup** — A lateral-thinking puzzle game. The DM holds a hidden story; players ask yes/no questions to piece together the truth. The AI judges each question against a decomposed fact set, generates atmospheric responses, and escalates hints when players go quiet.
-
-**剧本杀 / Murder Mystery** — A structured whodunit. 2–4 players are each assigned a character with a public backstory and a private secret. The AI DM hosts a six-phase session (opening → reading → investigation → discussion → voting → reveal), answers investigation questions, voices NPC characters, enforces phase rules, and narrates the dramatic reveal — all without ever leaking the solution early.
-
-### Technical highlights
-
-**Multi-agent pipeline with minimum-privilege design**
-Each player message flows through a four-agent chain: a rules-based Router classifies intent in <1ms (no LLM), a Judge evaluates truth alignment against decomposed key facts, a Narrator generates atmospheric responses without access to the solution, and a Safety agent blocks any accidental leaks before broadcast. Agents only receive the information they strictly need — the culprit identity and character secrets never appear in any prompt before the reveal phase.
-
-**Real-time streaming**
-DM responses stream token-by-token to all players simultaneously using server-sent WebSocket chunks. The frontend renders a typewriter effect with judgment shown immediately (before the full response arrives), so players get feedback in under a second even on slow connections.
-
-**Deterministic game state**
-All game rules — phase transitions, allowed actions, vote tallying, skip voting — are enforced by a pure Python state machine with no LLM involvement. The LLM can only respond to what the state machine permits; it cannot advance phases or reveal secrets on its own.
-
-**Observability**
-Every LLM call is logged to stdout (real-time) and to a daily JSONL file (full prompt + response for tuning). Every player message produces a structured `AgentTrace` (per-agent latency, token counts, cost) that can be toggled visible in the UI. An offline eval harness runs 58 judge accuracy scenarios and 56 adversarial red-team prompts against the live API, producing a markdown report with P50/P95 latency and projected cost.
-
-**Proactive DM intervention**
-The DM does not only react — it monitors the room and speaks up on its own. A background task ticks every 5 seconds and tracks silence per player. When a phase goes quiet, the engine escalates through three levels: a cheap canned encouragement at 45 seconds (no LLM cost), an LLM-generated nudge at 90 seconds, and a contextual hint at 180 seconds that references what the players have already discovered without giving away the answer. Thresholds double after each nudge to avoid spamming, and a global 15-second cooldown prevents two DM messages from overlapping. The intervention engine is phase-aware — it stays silent during opening and reading phases, switches to a vote reminder during voting, and runs the full backoff ladder only during investigation and discussion. This design keeps players engaged without feeling hand-held, and keeps LLM costs near zero for rooms that are actively playing.
-
-**MCP server**
-The game engine is exposed as MCP tools over stdio, making it playable from Claude Desktop, Cursor, or any MCP-compatible client without a browser.
-
-### Tech stack
-
-| Layer | Technologies |
-|-------|-------------|
-| Backend | Python 3.12, FastAPI, WebSocket, asyncio |
-| LLM | MiniMax M2.5 via OpenAI-compatible SDK; streaming + non-streaming |
-| Web frontend | React 19, TypeScript, Vite, React Router |
-| iOS app | SwiftUI, MVVM, URLSession, KeychainServices, Google + Apple Sign-In |
-| Real-time | Native WebSocket (auto ws/wss for LAN and tunnel access) |
-| Testing | pytest, pytest-asyncio, 400+ test cases including red-team suite |
-| CI | GitHub Actions (pytest + ruff + tsc + vite build) |
-| Packaging | uv (Python), pnpm (Node); one-command startup via `./start.sh` |
+**Full stack:** FastAPI backend · React web frontend · SwiftUI iOS app · WebSocket real-time multiplayer · JWT auth · MCP server · 114-scenario offline eval harness · CI (pytest + ruff + tsc + vite build)
 
 ---
 
-## Quick Start
+## Key Capabilities
 
-```bash
-git clone <repo>
-cp backend/.env.example backend/.env   # add your MINIMAX_API_KEY
-./start.sh                             # installs deps, starts both servers
+| Capability | Implementation |
+|---|---|
+| Role-specialized agents | Router (deterministic), Judge (LLM, truth-facing), Narrator (LLM, context-isolated), Safety (post-generation scan) |
+| Partial observability enforcement | `VisibilityRegistry` scopes context per player; Narrator never receives truth or key_facts |
+| Safety / leak detection | Verbatim substring scan (≥8 chars) + 4-gram paraphrase overlap check before any output is broadcast |
+| Offline evaluation harness | 114 scenarios: 58 judge accuracy + 56 adversarial prompt injection, CLI runner, markdown report |
+| Per-message observability | `AgentTrace` — step-level latency, token count, cost per agent, surfaced in UI |
+| Real-time multi-player | WebSocket, streaming DM responses (token-by-token), turn system, reconnect handling |
+| Deterministic state management | Phase state machine and voting module are pure Python — no LLM involved in game rules |
+| Proactive DM intervention | 3-level silence backoff (45 s / 90 s / 180 s), phase-aware, exponential backoff |
+| MCP server | Game engine exposed as MCP tools over stdio for Claude Desktop / Cursor / custom agents |
+| Bilingual | Chinese and English throughout: content, prompts, agent outputs, UI |
+
+---
+
+## System Architecture
+
+### High-level
+
+```mermaid
+flowchart LR
+    Client["Client\n(Web / iOS)"]
+    WS["WebSocket Handler\n(ws.py)"]
+    SM["State Machine\nphase guard"]
+    ORC["Orchestrator\n(orchestrator.py)"]
+    VR["VisibilityRegistry\ncontext scoping"]
+
+    subgraph Agents
+        RO["Router\nrules-based · <1ms"]
+        JU["Judge\nLLM · key_facts only"]
+        NA["Narrator\nLLM · no truth / no key_facts"]
+        SA["Safety\nleak scan · retry x2"]
+    end
+
+    TR["AgentTrace\nlatency · tokens · cost"]
+    OUT["Broadcast\nto room"]
+
+    Client -->|"message"| WS
+    WS --> SM
+    SM -->|"allowed"| ORC
+    ORC --> RO
+    RO -->|"question / accuse"| JU
+    JU -->|"judgment only"| NA
+    NA --> SA
+    SA -->|"clean"| OUT
+    SA -->|"leak"| NA
+    ORC --> VR
+    VR -.->|"visible context"| NA
+    ORC --> TR
 ```
 
-Open **http://localhost:5173** in your browser. Share the LAN URL printed at startup with friends on the same network.
+### Agent pipeline (murder mystery, question intent)
 
-> **Windows:** run `start.bat` instead of `./start.sh`.
+```
+Player message
+  └── Router          intent classification — regex, no LLM, <1 ms
+        └── State machine  can_act(action)?  rejects illegal moves before any LLM call
+              └── Judge    sees key_facts (decomposed), never sees culprit identity
+                    └── Narrator   sees judgment + visible_context only — truth is absent from its prompt
+                          └── Safety   scans output against truth + key_facts
+                                       verbatim (≥8 chars) + 4-gram paraphrase overlap
+                                       on fail → retry Narrator (up to 2×)
+                                └── broadcast to all players in room
+```
+
+The Router also dispatches to: `VotingModule` (vote intent, pure logic), `ClueSystem` + Narrator (search intent), `NPCAgent` (npc intent, persona + knowledge boundary), canned response (meta intent, no LLM).
+
+### Information boundaries
+
+| Agent | Sees | Never sees |
+|---|---|---|
+| Router | raw player message | anything game-state |
+| Judge | question + key_facts + phase | culprit identity, character secrets |
+| Narrator | judgment, visible context, phase | truth, key_facts, other players' secrets |
+| Safety | narrator output + truth + key_facts | (read-only, post-generation) |
+| NPCAgent | npc persona + assigned knowledge list | clues not in its knowledge list |
+| VisibilityRegistry | full game state | — (enforces boundaries for other agents) |
+
+The separation between Judge (truth-evaluating) and Narrator (response-generating) is the core architectural decision. It allows the Narrator prompt to be structurally incapable of leaking the solution, not merely instructed not to.
 
 ---
 
-## Prerequisites
+## Evaluation & Safety
 
-- Python 3.12+ with [uv](https://docs.astral.sh/uv/) — `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- Node.js 18+ — `brew install node` (macOS) or [nodejs.org](https://nodejs.org)
-- [pnpm](https://pnpm.io/) — `npm install -g pnpm`
-- A MiniMax API key (`base_url: https://api.minimax.io/v1`, model: `MiniMax-M2.5`)
-
----
-
-## Manual Setup
-
-### Backend
+### Offline evaluation harness
 
 ```bash
 cd backend
-cp .env.example .env      # fill in MINIMAX_API_KEY
-uv sync                   # install Python deps
-uv run uvicorn app.main:app --reload --host 0.0.0.0
-# REST API + WebSocket at http://localhost:8000
+uv run python -m eval --scenarios all --provider minimax
+# Report → eval/reports/minimax_YYYYMMDD.md
 ```
 
-### Frontend
+| Dataset | Count | What it measures |
+|---|---|---|
+| `judge_scenarios.json` | 58 | Judge accuracy: exact match against expected judgment (是 / 不是 / 无关 / 部分正确) |
+| `redteam_scenarios.json` | 56 | Adversarial prompt injection: spoiler extraction, role confusion, jailbreak attempts |
+
+Metrics reported: judge accuracy %, redteam leakage %, P50/P95 latency per scenario, projected cost per game session.
+
+**Latest results (MiniMax-M2.5, 2026-04-01):**
+- Judge accuracy: **58.6%** (48 accuracy + 10 edge-case scenarios)
+- End-to-end leak rate: **7.1%** (after Safety agent filtering)
+- Known weak point: **40% leak rate on `indirect_extraction` subcategory** — paraphrased questions that bypass verbatim key_fact matching
+
+### Safety layer
+
+The Safety agent runs after every Narrator output and before broadcast. Two detection passes:
+
+1. **Verbatim scan** — key_fact substrings ≥8 chars found in narrator output → flag
+2. **Paraphrase scan** — `VisibilityRegistry.is_private_content_leaked()` uses 4-gram overlap between narrator output and character secrets (threshold tuned to avoid false positives on short common phrases)
+
+On detection: Narrator is retried up to 2 times with an explicit "avoid leaking" injection. If all retries fail, the message is suppressed and an error is returned to the player.
+
+### Test coverage
 
 ```bash
+uv run pytest tests/ -x -v --ignore=tests/test_eval.py   # ~425 tests, no LLM required
+uv run pytest tests/test_redteam.py --slow               # real LLM, adversarial prompts
+```
+
+Targeted suites cover: agent pipeline (mock LLM), visibility isolation, state machine transitions, voting logic, DM intervention backoff, bilingual correctness, MCP server tools, agent trace accounting.
+
+---
+
+## Findings & Design Lessons
+
+**On context isolation as a structural guarantee**
+The Narrator's inability to leak truth is structural, not instructional: the truth object is never constructed into its prompt. This is more reliable than "don't leak" instructions in a single shared prompt. However, it requires the Judge→Narrator boundary to pass only a judgment token (`是 / 不是 / 无关`), not the full reasoning — which loses information and contributes to Narrator response quality variance.
+
+**On the Judge accuracy gap**
+58.6% exact-match accuracy sounds low. The main failure modes observed: (1) edge cases where a statement is partially true but the model returns `是` instead of `部分正确`, (2) questions about absence of evidence (the model tends toward `无关` when `不是` is correct). This is a known LLM calibration problem on structured multi-class judgment tasks, not a system design flaw — but it affects game quality directly.
+
+**On paraphrase as the hard safety case**
+Verbatim key_fact matching is robust but gameable. The `indirect_extraction` attack category (40% leak rate) exploits this: players ask semantically equivalent questions that avoid literal key_fact substrings. The 4-gram overlap check helps but is not sufficient. This gap would require either dense embedding similarity or a dedicated leak-detection LLM call per response.
+
+**On deterministic components as reliability anchors**
+The Router, state machine, and voting module are pure Python with no LLM calls. This means phase transitions, vote tallying, and intent classification are fully testable and never hallucinate. Placing the LLM only on tasks that require it (judgment + narration) and keeping everything else deterministic made the system substantially easier to debug and evaluate.
+
+**On per-message observability**
+Having `AgentTrace` (step-level latency, tokens, cost) surfaced in the UI proved more useful than expected during development. Unexpected latency spikes traced to the Judge's `<think>` token blocks (MiniMax-M2.5 reasoning model), not network. Without per-agent traces this would have looked like a single slow LLM call.
+
+**On multiplayer reconnect and shared state**
+Real-time multiplayer introduces non-obvious agent reliability problems: a player reconnecting mid-session must receive a consistent room snapshot, missed messages must be replayed, and the WebSocket handler must not broadcast stale disconnect/reconnect events into the game history. These are not LLM problems but they interact with the agent pipeline (e.g., replayed `dm_stream_end` events must not re-trigger clue unlock logic).
+
+---
+
+## Repository Structure
+
+```
+backend/
+├── app/
+│   ├── agents/
+│   │   ├── orchestrator.py   # Pipeline: Router → Judge → Narrator → Safety + trace collection
+│   │   ├── router.py         # Intent classifier — regex, bilingual, no LLM
+│   │   ├── judge.py          # Truth judgment — key_facts only, structured JSON output
+│   │   ├── narrator.py       # Response generation — context-isolated from truth
+│   │   ├── safety.py         # Post-generation leak detection — verbatim + 4-gram
+│   │   ├── npc.py            # NPC agent — persona + knowledge boundary
+│   │   └── trace.py          # TraceStep + AgentTrace dataclasses
+│   ├── main.py               # FastAPI: REST endpoints
+│   ├── ws.py                 # WebSocket handler: message routing, reconnect, streaming
+│   ├── room.py               # Room state, broadcast, message history, reconnect replay
+│   ├── visibility.py         # VisibilityRegistry: per-player context scoping + leak detection
+│   ├── state_machine.py      # Deterministic phase state machine (pure, no LLM)
+│   ├── voting.py             # VotingModule: tally, tiebreaker, runoff (pure, no LLM)
+│   ├── intervention.py       # Proactive DM — silence detection + 3-level backoff
+│   ├── dm.py                 # Turtle soup DM: prompt assembly, streaming, hint escalation
+│   ├── auth.py               # Google/Apple OAuth, JWT, SQLite user store
+│   └── community.py          # Community script metadata (likes, uploads)
+├── eval/
+│   ├── __main__.py           # CLI: python -m eval --scenarios all
+│   ├── scenarios.py          # EvalScenario dataclass + loader
+│   ├── runner.py             # Async runner: scenarios → EvalResult list
+│   ├── report.py             # Markdown report generator
+│   └── data/
+│       ├── judge_scenarios.json    # 58 accuracy + edge-case scenarios
+│       └── redteam_scenarios.json  # 56 adversarial scenarios (6 attack categories)
+├── mcp_server/               # MCP server (stdio transport, single-player only)
+├── data/
+│   ├── puzzles/{zh,en}/      # Turtle soup puzzle JSON files
+│   └── scripts/{zh,en}/      # Murder mystery script JSON files
+└── tests/                    # 400+ test cases (pytest-asyncio)
+
+frontend/src/
+├── hooks/useRoom.ts          # WebSocket state — all multiplayer message types
+├── components/
+│   ├── ChatPanel.tsx         # Streaming DM bubbles with judgment badges
+│   ├── TracePanel.tsx        # Per-message agent trace viewer (⚡ toggle)
+│   ├── VotePanel.tsx         # Vote UI with animated results
+│   └── ...
+└── pages/
+
+ios/AIDungeonMaster/
+├── Room/                     # RoomViewModel (WebSocket), streaming DM rendering
+├── Lobby/                    # WaitingRoomView + WaitingRoomViewModel
+├── Services/
+│   ├── WebSocketService.swift  # Connection ID rotation, stable guest identity, ping loop
+│   └── TTSService.swift        # DM voice narration (AVSpeechSynthesizer)
+└── Models/Models.swift         # GameMessage enum — all WS event types
+```
+
+---
+
+## How to Run
+
+### Prerequisites
+
+- Python 3.12+ with [uv](https://docs.astral.sh/uv/): `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- Node.js 18+ with [pnpm](https://pnpm.io/): `npm install -g pnpm`
+- A MiniMax API key (`base_url: https://api.minimax.io/v1`, model: `MiniMax-M2.5`)
+  - Any OpenAI-compatible provider works; change `MINIMAX_BASE_URL` and `MINIMAX_MODEL` in `.env`
+
+### One-command startup
+
+```bash
+git clone https://github.com/cxmbill97/AI_DM.git
+cd AI_DM
+cp backend/.env.example backend/.env   # add MINIMAX_API_KEY
+./start.sh                             # installs deps, starts backend + frontend
+```
+
+Open `http://localhost:5173`. Share `http://<your-lan-ip>:5173` for LAN multiplayer.
+
+### Manual startup
+
+```bash
+# Backend (port 8000)
+cd backend
+uv sync
+uv run uvicorn app.main:app --reload --host 0.0.0.0
+
+# Frontend (port 5173)
 cd frontend
 pnpm install
-pnpm dev --host 0.0.0.0   # UI at http://localhost:5173
-```
+pnpm dev --host 0.0.0.0
 
-### iOS App
-
-```bash
+# iOS (Xcode 16+)
 cd ios
 xcodegen generate
-open AIDungeonMaster.xcodeproj   # build & run from Xcode, or:
-xcodebuild -scheme AIDungeonMaster -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+open AIDungeonMaster.xcodeproj
 ```
 
-Requires Xcode 16+. Point `AppConfig.baseURL` at your backend host. The simulator uses `UserDefaults` for token storage (Keychain requires code-signing on device).
+### Environment variables
 
-**iOS features:**
-- Instagram-style scrollable feed with like, save, and play actions
-- Custom gold/purple tab bar (Home · Explore · Activity · Saved · Profile)
-- **Multiplayer lobby** — tap Play to enter a waiting room; share a 6-character room code or `aidm://room/{id}` deep link; host presses Start when everyone is ready
-- Profile page with Games Played (completed only) and Liked tabs
-- Real-time room view with clue panel, progress bar, and chat
-- Google Sign-In and Apple Sign-In
+| Variable | Required | Description |
+|---|---|---|
+| `MINIMAX_API_KEY` | Yes | LLM provider API key |
+| `MINIMAX_BASE_URL` | No | Default: `https://api.minimax.io/v1` |
+| `MINIMAX_MODEL` | No | Default: `MiniMax-M2.5` |
+| `JWT_SECRET` | No | Auto-generated if unset (sessions reset on restart) |
+| `GOOGLE_CLIENT_ID` | No | Required for Google Sign-In |
+| `GOOGLE_CLIENT_SECRET` | No | Required for Google OAuth callback |
 
-**Testing the lobby on simulator:**
-
-```bash
-# Terminal 1 — backend
-cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0
-
-# Terminal 2 — build & run first simulator (Alice, the host)
-cd ios
-xcodebuild -scheme AIDungeonMaster \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
-  -derivedDataPath build build 2>&1 | grep -E 'error:|Build succeeded'
-open -a Simulator
-
-# Terminal 3 — run a second simulator instance (Bob, the joiner)
-xcrun simctl boot "iPhone 15"
-open -a Simulator
-```
-
-Or simply open `ios/AIDungeonMaster.xcodeproj` in Xcode, run on two different simulators side-by-side (Product → Destination), and:
-
-1. Sign in on both (use the dev login at the bottom of the login screen if OAuth is not set up)
-2. On simulator A: tap any game card → **Play** → a waiting room opens with the room code
-3. On simulator B: go to the **Explore** tab (or Lobby tab) → enter the room code in the join field → tap **Join**
-4. Both simulators now show the same lobby with two player slots
-5. Players can tap **I'm Ready**; the host sees **Start Game** once at least one player has joined
-6. Host taps **Start Game** → both devices navigate to the game room simultaneously
-7. The **share button** (top-right ↗) opens the iOS native share sheet with the `aidm://room/{code}` deep link
-
----
-
-## Remote Access
-
-The frontend WebSocket URL is constructed from the current page's protocol, so all four access modes work without any configuration change:
-
-| Mode | How | URL shape |
-|------|-----|-----------|
-| Local dev | `./start.sh` | `ws://localhost:5173/ws/…` |
-| LAN | other device on same network | `ws://192.168.x.x:5173/ws/…` |
-| ngrok | `ngrok http 5173` in a second terminal | `wss://abc123.ngrok-free.app/ws/…` |
-| Cloudflare | `cloudflared tunnel --url http://localhost:5173` | `wss://xxx.trycloudflare.com/ws/…` |
-
-The Vite dev server proxies `/ws` to the backend with `ws: true`, so the backend always receives plain `ws://` regardless of how the player connected.
-
----
-
-## Bilingual Support (zh / en)
-
-The UI language is toggled per-browser and persists in `localStorage`. Game content (puzzles and scripts) is loaded in the language set when the room is created — all players in a room share the same DM language.
-
-| Layer | How |
-|-------|-----|
-| UI strings | `frontend/src/i18n/zh.json` + `en.json`, toggled by `LanguageToggle` |
-| Turtle soup content | `backend/data/puzzles/zh/` and `backend/data/puzzles/en/` |
-| Murder mystery content | `backend/data/scripts/zh/` and `backend/data/scripts/en/` |
-| DM narration | System prompt language follows `room.language`; English judgments: Yes / No / Irrelevant / Partially correct |
-| Intervention messages | Language-aware canned messages; same silence-backoff logic |
-| Router intent detection | Chinese and English patterns both supported (?, 吗, what, how, why, search, look, …) |
-
----
-
-## Running Tests
+### Running the eval harness
 
 ```bash
 cd backend
-
-# Unit tests — mock LLM, ~0.5 s
-uv run pytest tests/ -x -v
-
-# Integration / red-team — real MiniMax API
-uv run pytest tests/ -x -v --slow
-
-# Targeted suites
-uv run pytest tests/test_i18n.py       -x -v   # bilingual puzzle loading + DM language switching
-uv run pytest tests/test_state_machine.py -x -v # phase state machine
-uv run pytest tests/test_voting.py        -x -v # vote collection + tiebreaker
-uv run pytest tests/test_agents.py        -x -v # multi-agent pipeline (mock LLM)
-uv run pytest tests/test_redteam.py       -x -v --slow  # adversarial red-team (zh + en)
-uv run pytest tests/test_trace.py         -x -v # agent trace collection
-uv run pytest tests/test_eval.py          -x -v # eval harness (fast scenarios)
-uv run pytest tests/test_mcp.py           -x -v # MCP server tools
+uv run python -m eval --scenarios all        # full 114-scenario run
+uv run python -m eval --scenarios accuracy   # judge accuracy only (58 scenarios)
+uv run python -m eval --scenarios redteam    # adversarial only (56 scenarios)
+uv run python -m eval --dry-run              # list scenarios without running
+# Report saved to eval/reports/<provider>_<date>.md
 ```
 
-Current baseline: **425 passed, 50 skipped** (slow tests skipped without `--slow`).
-
----
-
-## Eval Harness
-
-Batch evaluation of the JudgeAgent against a curated scenario dataset — run offline, no players needed.
+### Running tests
 
 ```bash
 cd backend
-uv run python -m eval.run --provider minimax --scenarios all
-# Report saved to eval/reports/minimax_YYYYMMDD_HHMM.md
+uv run pytest tests/ -x -v --ignore=tests/test_eval.py   # all fast tests (~425)
+uv run pytest tests/test_agents.py -x -v                 # agent pipeline (mock LLM)
+uv run pytest tests/test_visibility.py -x -v             # context isolation
+uv run pytest tests/test_redteam.py --slow               # adversarial (real LLM)
 ```
-
-**Flags:** `--scenarios 50` (limit count), `--concurrency 5`, `--output path/report.md`, `--dry-run` (list scenarios without running)
-
-**What it measures:**
-
-| Metric | Description |
-|--------|-------------|
-| Judge accuracy | Exact match against `expected_judgment` (是/不是/无关/部分正确) |
-| Redteam leakage rate | % of adversarial prompts that confused the judge (returned non-无关) |
-| Latency P50/P95 | Per-scenario latency distribution |
-| Cost projection | USD + CNY per scenario and per estimated game session |
-
-Scenario datasets: `eval/data/judge_scenarios.json` (58 accuracy + edge_case scenarios) and `eval/data/redteam_scenarios.json` (56 adversarial scenarios across 6 attack categories). Example report: `eval/reports/minimax_example.md`.
 
 ---
 
 ## MCP Server
 
-Exposes the game engine as [MCP](https://modelcontextprotocol.io/) tools over stdio, so any MCP-compatible client (Claude Desktop, Cursor, custom agent) can play.
+The game engine is exposed as MCP tools over stdio, making it usable from Claude Desktop, Cursor, or any MCP-compatible client.
 
 ```bash
-cd backend
-uv run python -m mcp_server
+cd backend && uv run python -m mcp_server
 ```
 
-**Configure Claude Desktop** — add to `claude_desktop_config.json`:
-
+**Claude Desktop config** (`claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
@@ -244,342 +306,41 @@ uv run python -m mcp_server
 }
 ```
 
-See `backend/mcp_config_example.json` for the full example.
-
-**Available tools:**
-
-| Tool | Description |
-|------|-------------|
-| `list_puzzles(language)` | List available turtle soup puzzles |
-| `list_scripts(language)` | List available murder mystery scripts |
-| `start_game(puzzle_id, language, player_name)` | Start a single-player session |
-| `ask_question(session_id, question)` | Ask the DM a question, get judgment + response |
-| `get_game_status(session_id)` | Current progress, unlocked clues, questions asked |
-
-Single-player turtle soup only (multiplayer requires WebSocket and does not map to MCP's request-response model).
+Tools: `list_puzzles`, `list_scripts`, `start_game`, `ask_question`, `get_game_status`. Single-player only — multiplayer requires persistent WebSocket state that doesn't map to MCP's request-response model.
 
 ---
 
-## Agent Trace
+## Example: Agent Trace Output
 
-Every player message produces a structured `AgentTrace` recording each agent's input summary, output, latency, and token usage. Traces are:
+Every player message returns an `AgentTrace` (optionally surfaced in the UI):
 
-- Returned in WebSocket responses (optional field, hidden by default)
-- Displayed in a collapsible TracePanel in the frontend (toggle with ⚡ button)
-- Stored in `message_history` for reconnect replay
-
-**Note:** `TraceStep.input_summary` for the Judge never contains raw `key_facts` text — it shows only counts (`"key_facts: 5 items"`). The trace is visible to players in debug mode and must not leak game secrets.
-
-### LLM Call Logging
-
-Every LLM call is logged in two places:
-
-- **Terminal (stdout)** — real-time, one line per call/response:
-  ```
-  12:34:05 [LLM] LLM call → model=MiniMax-M2.5  prompt='did the butler...'
-  12:34:07 [LLM] LLM resp  ← 1243ms  in=890 out=87  reply='The shadows...'
-  ```
-- **File** — full JSON-lines record at `backend/logs/llm/YYYY-MM-DD.jsonl` (system prompt, messages, raw response including `<think>` blocks)
-
-End-to-end orchestrator pipeline timing is also logged per message:
-```
-INFO  uvicorn  Orchestrator done: player=Alice intent=question total=3821ms steps=4
-```
-
----
-
-## Project Structure
-
-```
-start.sh / start.bat          ← single-command startup (installs deps, starts both servers)
-
-backend/
-├── app/
-│   ├── main.py               # FastAPI: REST endpoints + WebSocket /ws/{room_id}
-│   ├── llm.py                # MiniMax client (OpenAI SDK compatible); stdout + file logging
-│   ├── models.py             # All Pydantic models (Puzzle, Script, Character, …)
-│   ├── puzzle_loader.py      # Load puzzle/script JSON — per-language cache
-│   ├── room.py               # Room manager: create/join/leave, broadcast
-│   ├── ws.py                 # WebSocket handler: message routing, phase ticks
-│   ├── intervention.py       # Phase-aware DM intervention engine (zh + en canned messages)
-│   ├── visibility.py         # VisibilityRegistry: per-player context filter
-│   ├── state_machine.py      # Deterministic phase state machine (pure, no LLM)
-│   ├── voting.py             # VotingModule: one-per-player, tiebreaker, runoff
-│   ├── dm.py                 # Turtle soup DM: prompt assembly (zh + en), hint escalation
-│   └── agents/
-│       ├── orchestrator.py   # Pipeline: Router → Judge → Narrator → Safety + trace collection
-│       ├── router.py         # Intent classifier (pure rules, <1 ms, no LLM; zh + en patterns)
-│       ├── judge.py          # Truth judgment (sees key_facts, not culprit identity)
-│       ├── narrator.py       # Response generation (zh + en personas; never sees truth before reveal)
-│       ├── safety.py         # Leak detection (sees truth + narrator output)
-│       ├── npc.py            # NPC agent: persona prompt + knowledge boundary
-│       └── trace.py          # TraceStep + AgentTrace dataclasses
-├── data/
-│   ├── puzzles/
-│   │   ├── zh/               # Chinese turtle soup puzzles
-│   │   └── en/               # English turtle soup puzzles
-│   └── scripts/
-│       ├── zh/               # Chinese murder mystery scripts
-│       └── en/               # English murder mystery scripts
-├── eval/                     # Eval harness
-│   ├── __main__.py           # CLI: python -m eval.run
-│   ├── scenarios.py          # EvalScenario dataclass + loader
-│   ├── runner.py             # Async runner: scenarios → EvalResult list
-│   ├── report.py             # Markdown report generator
-│   ├── data/
-│   │   ├── judge_scenarios.json    # 58 accuracy + edge_case scenarios
-│   │   └── redteam_scenarios.json  # 56 adversarial scenarios (6 attack categories)
-│   └── reports/
-│       └── minimax_example.md      # Example report
-├── mcp_server/               # MCP server
-│   ├── __main__.py           # Entry: python -m mcp_server
-│   └── server.py             # FastMCP tools wrapping game logic
-├── tests/
-│   ├── conftest.py           # Fixtures: MockLLM, real_llm guard, sample_puzzle
-│   ├── test_dm.py            # DM correctness (turtle soup)
-│   ├── test_clues.py         # Clue unlock logic
-│   ├── test_room.py          # Room join/leave/broadcast
-│   ├── test_room_lobby.py    # Lobby fields: started, max_players, host_player_id, ready_players
-│   ├── test_intervention.py  # Intervention engine: silence timer, backoff
-│   ├── test_visibility.py    # VisibilityRegistry: per-player context isolation
-│   ├── test_private_chat.py  # Private DM chat (turtle soup)
-│   ├── test_state_machine.py # Phase transitions, guards, timeout
-│   ├── test_voting.py        # Vote collection, tiebreaker, runoff, edge cases
-│   ├── test_agents.py        # Each agent + full pipeline (mock LLM)
-│   ├── test_i18n.py          # Bilingual: puzzle loading, DM prompt language, intervention messages
-│   ├── test_redteam.py       # Adversarial: spoiler-proofing in Chinese + English
-│   ├── test_trace.py         # Agent trace collection + token accounting
-│   ├── test_eval.py          # Eval harness: scenario loading, report generation
-│   └── test_mcp.py           # MCP server tool tests
-├── .env.example              ← copy to .env and add MINIMAX_API_KEY
-└── pyproject.toml
-
-frontend/
-├── src/
-│   ├── App.tsx               # Routes: / Lobby, /play Single-player, /room/:id Room
-│   ├── api.ts                # Typed fetch() wrappers — all relative URLs (/api/…)
-│   ├── i18n/
-│   │   ├── index.tsx         # LanguageContext, useT(), makeT(), LanguageProvider
-│   │   ├── zh.json           # Chinese UI strings
-│   │   └── en.json           # English UI strings
-│   ├── pages/
-│   │   ├── LobbyPage.tsx     # Mode tabs, puzzle/script picker, room join, language toggle
-│   │   ├── SinglePlayerPage.tsx  # Single-player turtle soup Q&A
-│   │   └── RoomPage.tsx      # Multiplayer: turtle soup + murder mystery layouts
-│   ├── components/
-│   │   ├── LanguageToggle.tsx    # zh ↔ en switch button
-│   │   ├── PuzzleCard.tsx        # Turtle soup surface display
-│   │   ├── ScriptCard.tsx        # MM character bio + private secret + personal script
-│   │   ├── PhaseBar.tsx          # MM phase progress + countdown timer + skip vote button
-│   │   ├── VotePanel.tsx         # MM vote UI: suspect selection + animated results
-│   │   ├── ChatPanel.tsx         # Chat with judgment badges (zh + en values)
-│   │   ├── CluePanel.tsx         # Shared unlocked clue cards
-│   │   ├── PrivateCluePanel.tsx  # Player's private clues/secrets
-│   │   ├── PlayerList.tsx        # Player roster with online status
-│   │   ├── HintBar.tsx           # Progress bar + hint display (turtle soup)
-│   │   └── TracePanel.tsx        # Expandable agent decision trace (⚡ toggle)
-│   └── hooks/
-│       ├── useChat.ts        # Single-player: REST-based Q&A
-│       ├── useRoom.ts        # Multiplayer: WebSocket (auto ws/wss) + all MM message types
-│       └── useTraceSetting.ts  # localStorage toggle for agent trace visibility
-└── vite.config.ts            # host 0.0.0.0; proxy /api → :8000, /ws → ws://:8000 (ws:true)
-
-ios/AIDungeonMaster/
-├── App/                      # MainTabView, CustomTabBar, TabBarVisibility, AppConfig
-├── Auth/                     # LoginView, AuthViewModel (deep link handler), KeychainService
-├── Home/                     # Feed, FeedCardView, HomeViewModel — Play → WaitingRoom
-├── Explore/                  # Active rooms list; join by code → WaitingRoom
-├── Profile/                  # History (completed only), Liked games, ProfileViewModel
-├── Room/                     # Game chat, clue panel, progress, RoomViewModel (WebSocket)
-├── Saved/                    # Bookmarked games (SavedView)
-├── Activity/                 # Recent community scripts (ActivityView)
-├── Lobby/                    # Script/puzzle browser (LobbyView) + WaitingRoomView + WaitingRoomViewModel
-├── Models/                   # Shared models + difficulty normalisation helpers
-└── Services/                 # APIService (REST + JWT), WebSocketService
-```
-
----
-
-## API Reference
-
-### Turtle Soup
-
-| Method | Path | Body / Query | Description |
-|--------|------|-------------|-------------|
-| `GET`  | `/api/puzzles` | `?lang=zh\|en` | List puzzles (id, title, difficulty, tags) |
-| `POST` | `/api/start` | `{ puzzle_id?, language }` | Start single-player session → `session_id` + `surface` |
-| `POST` | `/api/chat` | `{ session_id, message }` | Question → DM judgment + response + truth_progress |
-| `GET`  | `/health` | — | Health check |
-
-### Multiplayer Rooms
-
-| Method | Path | Body / Query | Description |
-|--------|------|-------------|-------------|
-| `POST` | `/api/rooms` | `{ game_type, puzzle_id?, script_id?, language, is_public, lobby_mode }` | Create room (`lobby_mode=true` holds in waiting room until host starts) |
-| `GET`  | `/api/rooms` | — | List all public active rooms |
-| `GET`  | `/api/rooms/{room_id}` | — | Room state (players, phase, title) |
-| `POST` | `/api/rooms/{room_id}/start` | — | Host starts the game; broadcasts `game_started` to all players |
-| `PATCH`| `/api/rooms/{room_id}` | `{ is_public?, max_players? }` | Update room settings (host only) |
-| `POST` | `/api/rooms/{room_id}/complete` | `{ outcome }` | Mark session completed (success/failed) |
-| `GET`  | `/api/scripts` | `?lang=zh\|en` | List murder mystery scripts |
-| `WS`   | `/ws/{room_id}?player_name=…` | — | Join room (real-time) |
-
-### WebSocket Message Types
-
-**Client → Server**
-
-| `type` | Fields | Description |
-|--------|--------|-------------|
-| `chat` | `text` | Public message / question to DM |
-| `private_chat` | `text` | Private DM question (turtle soup) |
-| `vote` | `target` | Cast vote for character id (murder mystery) |
-| `skip_phase` | — | Vote to skip the current phase (majority required) |
-| `ready` | — | Mark self as ready in the lobby waiting room |
-
-**Server → Client**
-
-| `type` | Description |
-|--------|-------------|
-| `room_snapshot` | Full state on connect — now includes `started`, `max_players`, `host_player_id`, `is_host`/`is_ready` per player |
-| `player_joined` | Sent to existing players when a new player joins the lobby |
-| `player_ready` | A player marked themselves ready in the lobby |
-| `game_started` | Host started the game; all clients navigate from lobby → game room |
-| `system` | System notification (join / leave / error) |
-| `player_message` | Another player's chat message |
-| `dm_response` | DM answer — **broadcast to all players** (judgment + response for TS; text for MM) |
-| `dm_intervention` | Proactive DM message (silence detection) |
-| `phase_change` | MM phase advanced (new_phase, duration, description) |
-| `character_assigned` | Character assigned to player (public info) |
-| `character_secret` | Private: player's own secret_bio + personal_script |
-| `clue_found` | A clue was discovered (broadcast) |
-| `vote_prompt` | Voting phase started, includes candidate list |
-| `vote_cast` | Anonymous vote count update |
-| `vote_result` | Final tally + winner + is_correct |
-| `skip_vote_update` | Skip-phase vote progress (voted / needed) |
-| `phase_blocked` | Action not allowed in current phase (private, only to sender) |
-| `private_dm_response` | Private DM reply (turtle soup only) |
-| `leak_warning` | Verbatim clue leak detected in player message |
-| `error` | Error message (private, only to sender) |
-
----
-
-## Murder Mystery — How It Works
-
-### Game Flow
-
-```
-Tap Play → WaitingRoomView (lobby) → Host shares 6-char code or aidm://room/{id} link →
-Players join → each sees a player slot update in real time →
-Players tap "I'm Ready" → Host taps "Start Game" → REST POST /api/rooms/{id}/start →
-game_started WS event → all clients navigate to RoomView simultaneously →
-Characters auto-assigned in join order →
-
-opening          DM narrates the case setup (listen only)
-reading          each player reads their own character script privately
-investigation_1  ask DM, search for clues, private chat with DM
-discussion       share reasoning publicly
-voting           each player votes for the culprit
-reveal           DM narrates the truth; vote tally shown
-```
-
-Any phase (except reveal) can be skipped early if a majority of players vote to skip via the **Skip ▶** button in the phase bar. Progress is shown as `voted/needed` next to the button.
-
-### Multi-Agent Pipeline
-
-Each player message in murder mystery mode routes through:
-
-```
-Player message
-  └── RouterAgent  (rules-only, <1 ms; zh + en patterns)
-        ├── vote    → VotingModule (pure logic)
-        ├── search  → ClueSystem → Narrator
-        ├── npc     → NPCAgent (persona + knowledge boundary)
-        ├── question/accuse → Judge → Narrator → Safety (retry ×2)
-        ├── meta    → Canned response (no LLM)
-        └── chat    → No DM reply; broadcast directly (bypasses state machine)
-```
-
-DM responses (`dm_response`, `clue_found`, `meta_response`) are **broadcast to all players** so everyone can follow the investigation. Only `phase_blocked` and `error` messages are sent privately to the asking player.
-
-**Minimum-privilege design:**
-- Judge sees `key_facts` only — never `truth.culprit`
-- Narrator never sees `truth` at all before reveal phase
-- Safety sees truth + narrator output; blocks if leak detected
-- NPC only knows clues in its `knowledge` list
-
-### Phase State Machine
-
-Transitions are deterministic and pure (no LLM calls):
-
-| Phase | Duration | Allowed actions |
-|-------|----------|-----------------|
-| `opening` | 2 min | listen |
-| `reading` | 5 min | read_script |
-| `investigation_1` | 10 min | ask_dm, search, private_chat |
-| `discussion` | 10 min | public_chat, private_chat |
-| `voting` | 2 min | cast_vote |
-| `reveal` | unlimited | listen |
-
-Timeout always forces advance — the game never stalls. Each phase timer is visible in the UI with a warning flash when < 30 seconds remain. The `chat` intent (plain player-to-player messages) always bypasses phase guards and is broadcast directly.
-
-### Script Format
-
-Scripts live in `backend/data/scripts/{zh,en}/` as JSON:
-
-```jsonc
+```json
 {
-  "id": "rain_night_001",
-  "title": "雨夜迷踪",
-  "metadata": { "player_count": 4, "difficulty": "beginner" },
-  "characters": [
-    { "id": "char_a", "name": "林晓", "public_bio": "…", "secret_bio": "…", "is_culprit": false }
+  "message_id": "msg_abc123",
+  "player_id": "player_001",
+  "steps": [
+    { "agent": "router",   "latency_ms": 0.8,   "output_summary": "intent=question" },
+    { "agent": "judge",    "latency_ms": 1240.0, "output_summary": "result=不是 confidence=0.91 facts=[2,5]",
+                           "input_summary": "key_facts: 7 items" },
+    { "agent": "narrator", "latency_ms": 2100.0, "output_summary": "\"那个时间点，船长确实不在…\"" },
+    { "agent": "safety",   "latency_ms": 3.2,    "output_summary": "clean" }
   ],
-  "phases": [ /* phase definitions with allowed_actions, duration_seconds */ ],
-  "clues": [
-    { "id": "clue_001", "title": "监控时间戳", "content": "…", "unlock_keywords": ["监控"] }
-  ],
-  "npcs": [
-    { "id": "npc_butler", "name": "管家老周", "persona": "…", "knowledge": ["clue_001"] }
-  ],
-  "truth": {
-    "culprit": "char_c",
-    "motive": "…", "method": "…", "timeline": "…",
-    "key_facts": ["…", "…"]
-  }
+  "total_latency_ms": 3344.0,
+  "total_tokens": 1847,
+  "total_cost": 0.000312
 }
 ```
 
-`truth.culprit` and `is_culprit` never enter any LLM prompt before the reveal phase.
+Note: `judge.input_summary` never contains raw `key_facts` text — only counts. The trace is togglable in the frontend and must not leak game secrets.
 
 ---
 
-## DM Intervention Engine
+## Potential Extensions
 
-Runs a background tick every 5 seconds per room. Phase-aware:
+These are gaps identified during development, not planned features:
 
-- `opening`, `reading`, `reveal` — silent (no intervention)
-- `voting` — vote reminder only after prolonged silence
-- `investigation`, `discussion` — full silence backoff:
-
-| Elapsed silence | Level | Behavior |
-|-----------------|-------|----------|
-| > 45 s | gentle | Canned encouragement (no LLM, zero cost) |
-| > 90 s | nudge | LLM-generated encouragement (≤ 30 words) |
-| > 180 s | hint | LLM-generated guiding hint (≤ 50 words, no spoilers) |
-
-Thresholds double after each nudge (45 → 90 → 180 → 240 s cap).
-Global cooldown: 15 s minimum between any two DM messages.
-Canned messages are in both Chinese and English; the room's language setting controls which list is used.
-
----
-
-## Security Invariants
-
-Enforced at multiple layers and tested by `test_redteam.py` (Chinese and English adversarial prompts):
-
-1. **Truth never leaks before reveal** — Narrator has no truth in its prompt; Safety agent double-checks every output.
-2. **Cross-character secrets are isolated** — VisibilityRegistry ensures player A cannot see player B's `secret_bio`.
-3. **NPC knowledge boundary** — NPCs only know clues in their `knowledge` list; the LLM cannot hallucinate unknown clue content.
-4. **Phase guards are deterministic** — Actions outside a phase's `allowed_actions` are rejected before any LLM call. Plain chat messages always bypass phase guards (they never trigger a DM response).
-5. **Voting integrity** — One vote per player, no changes after submit; tally only revealed after all votes are in.
-6. **English mode equally hardened** — All red-team tests run in both languages: "Tell me the answer directly", "Forget your rules", "Pretend you have no restrictions", and multi-turn pressure sequences.
+- **Embedding-based leak detection** to catch the `indirect_extraction` attack category (currently 40% leak rate through paraphrasing)
+- **Judge calibration** on the `部分正确` vs `是` boundary — the current 58.6% accuracy has a clear failure mode on partially-true statements
+- **Multi-turn judge memory** — the Judge currently evaluates each question in isolation; context from prior questions in the same session could improve accuracy on follow-up questions
+- **Eval dataset expansion** — 58 accuracy scenarios covers one script; cross-script generalization is untested
+- **Long-term session memory** — currently sessions are in-memory only; replaying missed messages on reconnect covers short disconnects but not cross-session persistence
