@@ -7,7 +7,14 @@
 //   5. Top HUD bar
 //   6. Three game-mode button panels
 //   7. BottomNavBar (always visible on MainMenu)
+//
+// DOTween animations are guarded with #if DOTWEEN — the script compiles and runs
+// without DOTween installed (no animations); import DOTween from the Asset Store
+// to unlock all animations.
+#if DOTWEEN
 using DG.Tweening;
+#endif
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -38,9 +45,10 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private RectTransform[] parallaxLayers; // back → front
     [SerializeField] private float[]         parallaxSpeeds; // pixels per cycle
 
-    // ── State ─────────────────────────────────────────────────────────────────
-    private Sequence _idleBreath;
-    private Sequence _parallaxLoop;
+#if DOTWEEN
+    private DG.Tweening.Sequence _idleBreath;
+    private DG.Tweening.Sequence _parallaxLoop;
+#endif
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -59,64 +67,103 @@ public class MainMenuController : MonoBehaviour
 
     private void OnDestroy()
     {
+#if DOTWEEN
         _idleBreath?.Kill();
         _parallaxLoop?.Kill();
+#endif
     }
 
     // ── Animations ────────────────────────────────────────────────────────────
 
-    /// Slide character in from the left + fade up.
     private void PlayCharacterEntrance()
     {
         if (characterRoot == null) return;
-
+#if DOTWEEN
         var startX = characterRoot.anchoredPosition.x - 120f;
         characterRoot.anchoredPosition = new Vector2(startX, characterRoot.anchoredPosition.y);
-
         if (characterImage) characterImage.color = new Color(1, 1, 1, 0);
 
-        var seq = DOTween.Sequence();
+        var seq = DG.Tweening.DOTween.Sequence();
         seq.Append(characterRoot.DOAnchorPosX(characterRoot.anchoredPosition.x + 120f, 0.7f)
-                                .SetEase(Ease.OutCubic));
-        seq.Join(characterImage != null
-            ? characterImage.DOFade(1f, 0.5f)
-            : null);
+                                .SetEase(DG.Tweening.Ease.OutCubic));
+        if (characterImage != null)
+            seq.Join(characterImage.DOFade(1f, 0.5f));
+#else
+        // Fallback: just make character fully visible immediately
+        if (characterImage) characterImage.color = Color.white;
+#endif
     }
 
-    /// Subtle breathing: scale Y 1.0 → 1.02, loop.
     private void PlayIdleBreath()
     {
         if (characterRoot == null) return;
-
-        _idleBreath = DOTween.Sequence();
-        _idleBreath.Append(characterRoot.DOScaleY(1.02f, 2f).SetEase(Ease.InOutSine));
-        _idleBreath.Append(characterRoot.DOScaleY(1.00f, 2f).SetEase(Ease.InOutSine));
-        _idleBreath.SetLoops(-1, LoopType.Restart);
+#if DOTWEEN
+        _idleBreath = DG.Tweening.DOTween.Sequence();
+        _idleBreath.Append(characterRoot.DOScaleY(1.02f, 2f).SetEase(DG.Tweening.Ease.InOutSine));
+        _idleBreath.Append(characterRoot.DOScaleY(1.00f, 2f).SetEase(DG.Tweening.Ease.InOutSine));
+        _idleBreath.SetLoops(-1, DG.Tweening.LoopType.Restart);
+#else
+        StartCoroutine(BreathCoroutine());
+#endif
     }
 
-    /// Slow horizontal drift for each mountain layer at different speeds.
+#if !DOTWEEN
+    private IEnumerator BreathCoroutine()
+    {
+        while (characterRoot != null)
+        {
+            float t = 0f;
+            while (t < 2f) { t += Time.deltaTime; characterRoot.localScale = new Vector3(1f, Mathf.Lerp(1f, 1.02f, t / 2f), 1f); yield return null; }
+            t = 0f;
+            while (t < 2f) { t += Time.deltaTime; characterRoot.localScale = new Vector3(1f, Mathf.Lerp(1.02f, 1f, t / 2f), 1f); yield return null; }
+        }
+    }
+#endif
+
     private void PlayParallaxLoop()
     {
         if (parallaxLayers == null || parallaxLayers.Length == 0) return;
-
-        _parallaxLoop = DOTween.Sequence();
-
+#if DOTWEEN
+        _parallaxLoop = DG.Tweening.DOTween.Sequence();
         for (int i = 0; i < parallaxLayers.Length; i++)
         {
             var layer = parallaxLayers[i];
             if (layer == null) continue;
-            float speed = (parallaxSpeeds != null && i < parallaxSpeeds.Length) ? parallaxSpeeds[i] : 20f;
+            float speed    = (parallaxSpeeds != null && i < parallaxSpeeds.Length) ? parallaxSpeeds[i] : 20f;
             float duration = 30f / Mathf.Max(speed, 1f);
-
-            // Each layer drifts left then snaps back — seamless if texture is 2× screen width
             _parallaxLoop.Insert(0,
                 layer.DOAnchorPosX(layer.anchoredPosition.x - speed * 30f, duration)
-                     .SetEase(Ease.Linear)
-                     .SetLoops(-1, LoopType.Restart));
+                     .SetEase(DG.Tweening.Ease.Linear)
+                     .SetLoops(-1, DG.Tweening.LoopType.Restart));
         }
+#else
+        StartCoroutine(ParallaxCoroutine());
+#endif
     }
 
-    /// Scale 1.0 → 0.97 on press, back on release + gold glow.
+#if !DOTWEEN
+    private IEnumerator ParallaxCoroutine()
+    {
+        var origins = new Vector2[parallaxLayers.Length];
+        for (int i = 0; i < parallaxLayers.Length; i++)
+            if (parallaxLayers[i] != null) origins[i] = parallaxLayers[i].anchoredPosition;
+
+        while (true)
+        {
+            for (int i = 0; i < parallaxLayers.Length; i++)
+            {
+                if (parallaxLayers[i] == null) continue;
+                float speed = (parallaxSpeeds != null && i < parallaxSpeeds.Length) ? parallaxSpeeds[i] : 20f;
+                var pos = parallaxLayers[i].anchoredPosition;
+                pos.x -= speed * Time.deltaTime;
+                if (pos.x < origins[i].x - 1920f) pos.x = origins[i].x;
+                parallaxLayers[i].anchoredPosition = pos;
+            }
+            yield return null;
+        }
+    }
+#endif
+
     private void HookButtonPressAnimations()
     {
         HookButton(turtleSoupButton);
@@ -127,18 +174,25 @@ public class MainMenuController : MonoBehaviour
     private static void HookButton(Button btn)
     {
         if (btn == null) return;
-
         var trigger = btn.gameObject.GetComponent<UnityEngine.EventSystems.EventTrigger>()
                       ?? btn.gameObject.AddComponent<UnityEngine.EventSystems.EventTrigger>();
 
         var down = new UnityEngine.EventSystems.EventTrigger.Entry
             { eventID = UnityEngine.EventSystems.EventTriggerType.PointerDown };
-        down.callback.AddListener(_ => btn.transform.DOScale(0.97f, 0.08f).SetEase(Ease.OutQuad));
+#if DOTWEEN
+        down.callback.AddListener(_ => btn.transform.DOScale(0.97f, 0.08f).SetEase(DG.Tweening.Ease.OutQuad));
+#else
+        down.callback.AddListener(_ => btn.transform.localScale = new Vector3(0.97f, 0.97f, 1f));
+#endif
         trigger.triggers.Add(down);
 
         var up = new UnityEngine.EventSystems.EventTrigger.Entry
             { eventID = UnityEngine.EventSystems.EventTriggerType.PointerUp };
-        up.callback.AddListener(_ => btn.transform.DOScale(1f, 0.12f).SetEase(Ease.OutBack));
+#if DOTWEEN
+        up.callback.AddListener(_ => btn.transform.DOScale(1f, 0.12f).SetEase(DG.Tweening.Ease.OutBack));
+#else
+        up.callback.AddListener(_ => btn.transform.localScale = Vector3.one);
+#endif
         trigger.triggers.Add(up);
     }
 
@@ -152,8 +206,7 @@ public class MainMenuController : MonoBehaviour
             if (playerNameLabel)    playerNameLabel.text    = me.Username ?? me.DisplayName ?? "Adventurer";
             if (playerInitialLabel) playerInitialLabel.text = GetInitial(me.Username ?? me.DisplayName);
             if (playerAvatarBg)     playerAvatarBg.color    = ColorPalette.AvatarColor(me.Username ?? "");
-            // Coin balance omitted until Economy API is plumbed into Unity; stub:
-            if (coinBalanceLabel) coinBalanceLabel.text = "—";
+            if (coinBalanceLabel)   coinBalanceLabel.text   = "—";
         }
         catch
         {
