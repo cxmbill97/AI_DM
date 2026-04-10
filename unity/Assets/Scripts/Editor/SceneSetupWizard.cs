@@ -385,8 +385,54 @@ public static class SceneSetupWizard
         SetField(ctrl, "scrollRect",       scroll.GetComponent<ScrollRect>());
         SetField(ctrl, "loadingOverlay",   loading);
         SetField(ctrl, "errorText",        err.GetComponent<TMP_Text>());
+        SetField(ctrl, "cardPrefab",       CreateCardPrefab());
 
         SaveScene(scene, "RoomBrowser");
+    }
+
+    static GameObject CreateCardPrefab()
+    {
+        const string path = "Assets/Prefabs/RoomCard.prefab";
+        if (!AssetDatabase.IsValidFolder("Assets/Prefabs"))
+            AssetDatabase.CreateFolder("Assets", "Prefabs");
+
+        // Build card in scene temporarily
+        var card = new GameObject("RoomCard", typeof(RectTransform));
+        card.AddComponent<Image>().color = new Color(0.12f, 0.10f, 0.20f);
+        var le = card.AddComponent<LayoutElement>();
+        le.preferredHeight = 90;
+        le.flexibleWidth   = 1;
+
+        var title   = MakeTMP("TitleLabel",       card, "Puzzle Title", 20, bold: true, color: TextLight);
+        var typeL   = MakeTMP("GameTypeLabel",     card, "Turtle Soup",  16, color: Accent);
+        var codeL   = MakeTMP("RoomCodeLabel",     card, "XXXX",         16, color: TextLight);
+        var countL  = MakeTMP("PlayerCountLabel",  card, "0/4",          16, color: TextLight);
+        var diffL   = MakeTMP("DifficultyBadge",   card, "Medium",       14, color: TextLight);
+        var playBtn = MakeButton("PlayButton",     card, "Play",         Accent, BgDark, 18);
+
+        // Simple horizontal layout
+        RectAt(title,   0.25f, 0.65f, 300, 28);
+        RectAt(typeL,   0.22f, 0.35f, 200, 24);
+        RectAt(codeL,   0.55f, 0.65f, 160, 24);
+        RectAt(countL,  0.55f, 0.35f, 120, 24);
+        RectAt(diffL,   0.75f, 0.35f, 100, 24);
+        RectAt(playBtn, 0.88f, 0.50f, 110, 56);
+
+        card.AddComponent<RoomCardItem>();
+        var so = new SerializedObject(card.GetComponent<RoomCardItem>());
+        void W(string f, Object v) { var p = so.FindProperty(f); if (p != null) { p.objectReferenceValue = v; } }
+        W("titleLabel",       title.GetComponent<TMP_Text>());
+        W("gameTypeLabel",    typeL.GetComponent<TMP_Text>());
+        W("roomCodeLabel",    codeL.GetComponent<TMP_Text>());
+        W("playerCountLabel", countL.GetComponent<TMP_Text>());
+        W("difficultyBadge",  diffL.GetComponent<TMP_Text>());
+        W("playButton",       playBtn.GetComponent<Button>());
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        var prefab = PrefabUtility.SaveAsPrefabAsset(card, path);
+        Object.DestroyImmediate(card);
+        Debug.Log($"[AI DM Setup] RoomCard prefab saved to {path}");
+        return prefab;
     }
 
     // ═════════════════════════════════════════════════════════════════════════

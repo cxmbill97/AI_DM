@@ -185,7 +185,7 @@ public class MainMenuController : MonoBehaviour
         var down = new UnityEngine.EventSystems.EventTrigger.Entry
             { eventID = UnityEngine.EventSystems.EventTriggerType.PointerDown };
 #if DOTWEEN
-        down.callback.AddListener(_ => btn.transform.DOScale(0.97f, 0.08f).SetEase(DG.Tweening.Ease.OutQuad));
+        down.callback.AddListener(_ => btn.transform.DOScale(0.97f, 0.08f).SetEase(DG.Tweening.Ease.OutQuad).SetLink(btn.gameObject));
 #else
         down.callback.AddListener(_ => btn.transform.localScale = new Vector3(0.97f, 0.97f, 1f));
 #endif
@@ -194,7 +194,7 @@ public class MainMenuController : MonoBehaviour
         var up = new UnityEngine.EventSystems.EventTrigger.Entry
             { eventID = UnityEngine.EventSystems.EventTriggerType.PointerUp };
 #if DOTWEEN
-        up.callback.AddListener(_ => btn.transform.DOScale(1f, 0.12f).SetEase(DG.Tweening.Ease.OutBack));
+        up.callback.AddListener(_ => btn.transform.DOScale(1f, 0.12f).SetEase(DG.Tweening.Ease.OutBack).SetLink(btn.gameObject));
 #else
         up.callback.AddListener(_ => btn.transform.localScale = Vector3.one);
 #endif
