@@ -193,7 +193,7 @@ struct GameStartedPayload: Codable {
     let room_id: String?
 }
 
-struct ErrorPayload: Codable {
+struct ErrorPayload: Decodable {
     /// Backend sends "text" for errors; we accept either key.
     let message: String
 
@@ -201,8 +201,11 @@ struct ErrorPayload: Codable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        message = (try? c.decode(String.self, forKey: .message))
-              ?? (try c.decode(String.self, forKey: .text))
+        if let m = try? c.decode(String.self, forKey: .message) {
+            message = m
+        } else {
+            message = try c.decode(String.self, forKey: .text)
+        }
     }
 }
 
