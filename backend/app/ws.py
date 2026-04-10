@@ -26,8 +26,9 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
+from app.agents.trace_store import store_trace  # noqa: E402
 from app.auth import add_history, decode_jwt, get_user_by_id  # noqa: E402
-from app.dm import dm_proactive_message, dm_turn, dm_turn_private  # noqa: E402
+from app.dm import dm_proactive_message, dm_turn, dm_turn_private, dm_turn_stream  # noqa: E402
 from app.room import RECONNECT_WINDOW_SECS, TURN_HINT_SECS, TURN_TIMEOUT_SECS, Room, room_manager  # noqa: E402
 from app.visibility import VisibilityRegistry  # noqa: E402
 from app.voting import VoteError, VotingModule  # noqa: E402
@@ -732,6 +733,9 @@ async def _handle_mm_chat(room: Room, player_id: str, player_name: str, text: st
                     room.message_history.append(final_msg)
                     await room.broadcast(final_msg)
                     room.intervention.record_dm_spoke()
+                    # Store trace for REST/SSE endpoints
+                    if event.get("trace"):
+                        store_trace(room_id, event["trace"])
                     replaced = "replace" in event
                     logger.info(
                         "[MM-CHAT] dm_stream_end clue=%s replaced=%s",
@@ -1033,19 +1037,48 @@ async def websocket_endpoint(
     # Authenticate via JWT
     user_id: str | None = None
     player_name = ""
+    jwt_sub: str | None = None          # JWT sub, even when signature is invalid
     try:
         payload = decode_jwt(token)
-        user = get_user_by_id(payload["sub"])
+        jwt_sub = payload.get("sub")
+        user = get_user_by_id(jwt_sub) if jwt_sub else None
         if user:
             user_id = user["id"]
             player_name = user["name"]
     except (ValueError, KeyError):
-        pass
+        # JWT signature invalid (e.g. JWT_SECRET rotated after backend restart).
+        # Extract sub WITHOUT verifying the signature — used only to derive a
+        # stable display name so the player doesn't appear as a new random guest
+        # on every reconnect.  This does NOT grant authentication privileges.
+        try:
+            import base64 as _b64, json as _json
+            _parts = token.split(".")
+            if len(_parts) == 3:
+                _pad = _parts[1] + "=="
+                _pl = _json.loads(_b64.urlsafe_b64decode(_pad))
+                jwt_sub = _pl.get("sub")
+        except Exception:
+            pass
 
     if not player_name:
-        await websocket.send_json({"type": "error", "text": "Authentication required"})
-        await websocket.close(code=4001)
-        return
+        # Priority order for stable identity (reconnect detection requires
+        # the same player_name every time for the same device/account):
+        # 1. iOS stable guest token: "guest:<hex_id>"
+        # 2. JWT present but user not in DB — derive from sub so the name is
+        #    the same on every connection for the same account, even across
+        #    backend restarts before the user row is created.
+        # 3. Anonymous web visitor — random (acceptable; no reconnect needed).
+        if token.startswith("guest:"):
+            guest_id = token[6:18]          # first 12 hex chars
+            player_name = f"Guest_{guest_id[:6]}"
+            user_id = f"guest_{guest_id}"   # stable slot key
+        elif jwt_sub:
+            stable = jwt_sub.replace("-", "")[:6]
+            player_name = f"Guest_{stable}"
+            user_id = f"jwt_{jwt_sub}"      # stable slot key
+        else:
+            import uuid as _uuid  # noqa: PLC0415
+            player_name = f"Guest_{_uuid.uuid4().hex[:6]}"
 
     room = room_manager.get_room(room_id)
     if room is None:
@@ -1480,49 +1513,70 @@ async def websocket_endpoint(
             room.message_history.append(player_msg_ts)
             await room.broadcast(player_msg_ts)
 
-            await room.broadcast({"type": "dm_typing", "typing": True, "timestamp": time.time()})
+            # ---- Turtle soup: streaming DM response ----
+            stream_id = str(uuid.uuid4())
+            end_data: dict[str, Any] = {}
             try:
                 async with room._lock:
-                    result = await dm_turn(room.game_session, text, player_id=player_id)
+                    async for event, data in dm_turn_stream(room.game_session, text, player_id=player_id):
+                        if event == "start":
+                            await room.broadcast({
+                                "type": "dm_stream_start",
+                                "player_name": player_name,
+                                "stream_id": stream_id,
+                                "timestamp": data["timestamp"],
+                            })
+                        elif event == "chunk":
+                            await room.broadcast({
+                                "type": "dm_stream_chunk",
+                                "text": data["text"],
+                                "stream_id": stream_id,
+                            })
+                        elif event == "end":
+                            end_data = data
             except Exception as exc:
-                logger.exception("dm_turn failed for %s: %s", player_name, exc)
+                logger.exception("dm_turn_stream failed for %s: %s", player_name, exc)
                 await room.broadcast({"type": "dm_typing", "typing": False, "timestamp": time.time()})
                 await room.send_to(
                     player_id,
                     {"type": "error", "text": "DM 暂时无法回应，请稍后再试"},
                 )
                 continue
-            await room.broadcast({"type": "dm_typing", "typing": False, "timestamp": time.time()})
 
             # ---- Phase 0: record winner and advance turn ----
             winner_name: str | None = None
-            if result.truth is not None and room.game_session and room.game_session.winner_player_id is None:
+            if end_data.get("truth") is not None and room.game_session and room.game_session.winner_player_id is None:
                 room.game_session.winner_player_id = player_id
                 winner_name = player_name
                 if room.turn_mode:
-                    room.turn_started_at = None  # stop the turn timer on win
+                    room.turn_started_at = None
 
             # ---- Phase 2: per-turn scoring ----
-            turn_score = _compute_turn_score(result.judgment, result.clue_unlocked is not None)
+            turn_score = _compute_turn_score(end_data.get("judgment", ""), end_data.get("clue_unlocked") is not None)
             room.record_score(player_id, turn_score)
 
-            dm_msg_ts: dict[str, Any] = {
-                "type": "dm_response",
+            # Finalize the streaming bubble with all metadata
+            dm_end_msg: dict[str, Any] = {
+                "type": "dm_stream_end",
+                "stream_id": stream_id,
                 "player_name": player_name,
-                "judgment": result.judgment,
-                "response": result.response,
-                "truth_progress": result.truth_progress,
-                "clue_unlocked": result.clue_unlocked.model_dump() if result.clue_unlocked else None,
-                "hint": result.hint,
-                "truth": result.truth,
+                "judgment": end_data.get("judgment"),
+                "response": end_data.get("response"),
+                "truth_progress": end_data.get("truth_progress"),
+                "clue_unlocked": end_data.get("clue_unlocked"),
+                "hint": end_data.get("hint"),
+                "truth": end_data.get("truth"),
                 "winner_name": winner_name,
                 "turn_score": turn_score,
                 "leaderboard": room.get_leaderboard(),
                 "timestamp": time.time(),
             }
-            room.message_history.append(dm_msg_ts)
-            await room.broadcast(dm_msg_ts)
+            room.message_history.append(dm_end_msg)
+            await room.broadcast(dm_end_msg)
             room.intervention.record_dm_spoke()
+
+            # Also store trace in trace_store (compatible with existing store_trace call)
+            store_trace(room.room_id, {})
 
             # ---- Phase 2: game_over broadcast with MVP ----
             if winner_name is not None:
@@ -1538,9 +1592,11 @@ async def websocket_endpoint(
                 await room.broadcast(game_over_msg)
 
             # ---- Phase 1: anomaly detection (fire-and-forget) ----
-            if result.judgment in _PROGRESS_JUDGMENTS and result.truth_progress >= 0.6:
+            judgment_val = end_data.get("judgment", "")
+            truth_progress_val = end_data.get("truth_progress", 0.0)
+            if judgment_val in _PROGRESS_JUDGMENTS and truth_progress_val >= 0.6:
                 asyncio.create_task(
-                    _check_anomaly(room, player_id, player_name, text, result.judgment, result.truth_progress)
+                    _check_anomaly(room, player_id, player_name, text, judgment_val, truth_progress_val)
                 )
 
             # Advance to next player after a successful turn (turn_mode only, game not yet over)
@@ -1582,10 +1638,22 @@ async def websocket_endpoint(
             }
             room.message_history.append(leave_notice)
             await room.broadcast(leave_notice)
-        # Broadcast updated player list so other players' banners update
+        # Broadcast updated player list so other clients' banners update
         players_update = {
             "type": "players_update",
             "players": [{"id": pid, "name": p["name"], "connected": p["connected"]} for pid, p in room.players.items()],
         }
         await room.broadcast(players_update)
-        _maybe_cancel_tick(room)
+        # Only stop the tick loop when every slot is gone.
+        # While at least one player remains connected the tick must keep running
+        # for phase timeouts and silence detection.
+        if not any(p["connected"] for p in room.players.values()):
+            _maybe_cancel_tick(room)
+            # Delay eviction by 60 s so players who disconnect briefly (network
+            # hiccup, app switch, lobby→room transition) can still reconnect.
+            async def _evict_if_still_empty(rid: str = room_id) -> None:
+                await asyncio.sleep(60)
+                r = room_manager.get_room(rid)
+                if r is not None and not any(p["connected"] for p in r.players.values()):
+                    room_manager.remove_room(rid)
+            asyncio.create_task(_evict_if_still_empty())

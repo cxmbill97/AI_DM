@@ -9,7 +9,9 @@ import { PrivateCluePanel } from '../components/PrivateCluePanel';
 import { PhaseBar } from '../components/PhaseBar';
 import { ReconstructionPanel } from '../components/ReconstructionPanel';
 import { ScriptCard } from '../components/ScriptCard';
+import { TraceFeed } from '../components/TraceFeed';
 import { TracePanel } from '../components/TracePanel';
+import { useTTS, useTTSSetting } from '../hooks/useTTS';
 import { VotePanel } from '../components/VotePanel';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { useRoom } from '../hooks/useRoom';
@@ -519,8 +521,10 @@ export function RoomPage() {
     scriptTheme,
   } = useRoom(roomId, token);
 
-  const { t } = useT();
+  const { t, lang } = useT();
   const { showTraces, toggleTraces } = useTraceSetting();
+  const { ttsEnabled, toggleTTS } = useTTSSetting();
+  const { speak, stop: stopTTS, speaking } = useTTS(lang);
   const [input, setInput] = useState('');
   const [showCluePanel, setShowCluePanel] = useState(false);
   const cluePanelRef = useRef<HTMLDivElement>(null);
@@ -542,6 +546,30 @@ export function RoomPage() {
       setShowIntroModal(true);
     }
   }, [privateClues.length]);
+
+  // TTS: speak the last non-streaming DM message whenever messages change
+  const lastSpokenIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ttsEnabled) return;
+    // Find the most recent finalized DM message (not still streaming)
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.type !== 'dm_response' && m.type !== 'dm_intervention') continue;
+      const dm = m as DmResponseMsg | InterventionMsg;
+      // Skip still-streaming placeholders
+      if ('streaming' in dm && (dm as DmResponseMsg).streaming) break;
+      const text = ('response' in dm ? (dm as DmResponseMsg).response : undefined)
+        ?? ('text' in dm ? (dm as DmResponseMsg).text : undefined)
+        ?? '';
+      if (!text.trim()) break;
+      // Use timestamp as a stable ID (messages don't have IDs)
+      const msgId = String(m.timestamp);
+      if (msgId === lastSpokenIdRef.current) break;
+      lastSpokenIdRef.current = msgId;
+      speak(text);
+      break;
+    }
+  }, [messages, ttsEnabled, speak]);
 
   const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
 
@@ -646,6 +674,13 @@ export function RoomPage() {
               >
                 ⚡
               </button>
+              <button
+                className={`btn btn-ghost trace-setting-btn${ttsEnabled ? ' trace-setting-btn--on' : ''}`}
+                onClick={() => { toggleTTS(); if (ttsEnabled) stopTTS(); }}
+                title={ttsEnabled ? 'Mute DM voice' : 'Enable DM voice'}
+              >
+                {ttsEnabled ? (speaking ? '🔊' : '🔈') : '🔇'}
+              </button>
               <span className="room-share-code" style={{ fontSize: 12 }}>#{roomId}</span>
               <span className={`conn-dot${connected ? ' conn-dot--on' : ''}`} />
             </div>
@@ -746,6 +781,8 @@ export function RoomPage() {
             )}
           </aside>
         </div>
+
+        <TraceFeed roomId={roomId} showTraces={showTraces} />
       </div>
     );
   }
@@ -775,6 +812,13 @@ export function RoomPage() {
               title={showTraces ? 'Hide agent traces' : 'Show agent traces'}
             >
               ⚡
+            </button>
+            <button
+              className={`btn btn-ghost trace-setting-btn${ttsEnabled ? ' trace-setting-btn--on' : ''}`}
+              onClick={() => { toggleTTS(); if (ttsEnabled) stopTTS(); }}
+              title={ttsEnabled ? 'Mute DM voice' : 'Enable DM voice'}
+            >
+              {ttsEnabled ? (speaking ? '🔊' : '🔈') : '🔇'}
             </button>
             <span className={`conn-dot${connected ? ' conn-dot--on' : ''}`} />
             {privateClues.length > 0 && (
@@ -892,6 +936,8 @@ export function RoomPage() {
         <div className="game-bottom">
           <HintBar hints={[]} progress={progress} />
         </div>
+
+        <TraceFeed roomId={roomId} showTraces={showTraces} />
       </div>
 
       <aside className="game-sidebar room-sidebar">

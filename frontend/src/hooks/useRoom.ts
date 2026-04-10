@@ -551,12 +551,13 @@ export function useRoom(roomId: string, token: string) {
         return;
       }
 
-      // ---- Murder mystery streaming: judgment arrives first ----
+      // ---- Streaming: judgment arrives first (murder mystery) or after (turtle soup) ----
       if (type === 'dm_stream_start') {
         setDmTyping(false); // streaming bubble replaces the typing dots
-        const streamId = crypto.randomUUID();
+        // Use server-provided stream_id if present, else generate one (MM compat)
+        const streamId = (data.stream_id as string | undefined) ?? crypto.randomUUID();
         streamingIdRef.current = streamId;
-        // Insert a placeholder DM message with judgment badge, no text yet
+        // Insert a placeholder DM message with judgment badge (may be undefined for turtle soup)
         const placeholder: DmResponseMsg = {
           type: 'dm_response',
           player_name: data.player_name as string | undefined,
@@ -570,9 +571,9 @@ export function useRoom(roomId: string, token: string) {
         return;
       }
 
-      // ---- Murder mystery streaming: append token chunk ----
+      // ---- Streaming: append token chunk ----
       if (type === 'dm_stream_chunk') {
-        const sid = streamingIdRef.current;
+        const sid = (data.stream_id as string | undefined) ?? streamingIdRef.current;
         if (sid) {
           setMessages((prev) =>
             prev.map((m) =>
@@ -585,9 +586,9 @@ export function useRoom(roomId: string, token: string) {
         return;
       }
 
-      // ---- Murder mystery streaming: finalize ----
+      // ---- Streaming: finalize ----
       if (type === 'dm_stream_end') {
-        const sid = streamingIdRef.current;
+        const sid = (data.stream_id as string | undefined) ?? streamingIdRef.current;
         streamingIdRef.current = null;
         setDmTyping(false);
         if (sid) {
@@ -596,19 +597,29 @@ export function useRoom(roomId: string, token: string) {
               if (m.type !== 'dm_response') return m;
               const dm = m as DmResponseMsg;
               if (dm.streamId !== sid) return m;
-              // If backend flagged a safety replace, swap the accumulated text
+              // safety replace (MM) or accumulated text (turtle soup)
               const finalText = (data.replace as string | undefined) ?? dm.text ?? '';
               return {
                 ...dm,
                 text: finalText,
                 streaming: false,
+                // turtle soup: judgment arrives here; MM: was already set in dm_stream_start
+                judgment: (data.judgment as string | undefined) ?? dm.judgment,
+                truth_progress: (data.truth_progress as number | undefined) ?? dm.truth_progress,
+                truth: (data.truth as string | null | undefined) ?? dm.truth ?? null,
+                clue_unlocked: (data.clue_unlocked as DmResponseMsg['clue_unlocked']) ?? null,
                 clue: (data.clue as DmResponseMsg['clue']) ?? null,
                 trace: (data.trace as AgentTrace | null | undefined) ?? null,
               };
             }),
           );
-          // Add clue to sidebar if found
-          const clueData = data.clue as { id: string; title: string; content: string } | null;
+          // Update game state from end event (turtle soup streaming)
+          const tp = data.truth_progress as number | undefined;
+          if (tp !== undefined) setProgress(tp);
+          const truthVal = data.truth as string | null | undefined;
+          if (truthVal) setTruth(truthVal);
+          // Clue (turtle soup uses clue_unlocked, MM uses clue)
+          const clueData = (data.clue_unlocked ?? data.clue) as { id: string; title: string; content: string } | null;
           if (clueData) addClue(clueData);
         }
         return;

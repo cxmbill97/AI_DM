@@ -5,9 +5,12 @@ from __future__ import annotations
 import uuid
 
 import httpx
+import asyncio
+import json as _json
+
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from openai import APIError
 from pydantic import BaseModel
 
@@ -31,7 +34,7 @@ from app.auth import (
 )
 from app.community import init_db, like_script, list_community_scripts, upsert_script
 from app.config import settings
-from app.dm import dm_turn
+from app.dm import dm_turn, dm_turn_stream
 from app.models import (
     ChatRequest,
     ChatResponse,
@@ -55,13 +58,13 @@ from app.puzzle_loader import (
     save_puzzle,
     save_script,
 )
+from app.agents.trace_store import get_traces, subscribe, unsubscribe
+from app.tts import synthesize as tts_synthesize
 from app.room import room_manager
-from app.ws import websocket_endpoint
 from app.routers import economy_router, pet_router
+from app.ws import websocket_endpoint
 
 app = FastAPI(title="AI DM — 海龟汤")
-
-
 app.include_router(economy_router.router)
 app.include_router(pet_router.router)
 
@@ -489,6 +492,34 @@ async def start_game(body: StartRequest = StartRequest()) -> StartResponse:
     )
 
 
+@app.post("/api/chat/stream")
+async def chat_stream_endpoint(body: ChatRequest) -> StreamingResponse:
+    """Streaming version of /api/chat — returns SSE events.
+
+    Events:
+      data: {"event": "start", "timestamp": ...}
+      data: {"event": "chunk", "text": "..."}     ← response tokens as they arrive
+      data: {"event": "end", "judgment": ..., "truth_progress": ..., ...}
+      data: [DONE]
+    """
+    session = _get_session(body.session_id)
+    if session.finished:
+        raise HTTPException(status_code=400, detail="Game is already finished.")
+    if not body.message.strip():
+        raise HTTPException(status_code=422, detail="Message cannot be empty.")
+
+    async def _generate():
+        async for event, data in dm_turn_stream(session, body.message.strip()):
+            yield f"data: {_json.dumps({'event': event, **data}, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_endpoint(body: ChatRequest) -> ChatResponse:
     """Submit a player question and receive the DM's judgment + response.
@@ -823,6 +854,46 @@ async def like_script_endpoint(script_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Agent Trace — REST + SSE endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/rooms/{room_id}/traces")
+async def get_room_traces(room_id: str) -> list[dict]:
+    """Return the last 20 agent traces for a room (newest first)."""
+    if room_manager.get_room(room_id) is None:
+        raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
+    return get_traces(room_id, limit=20)
+
+
+@app.get("/api/rooms/{room_id}/traces/live")
+async def stream_room_traces(room_id: str) -> StreamingResponse:
+    """SSE stream — emits one AgentTrace JSON per event as new traces arrive."""
+    if room_manager.get_room(room_id) is None:
+        raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
+
+    q = subscribe(room_id)
+
+    async def event_generator():
+        yield ": connected\n\n"
+        try:
+            while True:
+                try:
+                    trace_dict = await asyncio.wait_for(q.get(), timeout=25.0)
+                    yield f"data: {_json.dumps(trace_dict, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        finally:
+            unsubscribe(room_id, q)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Player reporting endpoints
 # ---------------------------------------------------------------------------
 
@@ -906,6 +977,29 @@ async def get_anomalies(room_id: str, _admin: dict = Depends(_require_admin)) ->
     if room is None:
         raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
     return room._anomaly_flags
+
+
+# ---------------------------------------------------------------------------
+# TTS endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/tts")
+async def tts_endpoint(text: str = "", lang: str = "zh") -> Response:
+    """GET /api/tts?text=…&lang=zh|en
+
+    Returns audio/mpeg (MP3).  Max text length is enforced inside synthesize().
+    No auth required — audio content is the DM's public narration text.
+    Cached responses carry a 1-hour public cache header.
+    """
+    if not text or not text.strip():
+        return Response(status_code=400)
+    mp3 = await tts_synthesize(text, language=lang)
+    return Response(
+        content=mp3,
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 # ---------------------------------------------------------------------------

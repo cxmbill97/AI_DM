@@ -79,7 +79,7 @@ struct SettingsView: View {
 
 #if DEBUG
 private struct DevServerRow: View {
-    @State private var url: String = UserDefaults.standard.string(forKey: "dev_base_url") ?? ""
+    @State private var url: String = UserDefaults.standard.string(forKey: "backend_url") ?? ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -90,7 +90,7 @@ private struct DevServerRow: View {
                 Text("Backend URL")
                     .foregroundColor(.white)
             }
-            TextField(AppConfig.baseURL, text: $url)
+            TextField("http://10.0.0.91:8000", text: $url)
                 .textFieldStyle(.plain)
                 .foregroundColor(Color(hex: "#c9a84c"))
                 .font(.system(size: 13, design: .monospaced))
@@ -98,7 +98,7 @@ private struct DevServerRow: View {
                 .disableAutocorrection(true)
                 .keyboardType(.URL)
             Button("Save") {
-                UserDefaults.standard.set(url.trimmingCharacters(in: .whitespaces), forKey: "dev_base_url")
+                UserDefaults.standard.set(url.trimmingCharacters(in: .whitespaces), forKey: "backend_url")
             }
             .font(.system(size: 12, weight: .semibold))
             .foregroundColor(Color(hex: "#c9a84c"))

@@ -1,50 +1,60 @@
-import SwiftUI
-import Combine
+import Foundation
 
 @MainActor
-class EconomyViewModel: ObservableObject {
-    @Published var wallet: WalletState?
-    @Published var lastPullResults: [CosmeticItem] = []
-    @Published var isLoading = false
-    @Published var errorMessage: String?
+final class EconomyViewModel: ObservableObject {
+    @Published var state = EconomyState()
 
-    private let baseURL = "http://localhost:8000"
+    private let api = APIService.shared
 
-    func loadWallet(playerId: String) async {
-        isLoading = true
-        defer { isLoading = false }
-        guard let url = URL(string: "\(baseURL)/economy/\(playerId)") else { return }
+    func loadAll() async {
+        state.isLoading = true
+        defer { state.isLoading = false }
+        async let balanceTask: BalanceResponse = api.request("/economy/balance")
+        async let shopTask: [ShopItem] = api.request("/economy/shop")
+        async let inventoryTask: [String] = api.request("/economy/inventory")
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            wallet = try JSONDecoder().decode(WalletState.self, from: data)
-        } catch { errorMessage = "Failed to load wallet" }
+            let (balance, shop, inventory) = try await (balanceTask, shopTask, inventoryTask)
+            state.balance = balance.balance
+            state.shopItems = shop
+            state.inventory = inventory
+            state.errorMessage = nil
+        } catch {
+            state.errorMessage = error.localizedDescription
+        }
     }
 
-    func earnMatchReward(playerId: String, won: Bool = false) async {
-        guard let url = URL(string: "\(baseURL)/economy/\(playerId)/earn_match?won=\(won)") else { return }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
+    func purchase(itemId: String) async {
+        state.isLoading = true
+        defer { state.isLoading = false }
+        struct Body: Encodable { let item_id: String }
         do {
-            let (data, _) = try await URLSession.shared.data(for: req)
-            if let result = try? JSONDecoder().decode(EarnResult.self, from: data) {
-                wallet?.coins = result.coins
+            let resp: PurchaseResponse = try await api.request("/economy/purchase", method: "POST", body: Body(item_id: itemId))
+            state.balance = resp.balance
+            if !state.inventory.contains(itemId) {
+                state.inventory.append(itemId)
             }
-        } catch { errorMessage = "Failed to earn reward" }
+            state.errorMessage = nil
+        } catch {
+            state.errorMessage = error.localizedDescription
+        }
     }
 
-    func gachaPull(playerId: String, count: Int = 1) async {
-        guard let url = URL(string: "\(baseURL)/economy/\(playerId)/gacha?count=\(count)") else { return }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
+    func pull() async -> GachaPullResult? {
+        state.isLoading = true
+        defer { state.isLoading = false }
         do {
-            let (data, _) = try await URLSession.shared.data(for: req)
-            let result = try JSONDecoder().decode(GachaResult.self, from: data)
-            if result.success {
-                lastPullResults = result.results ?? []
-                wallet?.coins = result.coins
-            } else {
-                errorMessage = result.error ?? "Pull failed"
+            let result: GachaPullResult = try await api.request("/economy/pull", method: "POST")
+            state.balance -= 100  // optimistic update; real balance refreshed on next load
+            state.lastPull = result
+            state.pityCount = result.pity_count
+            if !state.inventory.contains(result.item.id) {
+                state.inventory.append(result.item.id)
             }
-        } catch { errorMessage = "Gacha pull failed" }
+            state.errorMessage = nil
+            return result
+        } catch {
+            state.errorMessage = error.localizedDescription
+            return nil
+        }
     }
 }

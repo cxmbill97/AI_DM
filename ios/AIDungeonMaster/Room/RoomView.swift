@@ -117,6 +117,16 @@ struct RoomView: View {
                 }
             }
 
+            // TTS toggle
+            Button { vm.toggleTTS() } label: {
+                Image(systemName: vm.ttsEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                    .font(.system(size: 13))
+                    .foregroundColor(vm.ttsEnabled ? Color(hex: "#c9a84c") : Color(hex: "#5555a0"))
+                    .frame(width: 32, height: 32)
+                    .background(Color(hex: "#1e1c2e"))
+                    .clipShape(Circle())
+            }
+
             // Clues button
             if !vm.clues.isEmpty {
                 Button { vm.showClues = true } label: {
@@ -483,11 +493,16 @@ private struct MessageBubble: View {
                     }
                 }
 
-                Text(message.text)
-                    .font(.system(size: 14))
-                    .foregroundColor(textColor)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
+                HStack(alignment: .bottom, spacing: 2) {
+                    Text(message.text)
+                        .font(.system(size: 14))
+                        .foregroundColor(textColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                    if message.isStreaming {
+                        BlinkingCursor()
+                    }
+                }
             }
             Spacer(minLength: 32)
         }
@@ -594,6 +609,23 @@ private struct ClueSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - BlinkingCursor
+
+private struct BlinkingCursor: View {
+    @State private var visible = true
+    var body: some View {
+        Rectangle()
+            .fill(Color(hex: "#34d399"))
+            .frame(width: 2, height: 14)
+            .opacity(visible ? 1 : 0)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.5).repeatForever()) {
+                    visible = false
+                }
+            }
     }
 }
 

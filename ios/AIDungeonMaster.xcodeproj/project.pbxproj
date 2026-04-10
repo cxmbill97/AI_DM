@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -11,6 +11,7 @@
 		068B2EFF9E590FD9EA9F6F26 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 844AD5AB91E5E82C545D681B /* AppConfig.swift */; };
 		0B598706CA114D5EC77B9B93 /* AIDungeonMasterApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90C4143023E296A42FE3740 /* AIDungeonMasterApp.swift */; };
 		0EB4AF03FB841423DEFAB222 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ACBFEE1EE280DD9512714A7 /* APIService.swift */; };
+		TTS0000001111222233334444 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = TTS5555666677778888AAAA00 /* TTSService.swift */; };
 		AA001111BBCC2222DDEE3333 /* WaitingRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA001111BBCC2222DDEE4444 /* WaitingRoomView.swift */; };
 		AA001111BBCC2222DDEE5555 /* WaitingRoomViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA001111BBCC2222DDEE6666 /* WaitingRoomViewModel.swift */; };
 		14C0E96CB536EAC92191A5FD /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 514E77335343A8C82F8C7A3A /* LoginView.swift */; };
@@ -47,6 +48,7 @@
 		84341F3910887D31D3545026 /* ExploreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreView.swift; sourceTree = "<group>"; };
 		844AD5AB91E5E82C545D681B /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		8ACBFEE1EE280DD9512714A7 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
+		TTS5555666677778888AAAA00 /* TTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSService.swift; sourceTree = "<group>"; };
 		8DAF22F552A5EA941F38A4F7 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		AA001111BBCC2222DDEE4444 /* WaitingRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingRoomView.swift; sourceTree = "<group>"; };
 		AA001111BBCC2222DDEE6666 /* WaitingRoomViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingRoomViewModel.swift; sourceTree = "<group>"; };
@@ -195,6 +197,7 @@
 			children = (
 				8ACBFEE1EE280DD9512714A7 /* APIService.swift */,
 				CAE4F423C234AD3DCFD6F557 /* KeychainService.swift */,
+				TTS5555666677778888AAAA00 /* TTSService.swift */,
 				7CB73DFAC10DD2316D8CD4F4 /* WebSocketService.swift */,
 			);
 			path = Services;
@@ -253,7 +256,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1600;
+				LastUpgradeCheck = 1540;
 				TargetAttributes = {
 					E37E9B7B8363C9DF47B81213 = {
 						DevelopmentTeam = "";
@@ -312,6 +315,7 @@
 				AA001111BBCC2222DDEE5555 /* WaitingRoomViewModel.swift in Sources */,
 				D902013D34F77A645916F5CB /* TabBarVisibility.swift in Sources */,
 				C34DACE679066B27C97ADE87 /* WebSocketService.swift in Sources */,
+				TTS0000001111222233334444 /* TTSService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

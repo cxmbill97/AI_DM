@@ -12,6 +12,8 @@ final class WebSocketService: ObservableObject {
     private var token: String = ""
     private var retryCount = 0
     private let maxRetries = 3
+    private var pingTask: Task<Void, Never>?
+    private var currentConnectionId = UUID()
 
     init() {
         resetStream()
@@ -24,13 +26,39 @@ final class WebSocketService: ObservableObject {
     }
 
     func connect(roomId: String, token: String) {
+        // Prevent double-connecting to the same room (e.g. SwiftUI .task firing twice,
+        // or an external connect() call racing with the internal reconnect retry task).
+        if (isConnected || reconnecting) && self.roomId == roomId { return }
         self.roomId = roomId
-        self.token = token
+        // If no JWT, use a stable guest token so reconnects keep the same identity
+        self.token = token.isEmpty ? Self.stableGuestToken() : token
         self.retryCount = 0
         openConnection()
     }
 
+    private static func stableGuestToken() -> String {
+        let key = "ws_guest_stable_id"
+        let stored = UserDefaults.standard.string(forKey: key) ?? ""
+        let guestId: String
+        if stored.count >= 12 {
+            guestId = stored
+        } else {
+            guestId = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+            UserDefaults.standard.set(guestId, forKey: key)
+        }
+        return "guest:\(guestId)"
+    }
+
     private func openConnection() {
+        // Rotate connection ID first — any pending receive closure from the old
+        // task will see a stale ID and exit without calling handleDisconnect.
+        let connId = UUID()
+        currentConnectionId = connId
+
+        pingTask?.cancel()
+        pingTask = nil
+        task?.cancel(with: .goingAway, reason: nil)
+
         let encodedToken = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? token
         let urlString = "\(AppConfig.wsBaseURL)/ws/\(roomId)?token=\(encodedToken)"
         guard let url = URL(string: urlString) else { return }
@@ -38,26 +66,53 @@ final class WebSocketService: ObservableObject {
         task?.resume()
         isConnected = true
         reconnecting = false
-        listen()
+        listen(connectionId: connId)
+        startPingLoop()
     }
 
-    private func listen() {
-        task?.receive { [weak self] result in
+    private func startPingLoop() {
+        pingTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 20_000_000_000) // ping every 20s
+                guard !Task.isCancelled, let t = task else { break }
+                t.sendPing { _ in } // keep-alive; ignore pong result
+            }
+        }
+    }
+
+    private var listenTask: Task<Void, Never>?
+
+    private func listen(connectionId: UUID) {
+        listenTask?.cancel()
+        listenTask = Task { [weak self] in
             guard let self else { return }
-            switch result {
-            case .success(let msg):
-                if case .string(let text) = msg,
-                   let data = text.data(using: .utf8),
-                   let gameMsg = try? JSONDecoder().decode(GameMessage.self, from: data) {
-                    Task { @MainActor in
-                        self.continuation?.yield(gameMsg)
+            guard let ws = self.task else { return }
+            do {
+                while !Task.isCancelled, connectionId == self.currentConnectionId {
+                    let msg = try await ws.receive()
+                    guard connectionId == self.currentConnectionId else {
+                        print("[WS] connectionId rotated, exiting listen loop")
+                        break
+                    }
+                    if case .string(let text) = msg {
+                        guard let data = text.data(using: .utf8) else {
+                            print("[WS] failed to convert text to data")
+                            continue
+                        }
+                        do {
+                            let gameMsg = try JSONDecoder().decode(GameMessage.self, from: data)
+                            print("[WS] decoded message: \(gameMsg)")
+                            self.continuation?.yield(gameMsg)
+                        } catch {
+                            print("[WS] decode FAILED: \(error)")
+                            print("[WS] raw text: \(text.prefix(300))")
+                        }
                     }
                 }
-                self.listen()
-            case .failure:
-                Task { @MainActor in
-                    self.handleDisconnect()
-                }
+            } catch {
+                guard connectionId == self.currentConnectionId else { return }
+                print("[WS] receive error: \(error)")
+                self.handleDisconnect()
             }
         }
     }
@@ -84,6 +139,10 @@ final class WebSocketService: ObservableObject {
     }
 
     func disconnect() {
+        listenTask?.cancel()
+        listenTask = nil
+        pingTask?.cancel()
+        pingTask = nil
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
         isConnected = false

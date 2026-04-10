@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import re
+import time
+from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
 
-from app.llm import chat, strip_think
+from app.llm import chat, chat_stream, strip_think
 from app.models import ChatResponse, Clue, DMOutput, GameSession, Puzzle
 
 if TYPE_CHECKING:
@@ -709,3 +711,136 @@ async def dm_turn_private(
         )
 
     return response if response else ("(System error, please try again.)" if lang == "en" else "（系统错误，请重试）")
+
+
+# ---------------------------------------------------------------------------
+# Streaming DM turn — yields (event, data) tuples
+# ---------------------------------------------------------------------------
+
+_RESPONSE_FIELD_RE = re.compile(r'"response"\s*:\s*"')
+_ESCAPE_MAP: dict[str, str] = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\", "/": "/"}
+
+
+async def dm_turn_stream(
+    session: GameSession,
+    player_message: str,
+    player_id: str | None = None,
+) -> AsyncGenerator[tuple[str, dict], None]:
+    """Streaming version of dm_turn.
+
+    Yields (event_type, data) tuples:
+      ("start",  {"timestamp": float})
+      ("chunk",  {"text": str})           ← response field characters as they arrive
+      ("end",    {judgment, truth_progress, clue_unlocked, hint, truth})
+    """
+    # 1. Append to shared history
+    session.history.append({"role": "user", "content": player_message})
+
+    # 2. Build system prompt (same logic as dm_turn)
+    lang = session.language
+    trimmed = session.history[-MAX_HISTORY:]
+    if player_id and session.puzzle.private_clues:
+        from app.visibility import VisibilityRegistry  # noqa: PLC0415
+
+        registry = VisibilityRegistry(session)
+        vis_ctx = registry.get_visible_context(player_id)
+        dm_ctx = registry.get_dm_context()
+        system_prompt = assemble_prompt_for_player(vis_ctx, dm_ctx, session.puzzle, is_private=False, lang=lang)
+    else:
+        system_prompt = assemble_prompt(session.puzzle, session.unlocked_clue_ids, lang=lang)
+
+    yield ("start", {"timestamp": time.time()})
+
+    # 3. Stream LLM tokens, extracting only the "response" field value
+    accumulated = ""
+    in_response = False
+    response_done = False
+    search_buf = ""
+    escaped = False
+
+    async for token in chat_stream(system_prompt, trimmed):
+        accumulated += token
+        if response_done:
+            continue
+
+        if not in_response:
+            search_buf += token
+            m = _RESPONSE_FIELD_RE.search(search_buf)
+            if m:
+                in_response = True
+                chars = search_buf[m.end():]
+                search_buf = ""
+            else:
+                chars = ""
+        else:
+            chars = token
+
+        for ch in chars:
+            if escaped:
+                yield ("chunk", {"text": _ESCAPE_MAP.get(ch, ch)})
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                response_done = True
+                break
+            else:
+                yield ("chunk", {"text": ch})
+
+    # 4. Store raw response in history for multi-turn quality
+    session.history.append({"role": "assistant", "content": accumulated})
+
+    # 5. Parse full JSON response
+    dm_output = parse_dm_response(accumulated)
+
+    # 6. Safety: replace response if it leaks key_facts
+    if check_spoiler_leak(dm_output.response, session.puzzle):
+        dm_output = DMOutput(
+            judgment=dm_output.judgment,
+            response=(
+                "That's an interesting question, but I can't answer it directly. Try a different angle."
+                if lang == "en"
+                else "这个问题很有意思，但我暂时不能回答。请换一个角度提问。"
+            ),
+            truth_progress=dm_output.truth_progress,
+            should_hint=dm_output.should_hint,
+        )
+
+    # 7. Update consecutive_misses
+    if dm_output.judgment in _PROGRESS_JUDGMENTS:
+        session.consecutive_misses = 0
+    else:
+        session.consecutive_misses += 1
+
+    # 8. Clue unlock
+    unlocked_clue: Clue | None = check_clue_unlock_active(player_message, session.puzzle, session.unlocked_clue_ids)
+    give_hint = dm_output.should_hint or check_hint_needed(session)
+    if unlocked_clue is None and give_hint:
+        unlocked_clue = check_clue_unlock_passive(session)
+        if unlocked_clue:
+            session.consecutive_misses = 0
+
+    # 9. Legacy plain-text hint
+    hint: str | None = None
+    if unlocked_clue is None and give_hint:
+        hint = get_next_hint(session)
+        if hint:
+            session.consecutive_misses = 0
+
+    # 10. Game completion
+    game_truth: str | None = None
+    if dm_output.truth_progress >= 1.0:
+        session.finished = True
+        game_truth = session.puzzle.truth
+
+    yield (
+        "end",
+        {
+            "judgment": dm_output.judgment,
+            "response": dm_output.response,
+            "truth_progress": min(dm_output.truth_progress, 1.0),
+            "clue_unlocked": unlocked_clue.model_dump() if unlocked_clue else None,
+            "hint": hint,
+            "truth": game_truth,
+        },
+    )

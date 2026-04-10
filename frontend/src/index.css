@@ -400,6 +400,23 @@ button {
 .badge--na      { color: var(--na);      background: var(--na-bg);      border-color: #ccc; }
 .badge--partial { color: var(--partial); background: var(--partial-bg); border-color: var(--partial); }
 
+.dm-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--text-2);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink-cursor 0.8s step-end infinite;
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.message-bubble--streaming { opacity: 0.92; }
+
 .dm-thinking {
   font-size: 13px;
   color: var(--text-3);
@@ -2487,6 +2504,151 @@ button {
   color: var(--text-2);
   text-align: center;
 }
+
+/* ── TraceFeed — live agent trace drawer ────────────────────────────────── */
+
+.tf-drawer {
+  font-family: 'Menlo', 'Consolas', 'SF Mono', monospace;
+  font-size: 11px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+/* Toggle bar */
+.tf-drawer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: 11px;
+  text-align: left;
+  transition: background 0.12s;
+}
+.tf-drawer-toggle:hover { background: var(--surface); }
+.tf-drawer-toggle--alert { color: #f87171; }
+
+.tf-drawer-chevron { font-size: 9px; width: 10px; flex-shrink: 0; }
+.tf-drawer-title { font-weight: 700; letter-spacing: 0.04em; color: var(--text-2); }
+.tf-drawer-count { color: var(--text-3); margin-left: auto; }
+.tf-drawer-blocked-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+  letter-spacing: 0.05em;
+}
+
+/* Feed area */
+.tf-feed {
+  max-height: 280px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+.tf-empty {
+  padding: 10px 14px;
+  color: var(--text-3);
+  font-style: italic;
+}
+
+/* One trace entry */
+.tf-entry {
+  border-bottom: 1px solid var(--border);
+}
+.tf-entry--blocked {
+  background: rgba(248, 113, 113, 0.06);
+  border-left: 3px solid #f87171;
+}
+
+.tf-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 11px;
+  text-align: left;
+  transition: background 0.1s;
+}
+.tf-entry-header:hover { background: var(--surface); }
+
+.tf-entry-chevron { font-size: 9px; width: 10px; flex-shrink: 0; color: var(--text-3); }
+.tf-entry-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-entry-meta { color: var(--text-3); white-space: nowrap; margin-left: 6px; }
+.tf-entry-sep { margin: 0 4px; opacity: 0.4; }
+
+.tf-blocked-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 0px 4px;
+  border-radius: 3px;
+  background: rgba(248, 113, 113, 0.25);
+  color: #f87171;
+  margin-right: 5px;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+
+/* Spans area */
+.tf-spans {
+  padding: 4px 12px 8px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tf-span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.tf-span--blocked { color: #f87171; }
+
+.tf-span-icon  { width: 16px; flex-shrink: 0; font-size: 11px; }
+.tf-span-agent { width: 54px; flex-shrink: 0; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.tf-span-decision {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+/* Latency bar */
+.tf-bar-track {
+  width: 60px;
+  flex-shrink: 0;
+  height: 5px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.tf-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  transition: width 0.2s;
+}
+
+.tf-span-ms  { width: 36px; flex-shrink: 0; text-align: right; color: var(--text-2); font-size: 10px; }
+.tf-span-tok { width: 38px; flex-shrink: 0; text-align: right; color: var(--text-3); font-size: 10px; }
 
 /* ── Lobby mode tabs ────────────────────────────────────────────────────── */
 

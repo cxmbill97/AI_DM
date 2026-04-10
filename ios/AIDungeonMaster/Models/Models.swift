@@ -106,6 +106,29 @@ struct DmResponsePayload: Codable {
     let timestamp: Double
 }
 
+struct DmStreamStartPayload: Codable {
+    let stream_id: String
+    let player_name: String?
+    let timestamp: Double?
+}
+
+struct DmStreamChunkPayload: Codable {
+    let stream_id: String
+    let text: String
+}
+
+struct DmStreamEndPayload: Codable {
+    let stream_id: String?
+    let player_name: String?
+    let judgment: String?
+    let response: String?
+    let truth_progress: Double?
+    let clue_unlocked: CluePayload?
+    let hint: String?
+    let truth: String?
+    let timestamp: Double?
+}
+
 struct PlayerMessagePayload: Codable {
     let player_name: String
     let text: String
@@ -170,17 +193,29 @@ struct GameStartedPayload: Codable {
     let room_id: String?
 }
 
-struct ErrorPayload: Codable {
-    let text: String
-    // "message" alias for any older callers — remove once all backend errors use "text"
-    var message: String { text }
-    private enum CodingKeys: String, CodingKey { case text }
+struct ErrorPayload: Decodable {
+    /// Backend sends "text" for errors; we accept either key.
+    let message: String
+
+    private enum CodingKeys: String, CodingKey { case message, text }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let m = try? c.decode(String.self, forKey: .message) {
+            message = m
+        } else {
+            message = try c.decode(String.self, forKey: .text)
+        }
+    }
 }
 
 // MARK: - GameMessage (discriminated union on "type" field)
 
 enum GameMessage {
     case dmResponse(DmResponsePayload)
+    case dmStreamStart(DmStreamStartPayload)
+    case dmStreamChunk(DmStreamChunkPayload)
+    case dmStreamEnd(DmStreamEndPayload)
     case playerMessage(PlayerMessagePayload)
     case system(SystemPayload)
     case roomSnapshot(RoomSnapshotPayload)
@@ -188,7 +223,7 @@ enum GameMessage {
     case lobbyPlayerJoined(LobbyPlayerJoinedPayload)
     case lobbyPlayerReady(LobbyPlayerReadyPayload)
     case gameStarted(GameStartedPayload)
-    case turnChange(TurnChangePayload)   // Phase 3: turn-based highlight
+    case turnChange(TurnChangePayload)
     case unknown(String)
 }
 
@@ -201,6 +236,12 @@ extension GameMessage: Decodable {
         switch wrapper.type {
         case "dm_response":
             self = .dmResponse(try container.decode(DmResponsePayload.self))
+        case "dm_stream_start":
+            self = .dmStreamStart(try container.decode(DmStreamStartPayload.self))
+        case "dm_stream_chunk":
+            self = .dmStreamChunk(try container.decode(DmStreamChunkPayload.self))
+        case "dm_stream_end":
+            self = .dmStreamEnd(try container.decode(DmStreamEndPayload.self))
         case "player_message":
             self = .playerMessage(try container.decode(PlayerMessagePayload.self))
         case "system":

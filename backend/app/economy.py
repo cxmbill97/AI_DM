@@ -1,96 +1,114 @@
-"""Economy system — in-game currency, gacha pulls, and cosmetics."""
+"""Economy system — currency, shop, gacha with pity."""
 from __future__ import annotations
 
 import random
-from enum import Enum
-from typing import Optional
+from dataclasses import dataclass, field
 
+EARN_PER_MATCH = 10
+EARN_MVP_BONUS = 5
+GACHA_COST = 100
+SSR_PITY_THRESHOLD = 10
 
-class Rarity(str, Enum):
-    R = "R"
-    SR = "SR"
-    SSR = "SSR"
-
-
-RARITY_WEIGHTS = {Rarity.R: 0.70, Rarity.SR: 0.25, Rarity.SSR: 0.05}
-
-COSMETICS_POOL: list[dict] = [
-    {"id": "avatar_fox", "name": "Fox Avatar", "rarity": Rarity.R, "type": "avatar"},
-    {"id": "avatar_wolf", "name": "Wolf Avatar", "rarity": Rarity.SR, "type": "avatar"},
-    {"id": "avatar_dragon", "name": "Dragon Avatar", "rarity": Rarity.SSR, "type": "avatar"},
-    {"id": "frame_gold", "name": "Gold Frame", "rarity": Rarity.SR, "type": "frame"},
-    {"id": "frame_basic", "name": "Basic Frame", "rarity": Rarity.R, "type": "frame"},
-    {"id": "title_detective", "name": "Detective Title", "rarity": Rarity.R, "type": "title"},
-    {"id": "title_mastermind", "name": "Mastermind Title", "rarity": Rarity.SSR, "type": "title"},
-    {"id": "effect_sparkle", "name": "Sparkle Effect", "rarity": Rarity.SR, "type": "effect"},
+SHOP_ITEMS: list[dict] = [
+    {"id": "frame_gold",    "name": "Gold Frame",      "cost": 200, "rarity": "SR",  "type": "frame"},
+    {"id": "frame_dragon",  "name": "Dragon Frame",    "cost": 500, "rarity": "SSR", "type": "frame"},
+    {"id": "color_crimson", "name": "Crimson Name",    "cost": 150, "rarity": "R",   "type": "color"},
+    {"id": "color_void",    "name": "Void Blue Name",  "cost": 300, "rarity": "SR",  "type": "color"},
+    {"id": "badge_sleuth",  "name": "Sleuth Badge",    "cost": 100, "rarity": "R",   "type": "badge"},
+    {"id": "badge_legend",  "name": "Legend Badge",    "cost": 400, "rarity": "SSR", "type": "badge"},
+    {"id": "frame_sakura",  "name": "Sakura Frame",    "cost": 180, "rarity": "R",   "type": "frame"},
+    {"id": "badge_phantom", "name": "Phantom Badge",   "cost": 350, "rarity": "SR",  "type": "badge"},
 ]
 
-GACHA_COST = 100  # coins per pull
-MATCH_REWARD = 20  # coins earned per match played
-WIN_BONUS = 30     # extra coins for winning
+_GACHA_POOL: dict[str, list[dict]] = {
+    rarity: [i for i in SHOP_ITEMS if i["rarity"] == rarity]
+    for rarity in ("R", "SR", "SSR")
+}
 
 
-class Wallet:
-    def __init__(self, player_id: str):
-        self.player_id = player_id
-        self.coins: int = 0
-        self.inventory: list[dict] = []
-        self.pull_history: list[dict] = []
+@dataclass
+class _UserEconomy:
+    balance: int = 0
+    inventory: list[str] = field(default_factory=list)
+    pity: int = 0  # pulls since last SSR
 
-    def earn(self, amount: int, reason: str = "match") -> dict:
-        self.coins += amount
-        return {"coins": self.coins, "earned": amount, "reason": reason}
 
-    def spend(self, amount: int) -> bool:
-        if self.coins < amount:
-            return False
-        self.coins -= amount
-        return True
+class EconomyManager:
+    def __init__(self) -> None:
+        self._store: dict[str, _UserEconomy] = {}
 
-    def gacha_pull(self, count: int = 1) -> dict:
-        total_cost = GACHA_COST * count
-        if not self.spend(total_cost):
-            return {"success": False, "error": "insufficient_coins", "coins": self.coins}
+    def _get(self, user_id: str) -> _UserEconomy:
+        if user_id not in self._store:
+            self._store[user_id] = _UserEconomy()
+        return self._store[user_id]
 
-        results = []
-        for _ in range(count):
-            item = self._pull_one()
-            self.inventory.append(item)
-            self.pull_history.append(item)
-            results.append(item)
+    def earn_coins(self, user_id: str, amount: int) -> int:
+        u = self._get(user_id)
+        u.balance += amount
+        return u.balance
 
-        return {
-            "success": True,
-            "results": results,
-            "coins": self.coins,
-            "spent": total_cost,
-        }
+    def get_balance(self, user_id: str) -> int:
+        return self._get(user_id).balance
 
-    def _pull_one(self) -> dict:
-        roll = random.random()
-        cumulative = 0.0
-        chosen_rarity = Rarity.R
-        for rarity, weight in RARITY_WEIGHTS.items():
-            cumulative += weight
-            if roll < cumulative:
-                chosen_rarity = rarity
-                break
+    def purchase(self, user_id: str, item_id: str) -> dict:
+        item = next((i for i in SHOP_ITEMS if i["id"] == item_id), None)
+        if item is None:
+            raise ValueError(f"Unknown item: {item_id}")
+        u = self._get(user_id)
+        if item_id in u.inventory:
+            raise ValueError("Item already owned")
+        if u.balance < item["cost"]:
+            raise ValueError("Insufficient funds")
+        u.balance -= item["cost"]
+        u.inventory.append(item_id)
+        return {"ok": True}
 
-        pool = [c for c in COSMETICS_POOL if c["rarity"] == chosen_rarity]
-        if not pool:
-            pool = COSMETICS_POOL
+    def get_inventory(self, user_id: str) -> list[str]:
+        return list(self._get(user_id).inventory)
+
+    def get_pity(self, user_id: str) -> int:
+        return self._get(user_id).pity
+
+
+class GachaEngine:
+    def __init__(self, economy: EconomyManager) -> None:
+        self._eco = economy
+
+    def pull(self, user_id: str) -> dict:
+        u = self._eco._get(user_id)
+        if u.balance < GACHA_COST:
+            raise ValueError("Insufficient funds for gacha pull")
+        u.balance -= GACHA_COST
+        u.pity += 1
+
+        # Determine rarity
+        if u.pity >= SSR_PITY_THRESHOLD:
+            rarity = "SSR"
+        else:
+            roll = random.random()
+            if roll < 0.10:
+                rarity = "SSR"
+            elif roll < 0.40:
+                rarity = "SR"
+            else:
+                rarity = "R"
+
+        if rarity == "SSR":
+            u.pity = 0
+
+        pool = _GACHA_POOL.get(rarity, _GACHA_POOL["R"])
         item = random.choice(pool)
-        return {**item, "obtained_at": _now()}
 
-    def to_dict(self) -> dict:
-        return {
-            "player_id": self.player_id,
-            "coins": self.coins,
-            "inventory": self.inventory,
-            "pull_count": len(self.pull_history),
-        }
+        # Add to inventory if not owned
+        if item["id"] not in u.inventory:
+            u.inventory.append(item["id"])
+
+        return {"item": item, "rarity": rarity, "pity_count": u.pity}
+
+    def get_pity(self, user_id: str) -> int:
+        return self._eco.get_pity(user_id)
 
 
-def _now() -> str:
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).isoformat()
+# Singletons
+economy_manager = EconomyManager()
+gacha_engine = GachaEngine(economy_manager)
