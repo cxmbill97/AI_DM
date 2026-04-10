@@ -262,7 +262,7 @@ struct RoomView: View {
                 .padding(.vertical, 12)
                 .animation(.easeOut(duration: 0.2), value: vm.messages.count)
             }
-            .onChange(of: vm.messages.count) { _ in
+            .onChange(of: vm.messages.count) { _, _ in
                 if let last = vm.messages.last {
                     withAnimation(.easeOut(duration: 0.2)) {
                         proxy.scrollTo(last.id, anchor: .bottom)
@@ -312,7 +312,6 @@ struct RoomView: View {
                     .disabled(vm.isSending)
                     .submitLabel(.send)
                     .onSubmit { if vm.canSend { Task { await vm.send() } } }
-                    .onTapGesture { showEmotes = false }
 
                 Button {
                     Task { await vm.send() }

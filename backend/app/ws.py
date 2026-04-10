@@ -735,7 +735,7 @@ async def _handle_mm_chat(room: Room, player_id: str, player_name: str, text: st
                     room.intervention.record_dm_spoke()
                     # Store trace for REST/SSE endpoints
                     if event.get("trace"):
-                        store_trace(room_id, event["trace"])
+                        store_trace(room.room_id, event["trace"])
                     replaced = "replace" in event
                     logger.info(
                         "[MM-CHAT] dm_stream_end clue=%s replaced=%s",
@@ -1600,7 +1600,7 @@ async def websocket_endpoint(
                 )
 
             # Advance to next player after a successful turn (turn_mode only, game not yet over)
-            if room.turn_mode and result.truth is None:
+            if room.turn_mode and end_data.get("truth") is None:
                 next_pid = room.advance_turn()
                 if next_pid and next_pid in room.players:
                     next_name = room.players[next_pid]["name"]
