@@ -43,6 +43,7 @@
 		PE0001AA11BB22CC33DD5501 /* PetModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = PE0001FF11BB22CC33DD5501 /* PetModels.swift */; };
 		PE0002AA11BB22CC33DD5502 /* PetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PE0002FF11BB22CC33DD5502 /* PetView.swift */; };
 		PE0003AA11BB22CC33DD5503 /* PetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = PE0003FF11BB22CC33DD5503 /* PetViewModel.swift */; };
+		DB0001AA11BB22CC33DD6601 /* DebugLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB0001FF11BB22CC33DD6601 /* DebugLog.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -53,6 +54,7 @@
 		6CE2DCD90693C25ED42C70AF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7C24EED907ACE0027BFEB2D4 /* SavedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedView.swift; sourceTree = "<group>"; };
 		7CB73DFAC10DD2316D8CD4F4 /* WebSocketService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketService.swift; sourceTree = "<group>"; };
+		DB0001FF11BB22CC33DD6601 /* DebugLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugLog.swift; sourceTree = "<group>"; };
 		84341F3910887D31D3545026 /* ExploreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreView.swift; sourceTree = "<group>"; };
 		844AD5AB91E5E82C545D681B /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		8ACBFEE1EE280DD9512714A7 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
@@ -214,6 +216,7 @@
 			isa = PBXGroup;
 			children = (
 				8ACBFEE1EE280DD9512714A7 /* APIService.swift */,
+				DB0001FF11BB22CC33DD6601 /* DebugLog.swift */,
 				CAE4F423C234AD3DCFD6F557 /* KeychainService.swift */,
 				TTS5555666677778888AAAA00 /* TTSService.swift */,
 				7CB73DFAC10DD2316D8CD4F4 /* WebSocketService.swift */,
@@ -356,6 +359,7 @@
 				D902013D34F77A645916F5CB /* TabBarVisibility.swift in Sources */,
 				C34DACE679066B27C97ADE87 /* WebSocketService.swift in Sources */,
 				TTS0000001111222233334444 /* TTSService.swift in Sources */,
+				DB0001AA11BB22CC33DD6601 /* DebugLog.swift in Sources */,
 				EC0001AA11BB22CC33DD4401 /* EconomyModels.swift in Sources */,
 				EC0002AA11BB22CC33DD4402 /* EconomyView.swift in Sources */,
 				EC0003AA11BB22CC33DD4403 /* EconomyViewModel.swift in Sources */,
