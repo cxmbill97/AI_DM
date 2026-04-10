@@ -35,6 +35,14 @@
 		D902013D34F77A645916F5CB /* TabBarVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = A511820F6CF30D5B3CE39250 /* TabBarVisibility.swift */; };
 		DFA434F2B7385A5CD07845D4 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAE4F423C234AD3DCFD6F557 /* KeychainService.swift */; };
 		E65EBF26E58D58A14E43D3D7 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D08F8D97B5383F75603C92C9 /* ContentView.swift */; };
+		EC0001AA11BB22CC33DD4401 /* EconomyModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0001FF11BB22CC33DD4401 /* EconomyModels.swift */; };
+		EC0002AA11BB22CC33DD4402 /* EconomyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0002FF11BB22CC33DD4402 /* EconomyView.swift */; };
+		EC0003AA11BB22CC33DD4403 /* EconomyViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0003FF11BB22CC33DD4403 /* EconomyViewModel.swift */; };
+		EC0004AA11BB22CC33DD4404 /* GachaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0004FF11BB22CC33DD4404 /* GachaView.swift */; };
+		EC0005AA11BB22CC33DD4405 /* ShopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0005FF11BB22CC33DD4405 /* ShopView.swift */; };
+		PE0001AA11BB22CC33DD5501 /* PetModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = PE0001FF11BB22CC33DD5501 /* PetModels.swift */; };
+		PE0002AA11BB22CC33DD5502 /* PetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PE0002FF11BB22CC33DD5502 /* PetView.swift */; };
+		PE0003AA11BB22CC33DD5503 /* PetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = PE0003FF11BB22CC33DD5503 /* PetViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -69,6 +77,14 @@
 		E9C2F894657B63C2944A0730 /* LobbyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LobbyView.swift; sourceTree = "<group>"; };
 		F22ECD36D436FC87E8E00B7F /* RoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomView.swift; sourceTree = "<group>"; };
 		FD785254FC2E01C9B6ED052B /* LobbyViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LobbyViewModel.swift; sourceTree = "<group>"; };
+		EC0001FF11BB22CC33DD4401 /* EconomyModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EconomyModels.swift; sourceTree = "<group>"; };
+		EC0002FF11BB22CC33DD4402 /* EconomyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EconomyView.swift; sourceTree = "<group>"; };
+		EC0003FF11BB22CC33DD4403 /* EconomyViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EconomyViewModel.swift; sourceTree = "<group>"; };
+		EC0004FF11BB22CC33DD4404 /* GachaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GachaView.swift; sourceTree = "<group>"; };
+		EC0005FF11BB22CC33DD4405 /* ShopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopView.swift; sourceTree = "<group>"; };
+		PE0001FF11BB22CC33DD5501 /* PetModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetModels.swift; sourceTree = "<group>"; };
+		PE0002FF11BB22CC33DD5502 /* PetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetView.swift; sourceTree = "<group>"; };
+		PE0003FF11BB22CC33DD5503 /* PetViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -122,10 +138,12 @@
 				01C1E0E7D9645AEEC1831F0E /* App */,
 				3DC456F994730C1E570A6F18 /* Auth */,
 				6AE16501C2CF07B97AF4A405 /* Config */,
+				EC0000GG11BB22CC33DD4400 /* Economy */,
 				6A04FE4B37BACCBB8440D9B6 /* Explore */,
 				9C4E035750E173CD592205A8 /* Home */,
 				0923ED983634CC28E8F431C7 /* Lobby */,
 				CF06A053FAF5EA4602F369CF /* Models */,
+				PE0000GG11BB22CC33DD5500 /* Pet */,
 				11E9C89C246D8E604237AA3E /* Profile */,
 				812BC6A95E0AC42CFA24E2D0 /* Room */,
 				4FCB3BA531F84080178A5632 /* Saved */,
@@ -219,6 +237,28 @@
 				D1918D539CA82CB1E6EDE6A0 /* HomeViewModel.swift */,
 			);
 			path = Home;
+			sourceTree = "<group>";
+		};
+		EC0000GG11BB22CC33DD4400 /* Economy */ = {
+			isa = PBXGroup;
+			children = (
+				EC0001FF11BB22CC33DD4401 /* EconomyModels.swift */,
+				EC0002FF11BB22CC33DD4402 /* EconomyView.swift */,
+				EC0003FF11BB22CC33DD4403 /* EconomyViewModel.swift */,
+				EC0004FF11BB22CC33DD4404 /* GachaView.swift */,
+				EC0005FF11BB22CC33DD4405 /* ShopView.swift */,
+			);
+			path = Economy;
+			sourceTree = "<group>";
+		};
+		PE0000GG11BB22CC33DD5500 /* Pet */ = {
+			isa = PBXGroup;
+			children = (
+				PE0001FF11BB22CC33DD5501 /* PetModels.swift */,
+				PE0002FF11BB22CC33DD5502 /* PetView.swift */,
+				PE0003FF11BB22CC33DD5503 /* PetViewModel.swift */,
+			);
+			path = Pet;
 			sourceTree = "<group>";
 		};
 		CF06A053FAF5EA4602F369CF /* Models */ = {
@@ -316,6 +356,14 @@
 				D902013D34F77A645916F5CB /* TabBarVisibility.swift in Sources */,
 				C34DACE679066B27C97ADE87 /* WebSocketService.swift in Sources */,
 				TTS0000001111222233334444 /* TTSService.swift in Sources */,
+				EC0001AA11BB22CC33DD4401 /* EconomyModels.swift in Sources */,
+				EC0002AA11BB22CC33DD4402 /* EconomyView.swift in Sources */,
+				EC0003AA11BB22CC33DD4403 /* EconomyViewModel.swift in Sources */,
+				EC0004AA11BB22CC33DD4404 /* GachaView.swift in Sources */,
+				EC0005AA11BB22CC33DD4405 /* ShopView.swift in Sources */,
+				PE0001AA11BB22CC33DD5501 /* PetModels.swift in Sources */,
+				PE0002AA11BB22CC33DD5502 /* PetView.swift in Sources */,
+				PE0003AA11BB22CC33DD5503 /* PetViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
