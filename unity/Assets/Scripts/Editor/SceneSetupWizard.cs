@@ -32,7 +32,21 @@ public static class SceneSetupWizard
         SetupRoomBrowser();
         SetupWaitingRoom();
         SetupGameRoom();
-        EditorUtility.DisplayDialog("AI DM Setup", "All 6 scenes built successfully!\n\nPress Play from the Boot scene to test the full flow.", "OK");
+        RegisterBuildSettings();
+        // Re-open Boot so it's ready to Play
+        EditorSceneManager.OpenScene("Assets/Scenes/Boot.unity");
+        EditorUtility.DisplayDialog("AI DM Setup", "All 6 scenes built and registered!\n\nPress ▶ Play now — Boot → Login → MainMenu.", "OK");
+    }
+
+    [MenuItem("AI DM/Register Build Settings")]
+    public static void RegisterBuildSettings()
+    {
+        string[] names = { "Boot", "Login", "MainMenu", "RoomBrowser", "WaitingRoom", "GameRoom" };
+        var entries = new EditorBuildSettingsScene[names.Length];
+        for (int i = 0; i < names.Length; i++)
+            entries[i] = new EditorBuildSettingsScene($"Assets/Scenes/{names[i]}.unity", true);
+        EditorBuildSettings.scenes = entries;
+        Debug.Log("[AI DM Setup] Build Settings updated with all 6 scenes.");
     }
 
     [MenuItem("AI DM/Setup Boot Scene")]   public static void SetupBoot()       => BuildBoot();
