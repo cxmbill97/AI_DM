@@ -89,8 +89,13 @@ public class MainMenuController : MonoBehaviour
         if (characterImage != null)
             seq.Join(characterImage.DOFade(1f, 0.5f));
 #else
-        // Fallback: just make character fully visible immediately
-        if (characterImage) characterImage.color = Color.white;
+        // Fallback: keep existing color, just ensure alpha is fully visible
+        if (characterImage)
+        {
+            var c = characterImage.color;
+            c.a = 1f;
+            characterImage.color = c;
+        }
 #endif
     }
 

@@ -246,7 +246,7 @@ public static class SceneSetupWizard
         charRT.anchorMax = new Vector2(0.42f, 1f);
         charRT.offsetMin = charRT.offsetMax = Vector2.zero;
         var charImg  = charRoot.AddComponent<Image>();
-        charImg.color = new Color(0.18f, 0.10f, 0.30f, 0.85f);  // placeholder silhouette
+        charImg.color = new Color(0.22f, 0.12f, 0.38f, 1f);  // dark purple silhouette placeholder
 
         // Top HUD bar
         var hud = NewChild("TopHUD", content);
