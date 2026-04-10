@@ -155,7 +155,7 @@ public class WebSocketManager : MonoBehaviour
     private IEnumerator RetryAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
-        OpenConnection().AsUniTask().Forget();
+        OpenConnection().Forget();
     }
 
     private void StartPing()
