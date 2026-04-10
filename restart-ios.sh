@@ -57,11 +57,11 @@ if [ "$SKIP_BUILD" = false ]; then
     -destination "id=$UDID" \
     -configuration Debug \
     -derivedDataPath /tmp/aidm_build \
-    build 2>&1 | grep -E "^(Build|error:|warning: |CompileSwift|Ld |FAILED|** BUILD)" | tail -30
+    build 2>&1 | tee /tmp/aidm_build.log | grep -E "(error:|BUILD SUCCEEDED|BUILD FAILED)" | tail -20
 
-  if [ "${PIPESTATUS[0]}" -ne 0 ]; then
-    echo "Build FAILED — check full output with:"
-    echo "  xcodebuild -project $PROJECT -scheme $SCHEME -destination 'id=$UDID' build 2>&1 | tail -50"
+  if grep -q "BUILD FAILED" /tmp/aidm_build.log; then
+    echo "Build FAILED — last errors:"
+    grep "error:" /tmp/aidm_build.log | tail -20
     exit 1
   fi
 
