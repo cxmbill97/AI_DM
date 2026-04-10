@@ -1,5 +1,6 @@
 // Mirrors ios/AIDungeonMaster/Auth/AuthViewModel.swift
 using System;
+using System.Threading;
 using UnityEngine;
 using Cysharp.Threading.Tasks;
 
@@ -42,8 +43,8 @@ public class AuthManager : MonoBehaviour
         try
         {
             // 5-second timeout — mirrors AuthViewModel.withTimeout(seconds: 5)
-            var user = await APIManager.Instance.GetMe()
-                .TimeoutAsync(TimeSpan.FromSeconds(5));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var user = await APIManager.Instance.GetMe().AttachExternalCancellation(cts.Token);
             CurrentUser = user;
             OnUserChanged?.Invoke();
             return true;

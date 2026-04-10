@@ -123,9 +123,13 @@ public class WaitingRoomController : MonoBehaviour
     private void OnStartGame()
     {
         if (!CanStart) return;
-        APIManager.Instance.StartRoom(_roomId)
-            .ContinueWith(() => { }, ex => ShowError(ex.Message))
-            .Forget();
+        DoStartGame().Forget();
+    }
+
+    private async UniTaskVoid DoStartGame()
+    {
+        try   { await APIManager.Instance.StartRoom(_roomId); }
+        catch (System.Exception ex) { ShowError(ex.Message); }
     }
 
     private void OnReady()
@@ -145,9 +149,13 @@ public class WaitingRoomController : MonoBehaviour
     private void OnPublicToggle()
     {
         _isPublic = !_isPublic;
-        APIManager.Instance.PatchRoom(_roomId, isPublic: _isPublic)
-            .ContinueWith(() => RefreshButtons(), ex => ShowError(ex.Message))
-            .Forget();
+        DoPublicToggle().Forget();
+    }
+
+    private async UniTaskVoid DoPublicToggle()
+    {
+        try   { await APIManager.Instance.PatchRoom(_roomId, isPublic: _isPublic); RefreshButtons(); }
+        catch (System.Exception ex) { ShowError(ex.Message); }
     }
 
     private void TransitionToGame()

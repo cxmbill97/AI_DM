@@ -203,9 +203,9 @@ public class MainMenuController : MonoBehaviour
         try
         {
             var me = await APIManager.Instance.GetMe();
-            if (playerNameLabel)    playerNameLabel.text    = me.Username ?? me.DisplayName ?? "Adventurer";
-            if (playerInitialLabel) playerInitialLabel.text = GetInitial(me.Username ?? me.DisplayName);
-            if (playerAvatarBg)     playerAvatarBg.color    = ColorPalette.AvatarColor(me.Username ?? "");
+            if (playerNameLabel)    playerNameLabel.text    = me.Name ?? "Adventurer";
+            if (playerInitialLabel) playerInitialLabel.text = GetInitial(me.Name);
+            if (playerAvatarBg)     playerAvatarBg.color    = ColorPalette.AvatarColor(me.Name ?? "");
             if (coinBalanceLabel)   coinBalanceLabel.text   = "—";
         }
         catch

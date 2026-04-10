@@ -10,6 +10,7 @@ using System.Collections;
 using System.Text;
 using UnityEngine;
 using NativeWebSocket;
+using Cysharp.Threading.Tasks;
 
 public class WebSocketManager : MonoBehaviour
 {
@@ -154,8 +155,7 @@ public class WebSocketManager : MonoBehaviour
     private IEnumerator RetryAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
-        // Run async on the coroutine thread — fire-and-forget
-        OpenConnection().Forget();
+        OpenConnection().AsUniTask().Forget();
     }
 
     private void StartPing()

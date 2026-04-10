@@ -116,10 +116,18 @@ public class RoomBrowserController : MonoBehaviour
     private void CreateAndJoin(string gameType, string puzzleId = null, string scriptId = null)
     {
         SetLoading(true);
-        APIManager.Instance.CreateRoom(gameType, puzzleId: puzzleId, scriptId: scriptId)
-            .ContinueWith(resp => { SetLoading(false); SceneLoader.LoadWaitingRoom(resp.RoomId, gameType); },
-                          ex   => { SetLoading(false); ShowError(ex.Message); })
-            .Forget();
+        DoCreateAndJoin(gameType, puzzleId, scriptId).Forget();
+    }
+
+    private async UniTaskVoid DoCreateAndJoin(string gameType, string puzzleId, string scriptId)
+    {
+        try
+        {
+            var resp = await APIManager.Instance.CreateRoom(gameType, puzzleId: puzzleId, scriptId: scriptId);
+            SetLoading(false);
+            SceneLoader.LoadWaitingRoom(resp.RoomId, gameType);
+        }
+        catch (System.Exception ex) { SetLoading(false); ShowError(ex.Message); }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

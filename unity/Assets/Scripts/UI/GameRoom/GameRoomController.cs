@@ -277,6 +277,7 @@ public class GameRoomController : MonoBehaviour
     private void Resolve(string truth)
     {
         _gameWon = true;
+        _ = _gameWon;   // suppress CS0414
         winBanner?.SetActive(true);
         if (truthRevealText) truthRevealText.text = truth;
         inputField?.gameObject.SetActive(false);
