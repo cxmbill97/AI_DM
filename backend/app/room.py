@@ -598,6 +598,10 @@ class RoomManager:
     def get_room(self, room_id: str) -> Room | None:
         return self.rooms.get(room_id)
 
+    def remove_room(self, room_id: str) -> None:
+        """Evict a room once all players have disconnected."""
+        self.rooms.pop(room_id, None)
+
 
 # Module-level singleton — imported by ws.py and main.py
 room_manager = RoomManager()

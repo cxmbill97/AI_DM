@@ -1608,10 +1608,15 @@ async def websocket_endpoint(
             }
             room.message_history.append(leave_notice)
             await room.broadcast(leave_notice)
-        # Broadcast updated player list so other players' banners update
+        # Broadcast updated player list so other clients' banners update
         players_update = {
             "type": "players_update",
             "players": [{"id": pid, "name": p["name"], "connected": p["connected"]} for pid, p in room.players.items()],
         }
         await room.broadcast(players_update)
-        _maybe_cancel_tick(room)
+        # Only stop the tick loop (and evict the room) when every slot is gone.
+        # While at least one player remains connected the tick must keep running
+        # for phase timeouts and silence detection.
+        if not any(p["connected"] for p in room.players.values()):
+            _maybe_cancel_tick(room)
+            room_manager.remove_room(room_id)
