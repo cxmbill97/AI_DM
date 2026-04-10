@@ -113,13 +113,15 @@ final class WebSocketService: ObservableObject {
                         }
                         do {
                             let gameMsg = try JSONDecoder().decode(GameMessage.self, from: data)
+                            DebugLog.log("WS", "✓ decoded: \(String(describing: gameMsg).prefix(60))")
                             if self.continuation == nil {
-                                DebugLog.log("WS", "⚠️ continuation is NIL — message will be LOST")
+                                DebugLog.log("WS", "⚠️ continuation is NIL — message LOST")
                             }
                             self.continuation?.yield(gameMsg)
+                            DebugLog.log("WS", "✓ yield called")
                         } catch {
                             DebugLog.log("WS", "❌ DECODE FAIL: \(error)")
-                            DebugLog.log("WS", "❌ raw text: \(String(text.prefix(300)))")
+                            DebugLog.log("WS", "❌ raw: \(String(text.prefix(300)))")
                         }
                     } else {
                         DebugLog.log("WS", "recv non-string message (binary?)")

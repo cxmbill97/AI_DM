@@ -12,7 +12,7 @@ import SwiftUI
 final class DebugLog: ObservableObject {
     static let shared = DebugLog()
     @Published var entries: [String] = []
-    private let maxEntries = 40
+    private let maxEntries = 80
 
     static func log(_ tag: String, _ msg: String) {
         let ts = ISO8601DateFormatter().string(from: Date())
@@ -20,10 +20,18 @@ final class DebugLog: ObservableObject {
             .replacingOccurrences(of: "Z", with: "")
         let line = "[\(ts)] [\(tag)] \(msg)"
         print(line) // also goes to Xcode console / Console.app
-        Task { @MainActor in
+        // If already on main actor, update synchronously so logs appear immediately.
+        if Thread.isMainThread {
             shared.entries.append(line)
             if shared.entries.count > shared.maxEntries {
                 shared.entries.removeFirst(shared.entries.count - shared.maxEntries)
+            }
+        } else {
+            Task { @MainActor in
+                shared.entries.append(line)
+                if shared.entries.count > shared.maxEntries {
+                    shared.entries.removeFirst(shared.entries.count - shared.maxEntries)
+                }
             }
         }
     }
