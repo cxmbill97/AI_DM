@@ -5,7 +5,6 @@ struct RoomView: View {
     @StateObject private var vm: RoomViewModel
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tabBarState: TabBarVisibility
-    @State private var keyboardHeight: CGFloat = 0
     @State private var showEmotes = false
 
     init(roomId: String) {
@@ -32,9 +31,6 @@ struct RoomView: View {
                     inputBar
                 }
             }
-            // Compensate for keyboard — MainTabView uses .ignoresSafeArea(.keyboard)
-            .padding(.bottom, keyboardHeight)
-            .animation(.easeOut(duration: 0.25), value: keyboardHeight)
         }
         .navigationBarHidden(true)
         .onAppear { tabBarState.isHidden = true }
@@ -43,15 +39,6 @@ struct RoomView: View {
             vm.disconnect()
         }
         .task { await vm.connect() }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { n in
-            if let frame = n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
-                keyboardHeight = frame.height
-                showEmotes = false
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            keyboardHeight = 0
-        }
         .sheet(isPresented: $vm.showClues) { ClueSheet(clues: vm.clues) }
         .alert("Error", isPresented: Binding(
             get: { vm.errorMessage != nil },
@@ -246,7 +233,7 @@ struct RoomView: View {
                     ForEach(vm.messages) { msg in
                         MessageBubble(message: msg)
                             .id(msg.id)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                            .transition(.opacity)
                     }
                     if vm.messages.isEmpty {
                         VStack(spacing: 12) {
@@ -260,7 +247,6 @@ struct RoomView: View {
                     }
                 }
                 .padding(.vertical, 12)
-                .animation(.easeOut(duration: 0.2), value: vm.messages.count)
             }
             .onChange(of: vm.messages.count) { _ in
                 if let last = vm.messages.last {
@@ -312,6 +298,9 @@ struct RoomView: View {
                     .disabled(vm.isSending)
                     .submitLabel(.send)
                     .onSubmit { if vm.canSend { Task { await vm.send() } } }
+                    .onChange(of: vm.inputText) { _ in
+                        if showEmotes { showEmotes = false }
+                    }
 
                 Button {
                     Task { await vm.send() }
@@ -337,14 +326,6 @@ struct RoomView: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
             .background(Color(hex: "#0d0c16"))
-
-            // Bottom safe-area spacer — only needed once the tab bar is hidden.
-            // When the tab bar is visible, SwiftUI's safeAreaInset already reserves
-            // the correct space; adding the spacer then would double-count.
-            if tabBarState.isHidden {
-                Color(hex: "#0d0c16")
-                    .frame(height: max(0, safeAreaBottomInset - keyboardHeight))
-            }
         }
     }
 
@@ -368,13 +349,6 @@ struct RoomView: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .background(Color(hex: "#0d0c16"))
-    }
-
-    // Bottom safe area height (home indicator) for proper input bar positioning
-    private var safeAreaBottomInset: CGFloat {
-        (UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first?.safeAreaInsets.bottom) ?? 0
     }
 
     // MARK: - Win banner
