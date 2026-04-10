@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct WaitingRoomDestination: Hashable {
+struct WaitingRoomDestination: Hashable, Equatable {
     let gameId: String
     let gameType: String
     let roomId: String
@@ -8,6 +8,7 @@ struct WaitingRoomDestination: Hashable {
 
 struct HomeView: View {
     @EnvironmentObject private var auth: AuthViewModel
+    @EnvironmentObject private var tabBarState: TabBarVisibility
     @StateObject private var vm = HomeViewModel()
     @State private var waitingRoomDest: WaitingRoomDestination? = nil
     @State private var isCreating = false
@@ -56,11 +57,16 @@ struct HomeView: View {
             .navigationBarHidden(true)
             .navigationDestination(isPresented: Binding(
                 get: { waitingRoomDest != nil },
-                set: { if !$0 { waitingRoomDest = nil } }
+                set: { if !$0 { waitingRoomDest = nil; tabBarState.isHidden = false } }
             )) {
                 if let dest = waitingRoomDest {
                     WaitingRoomView(gameId: dest.gameId, gameType: dest.gameType, roomId: dest.roomId)
                 }
+            }
+            .onChange(of: waitingRoomDest) { dest in
+                // Hide immediately when navigating into a room so the tab bar
+                // never overlaps the waiting room / game view during animation.
+                if dest != nil { tabBarState.isHidden = true }
             }
             .task {
                 await vm.load()

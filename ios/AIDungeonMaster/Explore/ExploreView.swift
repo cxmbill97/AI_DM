@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ExploreView: View {
     @StateObject private var vm = ExploreViewModel()
+    @EnvironmentObject private var tabBarState: TabBarVisibility
     @State private var navigateToRoom: String? = nil
     @State private var joinCode = ""
     @State private var showBrowse = false
@@ -44,9 +45,14 @@ struct ExploreView: View {
             .navigationBarHidden(true)
             .navigationDestination(isPresented: Binding(
                 get: { navigateToRoom != nil },
-                set: { if !$0 { navigateToRoom = nil } }
+                set: { if !$0 { navigateToRoom = nil; tabBarState.isHidden = false } }
             )) {
                 if let roomId = navigateToRoom { RoomView(roomId: roomId) }
+            }
+            .onChange(of: navigateToRoom) { roomId in
+                // Hide tab bar immediately when a room navigation starts so it
+                // never appears on top of RoomView during the push animation.
+                tabBarState.isHidden = (roomId != nil)
             }
             .sheet(isPresented: $showBrowse) {
                 LobbyView()
