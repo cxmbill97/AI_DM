@@ -63,8 +63,10 @@ final class RoomViewModel: ObservableObject {
         isListening = true
         defer { isListening = false }
         for await msg in ws.stream {
+            print("[RoomVM] received message from stream: \(msg)")
             handle(msg)
         }
+        print("[RoomVM] stream ended")
     }
 
     func disconnect() {

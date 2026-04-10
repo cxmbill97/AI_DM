@@ -80,23 +80,39 @@ final class WebSocketService: ObservableObject {
         }
     }
 
+    private var listenTask: Task<Void, Never>?
+
     private func listen(connectionId: UUID) {
-        task?.receive { [weak self] result in
-            guard let self, connectionId == self.currentConnectionId else { return }
-            switch result {
-            case .success(let msg):
-                if case .string(let text) = msg,
-                   let data = text.data(using: .utf8),
-                   let gameMsg = try? JSONDecoder().decode(GameMessage.self, from: data) {
-                    Task { @MainActor in
-                        self.continuation?.yield(gameMsg)
+        listenTask?.cancel()
+        listenTask = Task { [weak self] in
+            guard let self else { return }
+            guard let ws = self.task else { return }
+            do {
+                while !Task.isCancelled, connectionId == self.currentConnectionId {
+                    let msg = try await ws.receive()
+                    guard connectionId == self.currentConnectionId else {
+                        print("[WS] connectionId rotated, exiting listen loop")
+                        break
+                    }
+                    if case .string(let text) = msg {
+                        guard let data = text.data(using: .utf8) else {
+                            print("[WS] failed to convert text to data")
+                            continue
+                        }
+                        do {
+                            let gameMsg = try JSONDecoder().decode(GameMessage.self, from: data)
+                            print("[WS] decoded message: \(gameMsg)")
+                            self.continuation?.yield(gameMsg)
+                        } catch {
+                            print("[WS] decode FAILED: \(error)")
+                            print("[WS] raw text: \(text.prefix(300))")
+                        }
                     }
                 }
-                self.listen(connectionId: connectionId)
-            case .failure:
-                Task { @MainActor in
-                    self.handleDisconnect()
-                }
+            } catch {
+                guard connectionId == self.currentConnectionId else { return }
+                print("[WS] receive error: \(error)")
+                self.handleDisconnect()
             }
         }
     }
@@ -123,6 +139,8 @@ final class WebSocketService: ObservableObject {
     }
 
     func disconnect() {
+        listenTask?.cancel()
+        listenTask = nil
         pingTask?.cancel()
         pingTask = nil
         task?.cancel(with: .goingAway, reason: nil)
