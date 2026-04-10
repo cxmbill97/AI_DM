@@ -505,6 +505,15 @@ public static class SceneSetupWizard
 
     static Canvas MakeCanvas(string name)
     {
+        // Camera — required so the Game view doesn't show "No cameras rendering"
+        var camGO  = new GameObject("Main Camera");
+        var cam    = camGO.AddComponent<Camera>();
+        cam.clearFlags       = CameraClearFlags.SolidColor;
+        cam.backgroundColor  = new Color(0.05f, 0.03f, 0.09f);
+        cam.orthographic     = true;
+        cam.depth            = -1;
+        camGO.tag            = "MainCamera";
+
         var go     = new GameObject(name);
         var canvas = go.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
