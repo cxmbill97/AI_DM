@@ -32,13 +32,21 @@ struct RoomView: View {
                 }
             }
         }
+        .overlay(alignment: .topLeading) { DebugOverlay() }
         .navigationBarHidden(true)
-        .onAppear { tabBarState.isHidden = true }
+        .onAppear {
+            tabBarState.isHidden = true
+            DebugLog.log("UI", "RoomView.onAppear roomId=\(roomId)")
+        }
         .onDisappear {
             tabBarState.isHidden = false
             vm.disconnect()
         }
-        .task { await vm.connect() }
+        .task {
+            DebugLog.log("UI", "RoomView.task STARTED")
+            await vm.connect()
+            DebugLog.log("UI", "RoomView.task ENDED (connect returned)")
+        }
         .sheet(isPresented: $vm.showClues) { ClueSheet(clues: vm.clues) }
         .alert("Error", isPresented: Binding(
             get: { vm.errorMessage != nil },
