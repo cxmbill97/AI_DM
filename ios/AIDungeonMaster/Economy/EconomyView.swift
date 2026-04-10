@@ -2,8 +2,10 @@ import SwiftUI
 
 struct EconomyView: View {
     @StateObject private var vm = EconomyViewModel()
-    let playerId: String
+    @EnvironmentObject private var auth: AuthViewModel
     @State private var showPullSheet = false
+
+    private var playerId: String { auth.user?.id ?? "" }
 
     var body: some View {
         NavigationView {

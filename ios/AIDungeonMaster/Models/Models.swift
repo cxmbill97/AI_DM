@@ -171,7 +171,10 @@ struct GameStartedPayload: Codable {
 }
 
 struct ErrorPayload: Codable {
-    let message: String
+    let text: String
+    // "message" alias for any older callers — remove once all backend errors use "text"
+    var message: String { text }
+    private enum CodingKeys: String, CodingKey { case text }
 }
 
 // MARK: - GameMessage (discriminated union on "type" field)

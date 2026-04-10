@@ -2,9 +2,11 @@ import SwiftUI
 
 struct PetView: View {
     @StateObject private var vm = PetViewModel()
-    let playerId: String
+    @EnvironmentObject private var auth: AuthViewModel
     @State private var showRename = false
     @State private var newName = ""
+
+    private var playerId: String { auth.user?.id ?? "" }
 
     var body: some View {
         VStack(spacing: 20) {

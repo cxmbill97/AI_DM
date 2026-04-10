@@ -689,7 +689,7 @@ export function useRoom(roomId: string, token: string) {
         setError(t('room.disconnect_error'));
       }
     };
-  }, [roomId, playerName, appendMessage, addClue]);
+  }, [roomId, token, appendMessage, addClue]);
 
   useEffect(() => {
     mountedRef.current = true;

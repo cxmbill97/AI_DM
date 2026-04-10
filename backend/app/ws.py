@@ -169,6 +169,7 @@ def _mm_snapshot(room: Room, player_id: str) -> dict[str, Any]:
         "game_mode": room.script.game_mode,
         "required_players": room.script.metadata.player_count,
         "theme": room.script.theme.model_dump(),
+        "my_player_id": player_id,
     }
 
 
@@ -1066,6 +1067,7 @@ async def websocket_endpoint(
     is_reconnect = False
     reconnect_timestamp: float = 0.0
 
+    reconnect_gap: float = 0.0
     existing_id = room.find_player_by_name(player_name)
     if existing_id is not None:
         slot = room.players[existing_id]
@@ -1073,8 +1075,8 @@ async def websocket_endpoint(
             # Same player reconnecting (e.g. navigating from lobby→game room on mobile).
             # Force-take the slot: mark old connection dead, treat as immediate reconnect.
             room.disconnect_player(existing_id)
-        gap = time.time() - slot["last_seen"]
-        if gap <= RECONNECT_WINDOW_SECS:
+        reconnect_gap = time.time() - slot["last_seen"]
+        if reconnect_gap <= RECONNECT_WINDOW_SECS:
             is_reconnect = True
             player_id = existing_id
             reconnect_timestamp = slot["last_seen"]
@@ -1100,14 +1102,19 @@ async def websocket_endpoint(
     # Announce presence
     # ----------------------------------------------------------------
     _lang = getattr(room, "language", "zh")
+    # Minimum gap (seconds) before we broadcast a "reconnected" notice.
+    # Very fast reconnects (< 2s) are React double-mount / mobile tab-switch
+    # artefacts — replay messages silently so the UI isn't cluttered.
+    _MIN_RECONNECT_ANNOUNCE_SECS = 2.0
     if is_reconnect:
-        _reconnect_text = f"{player_name} reconnected" if _lang == "en" else f"{player_name} 重新连接了"
-        join_notice = {
-            "type": "system",
-            "text": _reconnect_text,
-            "timestamp": time.time(),
-        }
-        await room.broadcast(join_notice)
+        if reconnect_gap >= _MIN_RECONNECT_ANNOUNCE_SECS:
+            _reconnect_text = f"{player_name} reconnected" if _lang == "en" else f"{player_name} 重新连接了"
+            join_notice = {
+                "type": "system",
+                "text": _reconnect_text,
+                "timestamp": time.time(),
+            }
+            await room.broadcast(join_notice)
         missed = room.messages_since(reconnect_timestamp)
         for msg in missed:
             await room.send_to(player_id, msg)
@@ -1268,7 +1275,7 @@ async def websocket_endpoint(
         and not room._opening_narrated
         and room.state_machine is not None
         and room.state_machine.current_phase == "opening"
-        and sum(1 for p in room.players.values() if p["connected"]) >= 2
+        and sum(1 for p in room.players.values() if p["connected"]) >= 1
     ):
         room._opening_narrated = True
         assert room.script is not None

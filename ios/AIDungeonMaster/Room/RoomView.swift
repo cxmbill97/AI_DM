@@ -327,9 +327,13 @@ struct RoomView: View {
             .padding(.horizontal, 14).padding(.vertical, 10)
             .background(Color(hex: "#0d0c16"))
 
-            // Bottom safe-area spacer so the bar clears the home indicator
-            Color(hex: "#0d0c16")
-                .frame(height: max(0, safeAreaBottomInset - keyboardHeight))
+            // Bottom safe-area spacer — only needed once the tab bar is hidden.
+            // When the tab bar is visible, SwiftUI's safeAreaInset already reserves
+            // the correct space; adding the spacer then would double-count.
+            if tabBarState.isHidden {
+                Color(hex: "#0d0c16")
+                    .frame(height: max(0, safeAreaBottomInset - keyboardHeight))
+            }
         }
     }
 

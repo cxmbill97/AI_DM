@@ -13,8 +13,8 @@ struct CustomTabBar: View {
     private let items: [TabBarItem] = [
         TabBarItem(tag: 0, icon: "house",              selectedIcon: "house.fill",              label: "Home"),
         TabBarItem(tag: 1, icon: "magnifyingglass",    selectedIcon: "magnifyingglass",          label: "Explore"),
-        TabBarItem(tag: 2, icon: "flame",              selectedIcon: "flame.fill",               label: "Activity"),
-        TabBarItem(tag: 3, icon: "bookmark",           selectedIcon: "bookmark.fill",            label: "Saved"),
+        TabBarItem(tag: 2, icon: "dollarsign.circle",  selectedIcon: "dollarsign.circle.fill",  label: "Economy"),
+        TabBarItem(tag: 3, icon: "pawprint",           selectedIcon: "pawprint.fill",            label: "Pet"),
         TabBarItem(tag: 4, icon: "person.crop.circle", selectedIcon: "person.crop.circle.fill",  label: "Profile"),
     ]
 
