@@ -46,7 +46,71 @@ public static class SceneSetupWizard
         for (int i = 0; i < names.Length; i++)
             entries[i] = new EditorBuildSettingsScene($"Assets/Scenes/{names[i]}.unity", true);
         EditorBuildSettings.scenes = entries;
-        Debug.Log("[AI DM Setup] Build Settings updated with all 6 scenes.");
+
+        // Resolution — 1080p default, full screen
+        PlayerSettings.defaultScreenWidth  = 1920;
+        PlayerSettings.defaultScreenHeight = 1080;
+        PlayerSettings.fullScreenMode      = FullScreenMode.FullScreenWindow;
+        PlayerSettings.runInBackground     = true;
+
+        // Add a 1920×1080 Game view resolution preset
+        var size = new System.Collections.Generic.Dictionary<string, object>
+        {
+            ["enabled"]  = true,
+            ["width"]    = 1920,
+            ["height"]   = 1080,
+            ["text"]     = "1920x1080"
+        };
+        // Use GameViewSizes API to add the preset
+        SetGameViewResolution(1920, 1080);
+
+        Debug.Log("[AI DM Setup] Build Settings + resolution updated.");
+    }
+
+    static void SetGameViewResolution(int w, int h)
+    {
+        // Unity internal GameViewSizes API
+        var gvsType = System.Type.GetType(
+            "UnityEditor.GameViewSizes,UnityEditor");
+        var svType  = System.Type.GetType(
+            "UnityEditor.ScriptableSingleton`1,UnityEditor");
+        if (gvsType == null || svType == null) return;
+
+        var singletonType = svType.MakeGenericType(gvsType);
+        var instance = singletonType.GetProperty("instance")
+                                    ?.GetValue(null);
+        if (instance == null) return;
+
+        var currentGroup = instance.GetType()
+                                   .GetMethod("GetGroup")
+                                   ?.Invoke(instance, new object[] { (int)UnityEditor.GameViewSizeGroupType.Standalone });
+        if (currentGroup == null) return;
+
+        // Check if already exists
+        var getCount = currentGroup.GetType().GetMethod("GetTotalCount");
+        var getView  = currentGroup.GetType().GetMethod("GetGameViewSize");
+        int count    = (int)(getCount?.Invoke(currentGroup, null) ?? 0);
+        for (int i = 0; i < count; i++)
+        {
+            var existing = getView?.Invoke(currentGroup, new object[] { i });
+            if (existing == null) continue;
+            var ew = existing.GetType().GetProperty("width")?.GetValue(existing);
+            var eh = existing.GetType().GetProperty("height")?.GetValue(existing);
+            if ((int)ew == w && (int)eh == h) return; // already present
+        }
+
+        // Add new size
+        var gvsSizeType = System.Type.GetType("UnityEditor.GameViewSize,UnityEditor");
+        var gvsSizeGT   = System.Type.GetType("UnityEditor.GameViewSizeType,UnityEditor");
+        if (gvsSizeType == null || gvsSizeGT == null) return;
+
+        var newSize = System.Activator.CreateInstance(
+            gvsSizeType,
+            System.Enum.Parse(gvsSizeGT, "FixedResolution"),
+            w, h, $"{w}x{h}");
+
+        currentGroup.GetType().GetMethod("AddCustomSize")
+                    ?.Invoke(currentGroup, new object[] { newSize });
     }
 
     [MenuItem("AI DM/Setup Boot Scene")]   public static void SetupBoot()       => BuildBoot();
