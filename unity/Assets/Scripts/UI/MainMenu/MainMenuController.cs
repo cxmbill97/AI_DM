@@ -1,19 +1,5 @@
-// Mahjong Soul-style main menu.
-// Layer stack (back → front):
-//   1. Sky gradient (set in Inspector)
-//   2. Parallax mountains (ParallaxLayer[] — assigned in Inspector)
-//   3. Cherry blossom particles (CherryBlossomSystem on same GameObject)
-//   4. Anime character placeholder (characterRoot RectTransform)
-//   5. Top HUD bar
-//   6. Three game-mode button panels
-//   7. BottomNavBar (always visible on MainMenu)
-//
-// DOTween animations are guarded with #if DOTWEEN — the script compiles and runs
-// without DOTween installed (no animations); import DOTween from the Asset Store
-// to unlock all animations.
-#if DOTWEEN
-using DG.Tweening;
-#endif
+// Mahjong Soul-style main menu — no DOTween dependency.
+// All animations use coroutines (character entrance, idle breath, parallax, button press).
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
@@ -22,33 +8,24 @@ using Cysharp.Threading.Tasks;
 
 public class MainMenuController : MonoBehaviour
 {
-    // ── Character ────────────────────────────────────────────────────────────
     [Header("Character")]
-    [SerializeField] private RectTransform characterRoot;   // left 40 % panel
-    [SerializeField] private Image         characterImage;  // swap art here
+    [SerializeField] private RectTransform characterRoot;
+    [SerializeField] private Image         characterImage;
 
-    // ── Top HUD ──────────────────────────────────────────────────────────────
     [Header("Top HUD")]
     [SerializeField] private TMP_Text playerNameLabel;
     [SerializeField] private TMP_Text coinBalanceLabel;
     [SerializeField] private Image    playerAvatarBg;
     [SerializeField] private TMP_Text playerInitialLabel;
 
-    // ── Game-mode buttons ─────────────────────────────────────────────────────
     [Header("Game Buttons")]
     [SerializeField] private Button   turtleSoupButton;
     [SerializeField] private Button   murderMysteryButton;
     [SerializeField] private Button   friendsLobbyButton;
 
-    // ── Parallax ─────────────────────────────────────────────────────────────
     [Header("Parallax")]
-    [SerializeField] private RectTransform[] parallaxLayers; // back → front
-    [SerializeField] private float[]         parallaxSpeeds; // pixels per cycle
-
-#if DOTWEEN
-    private DG.Tweening.Sequence _idleBreath;
-    private DG.Tweening.Sequence _parallaxLoop;
-#endif
+    [SerializeField] private RectTransform[] parallaxLayers;
+    [SerializeField] private float[]         parallaxSpeeds;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -58,97 +35,60 @@ public class MainMenuController : MonoBehaviour
         murderMysteryButton?.onClick.AddListener(OnMurderMystery);
         friendsLobbyButton?.onClick.AddListener(OnFriendsLobby);
 
-        PlayCharacterEntrance();
-        PlayIdleBreath();
-        PlayParallaxLoop();
-        LoadPlayerHUD().Forget();
+        StartCoroutine(CharacterEntrance());
+        StartCoroutine(IdleBreath());
+        StartCoroutine(ParallaxLoop());
         HookButtonPressAnimations();
-    }
-
-    private void OnDestroy()
-    {
-#if DOTWEEN
-        _idleBreath?.Kill();
-        _parallaxLoop?.Kill();
-#endif
+        LoadPlayerHUD().Forget();
     }
 
     // ── Animations ────────────────────────────────────────────────────────────
 
-    private void PlayCharacterEntrance()
+    private IEnumerator CharacterEntrance()
     {
-        if (characterRoot == null) return;
-#if DOTWEEN
-        var startX = characterRoot.anchoredPosition.x - 120f;
-        characterRoot.anchoredPosition = new Vector2(startX, characterRoot.anchoredPosition.y);
-        if (characterImage) characterImage.color = new Color(1, 1, 1, 0);
+        if (characterRoot == null) yield break;
 
-        var seq = DG.Tweening.DOTween.Sequence();
-        seq.Append(characterRoot.DOAnchorPosX(characterRoot.anchoredPosition.x + 120f, 0.7f)
-                                .SetEase(DG.Tweening.Ease.OutCubic));
-        if (characterImage != null)
-            seq.Join(characterImage.DOFade(1f, 0.5f));
-#else
-        // Fallback: keep existing color, just ensure alpha is fully visible
+        // Start transparent and offset left
+        var startPos = characterRoot.anchoredPosition;
+        characterRoot.anchoredPosition = new Vector2(startPos.x - 120f, startPos.y);
         if (characterImage)
         {
-            var c = characterImage.color;
-            c.a = 1f;
-            characterImage.color = c;
+            var c = characterImage.color; c.a = 0f; characterImage.color = c;
         }
-#endif
+
+        float t = 0f, dur = 0.7f;
+        while (t < dur)
+        {
+            t += Time.deltaTime;
+            float p = Mathf.SmoothStep(0f, 1f, t / dur);
+            characterRoot.anchoredPosition = new Vector2(
+                Mathf.Lerp(startPos.x - 120f, startPos.x, p), startPos.y);
+            if (characterImage)
+            {
+                var c = characterImage.color; c.a = Mathf.Lerp(0f, 1f, p); characterImage.color = c;
+            }
+            yield return null;
+        }
+        characterRoot.anchoredPosition = startPos;
+        if (characterImage)
+        {
+            var c = characterImage.color; c.a = 1f; characterImage.color = c;
+        }
     }
 
-    private void PlayIdleBreath()
+    private IEnumerator IdleBreath()
     {
-        if (characterRoot == null) return;
-#if DOTWEEN
-        _idleBreath = DG.Tweening.DOTween.Sequence();
-        _idleBreath.Append(characterRoot.DOScaleY(1.02f, 2f).SetEase(DG.Tweening.Ease.InOutSine));
-        _idleBreath.Append(characterRoot.DOScaleY(1.00f, 2f).SetEase(DG.Tweening.Ease.InOutSine));
-        _idleBreath.SetLoops(-1, DG.Tweening.LoopType.Restart);
-#else
-        StartCoroutine(BreathCoroutine());
-#endif
-    }
-
-#if !DOTWEEN
-    private IEnumerator BreathCoroutine()
-    {
+        if (characterRoot == null) yield break;
         while (characterRoot != null)
         {
-            float t = 0f;
-            while (t < 2f) { t += Time.deltaTime; characterRoot.localScale = new Vector3(1f, Mathf.Lerp(1f, 1.02f, t / 2f), 1f); yield return null; }
-            t = 0f;
-            while (t < 2f) { t += Time.deltaTime; characterRoot.localScale = new Vector3(1f, Mathf.Lerp(1.02f, 1f, t / 2f), 1f); yield return null; }
+            yield return ScaleTo(characterRoot, new Vector3(1f, 1.02f, 1f), 2f);
+            yield return ScaleTo(characterRoot, Vector3.one, 2f);
         }
     }
-#endif
 
-    private void PlayParallaxLoop()
+    private IEnumerator ParallaxLoop()
     {
-        if (parallaxLayers == null || parallaxLayers.Length == 0) return;
-#if DOTWEEN
-        _parallaxLoop = DG.Tweening.DOTween.Sequence();
-        for (int i = 0; i < parallaxLayers.Length; i++)
-        {
-            var layer = parallaxLayers[i];
-            if (layer == null) continue;
-            float speed    = (parallaxSpeeds != null && i < parallaxSpeeds.Length) ? parallaxSpeeds[i] : 20f;
-            float duration = 30f / Mathf.Max(speed, 1f);
-            _parallaxLoop.Insert(0,
-                layer.DOAnchorPosX(layer.anchoredPosition.x - speed * 30f, duration)
-                     .SetEase(DG.Tweening.Ease.Linear)
-                     .SetLoops(-1, DG.Tweening.LoopType.Restart));
-        }
-#else
-        StartCoroutine(ParallaxCoroutine());
-#endif
-    }
-
-#if !DOTWEEN
-    private IEnumerator ParallaxCoroutine()
-    {
+        if (parallaxLayers == null) yield break;
         var origins = new Vector2[parallaxLayers.Length];
         for (int i = 0; i < parallaxLayers.Length; i++)
             if (parallaxLayers[i] != null) origins[i] = parallaxLayers[i].anchoredPosition;
@@ -167,16 +107,29 @@ public class MainMenuController : MonoBehaviour
             yield return null;
         }
     }
-#endif
+
+    private static IEnumerator ScaleTo(Transform t, Vector3 target, float dur)
+    {
+        if (t == null) yield break;
+        var start = t.localScale;
+        float elapsed = 0f;
+        while (elapsed < dur)
+        {
+            elapsed += Time.deltaTime;
+            t.localScale = Vector3.Lerp(start, target, Mathf.SmoothStep(0f, 1f, elapsed / dur));
+            yield return null;
+        }
+        t.localScale = target;
+    }
 
     private void HookButtonPressAnimations()
     {
-        HookButton(turtleSoupButton);
-        HookButton(murderMysteryButton);
-        HookButton(friendsLobbyButton);
+        HookButton(turtleSoupButton,    this);
+        HookButton(murderMysteryButton, this);
+        HookButton(friendsLobbyButton,  this);
     }
 
-    private static void HookButton(Button btn)
+    private static void HookButton(Button btn, MonoBehaviour host)
     {
         if (btn == null) return;
         var trigger = btn.gameObject.GetComponent<UnityEngine.EventSystems.EventTrigger>()
@@ -184,24 +137,22 @@ public class MainMenuController : MonoBehaviour
 
         var down = new UnityEngine.EventSystems.EventTrigger.Entry
             { eventID = UnityEngine.EventSystems.EventTriggerType.PointerDown };
-#if DOTWEEN
-        down.callback.AddListener(_ => btn.transform.DOScale(0.97f, 0.08f).SetEase(DG.Tweening.Ease.OutQuad).SetLink(btn.gameObject));
-#else
-        down.callback.AddListener(_ => btn.transform.localScale = new Vector3(0.97f, 0.97f, 1f));
-#endif
+        down.callback.AddListener(_ =>
+        {
+            if (btn != null) host.StartCoroutine(ScaleTo(btn.transform, new Vector3(0.95f, 0.95f, 1f), 0.08f));
+        });
         trigger.triggers.Add(down);
 
         var up = new UnityEngine.EventSystems.EventTrigger.Entry
             { eventID = UnityEngine.EventSystems.EventTriggerType.PointerUp };
-#if DOTWEEN
-        up.callback.AddListener(_ => btn.transform.DOScale(1f, 0.12f).SetEase(DG.Tweening.Ease.OutBack).SetLink(btn.gameObject));
-#else
-        up.callback.AddListener(_ => btn.transform.localScale = Vector3.one);
-#endif
+        up.callback.AddListener(_ =>
+        {
+            if (btn != null) host.StartCoroutine(ScaleTo(btn.transform, Vector3.one, 0.12f));
+        });
         trigger.triggers.Add(up);
     }
 
-    // ── HUD data ──────────────────────────────────────────────────────────────
+    // ── HUD ───────────────────────────────────────────────────────────────────
 
     private async UniTaskVoid LoadPlayerHUD()
     {
@@ -209,27 +160,16 @@ public class MainMenuController : MonoBehaviour
         {
             var me = await APIManager.Instance.GetMe();
             if (playerNameLabel)    playerNameLabel.text    = me.Name ?? "Adventurer";
-            if (playerInitialLabel) playerInitialLabel.text = GetInitial(me.Name);
+            if (playerInitialLabel) playerInitialLabel.text = string.IsNullOrEmpty(me.Name) ? "?" : me.Name[0].ToString().ToUpper();
             if (playerAvatarBg)     playerAvatarBg.color    = ColorPalette.AvatarColor(me.Name ?? "");
             if (coinBalanceLabel)   coinBalanceLabel.text   = "—";
         }
-        catch
-        {
-            if (playerNameLabel) playerNameLabel.text = "Adventurer";
-        }
+        catch { if (playerNameLabel) playerNameLabel.text = "Adventurer"; }
     }
-
-    private static string GetInitial(string name)
-        => string.IsNullOrEmpty(name) ? "?" : name[0].ToString().ToUpper();
 
     // ── Navigation ────────────────────────────────────────────────────────────
 
-    private void OnTurtleSoup()
-        => SceneLoader.LoadScene("RoomBrowser", ("tab", "turtle_soup"));
-
-    private void OnMurderMystery()
-        => SceneLoader.LoadScene("RoomBrowser", ("tab", "murder_mystery"));
-
-    private void OnFriendsLobby()
-        => SceneLoader.LoadScene("RoomBrowser", ("tab", "active_rooms"));
+    private void OnTurtleSoup()    => SceneLoader.LoadScene("RoomBrowser", ("tab", "turtle_soup"));
+    private void OnMurderMystery() => SceneLoader.LoadScene("RoomBrowser", ("tab", "murder_mystery"));
+    private void OnFriendsLobby()  => SceneLoader.LoadScene("RoomBrowser", ("tab", "active_rooms"));
 }
