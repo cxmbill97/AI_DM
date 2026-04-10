@@ -81,7 +81,7 @@ final class RoomViewModel: ObservableObject {
     }
 
     func send() async {
-        let text = inputText.trimmingCharacters(in: .whitespaces)
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         inputText = ""
         isSending = true

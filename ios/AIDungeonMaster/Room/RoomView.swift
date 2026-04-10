@@ -310,6 +310,8 @@ struct RoomView: View {
                     .cornerRadius(12)
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "#2a2840"), lineWidth: 1))
                     .disabled(vm.isSending)
+                    .submitLabel(.send)
+                    .onSubmit { if vm.canSend { Task { await vm.send() } } }
                     .onTapGesture { showEmotes = false }
 
                 Button {
@@ -633,6 +635,6 @@ private struct BlinkingCursor: View {
 
 extension RoomViewModel {
     var canSend: Bool {
-        !inputText.trimmingCharacters(in: .whitespaces).isEmpty && !isSending
+        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSending
     }
 }
