@@ -28,11 +28,29 @@ final class AuthViewModel: NSObject, ObservableObject {
             return
         }
         do {
-            user = try await APIService.shared.getMe()
+            // 5-second timeout: unreachable server shows login screen quickly
+            // instead of hanging for URLSession's 60-second default.
+            try await withTimeout(seconds: 5) {
+                self.user = try await APIService.shared.getMe()
+            }
         } catch APIError.unauthorized {
             KeychainService.deleteToken()
         } catch {}
         isLoading = false
+    }
+
+    /// Runs `work` and cancels it (throwing CancellationError) after `seconds`.
+    private func withTimeout(seconds: Double, work: @escaping () async throws -> Void) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask { try await work() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw CancellationError()
+            }
+            // First to finish wins; cancel the other.
+            try await group.next()
+            group.cancelAll()
+        }
     }
 
     func signOut() {
