@@ -162,6 +162,9 @@ final class WebSocketService: ObservableObject {
 
     func disconnect() {
         DebugLog.log("WS", "disconnect() called")
+        // Rotate connectionId FIRST so the stale listenTask's catch block sees a
+        // mismatched ID and skips handleDisconnect — preventing a ghost reconnect.
+        currentConnectionId = UUID()
         listenTask?.cancel()
         listenTask = nil
         pingTask?.cancel()
