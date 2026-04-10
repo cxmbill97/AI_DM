@@ -39,6 +39,7 @@ final class RoomViewModel: ObservableObject {
     private let ws = WebSocketService()
     private let tts = TTSService()
     private var surfaceShown = false
+    private var isListening = false   // guard: only one stream consumer at a time
 
     init(roomId: String) {
         self.roomId = roomId
@@ -55,6 +56,12 @@ final class RoomViewModel: ObservableObject {
     func connect() async {
         let token = KeychainService.loadToken() ?? ""
         ws.connect(roomId: roomId, token: token)
+        // AsyncStream is single-consumer. If .task fires twice (SwiftUI
+        // re-render), a second for-await splits messages with the first,
+        // causing half of them to silently disappear.
+        guard !isListening else { return }
+        isListening = true
+        defer { isListening = false }
         for await msg in ws.stream {
             handle(msg)
         }

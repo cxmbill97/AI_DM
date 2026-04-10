@@ -194,7 +194,16 @@ struct GameStartedPayload: Codable {
 }
 
 struct ErrorPayload: Codable {
+    /// Backend sends "text" for errors; we accept either key.
     let message: String
+
+    private enum CodingKeys: String, CodingKey { case message, text }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        message = (try? c.decode(String.self, forKey: .message))
+              ?? (try c.decode(String.self, forKey: .text))
+    }
 }
 
 // MARK: - GameMessage (discriminated union on "type" field)
