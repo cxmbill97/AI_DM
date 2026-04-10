@@ -1036,7 +1036,7 @@ async def websocket_endpoint(
     # Authenticate via JWT
     user_id: str | None = None
     player_name = ""
-    jwt_sub: str | None = None          # JWT sub, even when user record is missing
+    jwt_sub: str | None = None          # JWT sub, even when signature is invalid
     try:
         payload = decode_jwt(token)
         jwt_sub = payload.get("sub")
@@ -1045,7 +1045,19 @@ async def websocket_endpoint(
             user_id = user["id"]
             player_name = user["name"]
     except (ValueError, KeyError):
-        pass
+        # JWT signature invalid (e.g. JWT_SECRET rotated after backend restart).
+        # Extract sub WITHOUT verifying the signature — used only to derive a
+        # stable display name so the player doesn't appear as a new random guest
+        # on every reconnect.  This does NOT grant authentication privileges.
+        try:
+            import base64 as _b64, json as _json
+            _parts = token.split(".")
+            if len(_parts) == 3:
+                _pad = _parts[1] + "=="
+                _pl = _json.loads(_b64.urlsafe_b64decode(_pad))
+                jwt_sub = _pl.get("sub")
+        except Exception:
+            pass
 
     if not player_name:
         # Priority order for stable identity (reconnect detection requires
