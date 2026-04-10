@@ -1614,9 +1614,16 @@ async def websocket_endpoint(
             "players": [{"id": pid, "name": p["name"], "connected": p["connected"]} for pid, p in room.players.items()],
         }
         await room.broadcast(players_update)
-        # Only stop the tick loop (and evict the room) when every slot is gone.
+        # Only stop the tick loop when every slot is gone.
         # While at least one player remains connected the tick must keep running
         # for phase timeouts and silence detection.
         if not any(p["connected"] for p in room.players.values()):
             _maybe_cancel_tick(room)
-            room_manager.remove_room(room_id)
+            # Delay eviction by 60 s so players who disconnect briefly (network
+            # hiccup, app switch, lobby→room transition) can still reconnect.
+            async def _evict_if_still_empty(rid: str = room_id) -> None:
+                await asyncio.sleep(60)
+                r = room_manager.get_room(rid)
+                if r is not None and not any(p["connected"] for p in r.players.values()):
+                    room_manager.remove_room(rid)
+            asyncio.create_task(_evict_if_still_empty())

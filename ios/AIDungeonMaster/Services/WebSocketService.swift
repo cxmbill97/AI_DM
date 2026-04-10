@@ -26,8 +26,9 @@ final class WebSocketService: ObservableObject {
     }
 
     func connect(roomId: String, token: String) {
-        // Prevent double-connecting to the same room (e.g. SwiftUI .task firing twice)
-        if isConnected && self.roomId == roomId { return }
+        // Prevent double-connecting to the same room (e.g. SwiftUI .task firing twice,
+        // or an external connect() call racing with the internal reconnect retry task).
+        if (isConnected || reconnecting) && self.roomId == roomId { return }
         self.roomId = roomId
         // If no JWT, use a stable guest token so reconnects keep the same identity
         self.token = token.isEmpty ? Self.stableGuestToken() : token
