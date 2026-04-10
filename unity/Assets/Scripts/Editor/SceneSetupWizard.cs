@@ -288,11 +288,11 @@ public static class SceneSetupWizard
         btnPanelRT.anchorMax = new Vector2(0.96f, 0.85f);
         btnPanelRT.offsetMin = btnPanelRT.offsetMax = Vector2.zero;
 
-        var tsBtn  = MakeButton("TurtleSoupButton",    btnPanel, "🐢  Turtle Soup  海龟汤",
+        var tsBtn  = MakeButton("TurtleSoupButton",    btnPanel, "Turtle Soup",
                                 ButtonNorm, TextLight, 22);
-        var mmBtn  = MakeButton("MurderMysteryButton", btnPanel, "🔍  Murder Mystery  剧本杀",
+        var mmBtn  = MakeButton("MurderMysteryButton", btnPanel, "Murder Mystery",
                                 ButtonNorm, TextLight, 22);
-        var flBtn  = MakeButton("FriendsLobbyButton",  btnPanel, "🚪  Friends / Lobby",
+        var flBtn  = MakeButton("FriendsLobbyButton",  btnPanel, "Friends / Lobby",
                                 ButtonNorm, TextLight, 22);
 
         // Stack the three buttons vertically
