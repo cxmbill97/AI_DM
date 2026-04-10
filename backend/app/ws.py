@@ -1036,9 +1036,11 @@ async def websocket_endpoint(
     # Authenticate via JWT
     user_id: str | None = None
     player_name = ""
+    jwt_sub: str | None = None          # JWT sub, even when user record is missing
     try:
         payload = decode_jwt(token)
-        user = get_user_by_id(payload["sub"])
+        jwt_sub = payload.get("sub")
+        user = get_user_by_id(jwt_sub) if jwt_sub else None
         if user:
             user_id = user["id"]
             player_name = user["name"]
@@ -1046,12 +1048,21 @@ async def websocket_endpoint(
         pass
 
     if not player_name:
-        # Stable guest identity: iOS passes "guest:<hex_id>" so reconnects
-        # are recognised as the same player.  Fall back to random for web.
+        # Priority order for stable identity (reconnect detection requires
+        # the same player_name every time for the same device/account):
+        # 1. iOS stable guest token: "guest:<hex_id>"
+        # 2. JWT present but user not in DB — derive from sub so the name is
+        #    the same on every connection for the same account, even across
+        #    backend restarts before the user row is created.
+        # 3. Anonymous web visitor — random (acceptable; no reconnect needed).
         if token.startswith("guest:"):
-            guest_id = token[6:18]  # first 12 hex chars
+            guest_id = token[6:18]          # first 12 hex chars
             player_name = f"Guest_{guest_id[:6]}"
-            user_id = f"guest_{guest_id}"   # stable player_id for reconnect detection
+            user_id = f"guest_{guest_id}"   # stable slot key
+        elif jwt_sub:
+            stable = jwt_sub.replace("-", "")[:6]
+            player_name = f"Guest_{stable}"
+            user_id = f"jwt_{jwt_sub}"      # stable slot key
         else:
             import uuid as _uuid  # noqa: PLC0415
             player_name = f"Guest_{_uuid.uuid4().hex[:6]}"
