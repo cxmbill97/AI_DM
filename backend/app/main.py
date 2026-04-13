@@ -393,19 +393,15 @@ async def get_history(user: dict = Depends(_require_user)) -> list[dict]:
 
 
 @app.get("/api/puzzles", response_model=list[PuzzleSummary])
-async def list_puzzles(lang: str = "zh") -> list[PuzzleSummary]:
+async def list_puzzles(lang: str = "zh", skip: int = 0, limit: int = 50) -> list[PuzzleSummary]:
     """List available puzzles — id, title, difficulty, tags only (no truth).
 
-    Query param: lang=zh (default) | lang=en
+    Query params: lang=zh|en, skip=0, limit=50
     """
+    puzzles = load_all_puzzles(lang)
     return [
-        PuzzleSummary(
-            id=p.id,
-            title=p.title,
-            difficulty=p.difficulty,
-            tags=p.tags,
-        )
-        for p in load_all_puzzles(lang)
+        PuzzleSummary(id=p.id, title=p.title, difficulty=p.difficulty, tags=p.tags)
+        for p in puzzles[skip : skip + limit]
     ]
 
 
@@ -596,12 +592,16 @@ async def create_room(body: CreateRoomRequest = CreateRoomRequest(), user: dict 
 
 
 @app.get("/api/scripts")
-async def list_scripts(lang: str = "zh") -> list[dict]:
+async def list_scripts(lang: str = "zh", skip: int = 0, limit: int = 50) -> list[dict]:
     """List available murder mystery scripts — id and title only.
 
-    Query param: lang=zh (default) | lang=en
+    Query params: lang=zh|en, skip=0, limit=50
     """
-    return [{"id": s.id, "title": s.title, "difficulty": s.metadata.difficulty, "player_count": s.metadata.player_count} for s in load_scripts(lang)]
+    scripts = load_scripts(lang)
+    return [
+        {"id": s.id, "title": s.title, "difficulty": s.metadata.difficulty, "player_count": s.metadata.player_count}
+        for s in scripts[skip : skip + limit]
+    ]
 
 
 @app.get("/api/rooms")

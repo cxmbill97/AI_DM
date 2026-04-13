@@ -4,6 +4,23 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Boot.unity
+    guid: 879a82cf288f340d8ad01b3afd36d226
+  - enabled: 1
+    path: Assets/Scenes/Login.unity
+    guid: 0e3ac9a19e00441df9a8a625c484a7e1
+  - enabled: 1
+    path: Assets/Scenes/MainMenu.unity
+    guid: a6d7e5554c4e049d191c26ca64ef9778
+  - enabled: 1
+    path: Assets/Scenes/RoomBrowser.unity
+    guid: 0573379f4548343a8827a51daa3126f8
+  - enabled: 1
+    path: Assets/Scenes/WaitingRoom.unity
+    guid: 2268f62f1eaab4abcb3358c37bb5aa42
+  - enabled: 1
+    path: Assets/Scenes/GameRoom.unity
+    guid: 04dd95970e34c447bb8784a67befa57e
   m_configObjects: {}
-  m_UseUCBPForAssetBundles: 0

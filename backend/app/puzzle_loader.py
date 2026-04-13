@@ -1,15 +1,17 @@
-"""Load puzzle and murder mystery script JSON files — cached at first access."""
+"""Load puzzle and murder mystery script content from the SQLite content database.
+
+The in-memory cache on top of the DB means repeated calls within a server
+process cost only a dict lookup.  Call invalidate_*_cache() after any write
+so the next read reloads from the DB.
+"""
 
 from __future__ import annotations
 
-import json
 import random
 from pathlib import Path
 
 from app.models import Puzzle, Script
-
-PUZZLES_DIR = Path(__file__).parent.parent / "data" / "puzzles"
-SCRIPTS_DIR = Path(__file__).parent.parent / "data" / "scripts"
+import app.content_db as _db
 
 # ---------------------------------------------------------------------------
 # Turtle soup puzzles — per-language cache
@@ -20,15 +22,9 @@ _cache: dict[str, dict[str, Puzzle]] = {}
 
 
 def _get_puzzles(lang: str = "zh") -> dict[str, Puzzle]:
-    """Return the puzzle cache for *lang*, loading from disk if needed."""
+    """Return the puzzle cache for *lang*, loading from the DB if needed."""
     if lang not in _cache:
-        _cache[lang] = {}
-        lang_dir = PUZZLES_DIR / lang
-        if lang_dir.exists():
-            for path in sorted(lang_dir.glob("*.json")):
-                data = json.loads(path.read_text(encoding="utf-8"))
-                puzzle = Puzzle.model_validate(data)
-                _cache[lang][puzzle.id] = puzzle
+        _cache[lang] = {p.id: p for p in _db.list_puzzles(lang)}
     return _cache[lang]
 
 
@@ -54,12 +50,18 @@ def random_puzzle(lang: str = "zh") -> Puzzle:
     """Return a randomly selected puzzle for *lang*."""
     puzzles = load_all_puzzles(lang)
     if not puzzles:
-        raise RuntimeError(f"No puzzle JSON files found in {PUZZLES_DIR / lang}")
+        raise RuntimeError(f"No puzzles found in content.db for lang={lang!r}")
     return random.choice(puzzles)
 
 
+def save_puzzle(puzzle: Puzzle, lang: str = "zh") -> None:
+    """Persist *puzzle* to the DB and invalidate the in-memory cache."""
+    _db.upsert_puzzle(puzzle, lang)
+    invalidate_puzzle_cache(lang)
+
+
 # ---------------------------------------------------------------------------
-# Murder mystery scripts — per-language cache (Phase 4)
+# Murder mystery scripts — per-language cache
 # ---------------------------------------------------------------------------
 
 # lang → list[Script]
@@ -67,15 +69,9 @@ _script_cache: dict[str, list[Script]] = {}
 
 
 def _get_scripts(lang: str = "zh") -> list[Script]:
-    """Return the script cache for *lang*, loading from disk if needed."""
+    """Return the script cache for *lang*, loading from the DB if needed."""
     if lang not in _script_cache:
-        _script_cache[lang] = []
-        lang_dir = SCRIPTS_DIR / lang
-        if lang_dir.exists():
-            for path in sorted(lang_dir.glob("*.json")):
-                data = json.loads(path.read_text(encoding="utf-8"))
-                script = Script.model_validate(data)
-                _script_cache[lang].append(script)
+        _script_cache[lang] = _db.list_scripts(lang)
     return _script_cache[lang]
 
 
@@ -92,30 +88,15 @@ def load_script(script_id: str, lang: str = "zh") -> Script:
     raise KeyError(f"Script not found: {script_id!r}")
 
 
-def save_script(script: Script, lang: str = "zh") -> Path:
-    """Persist *script* as JSON in data/scripts/{lang}/{script.id}.json.
-
-    Creates the language subdirectory if it does not exist.
-    Returns the path written.
-    """
-    lang_dir = SCRIPTS_DIR / lang
-    lang_dir.mkdir(parents=True, exist_ok=True)
-    path = lang_dir / f"{script.id}.json"
-    path.write_text(script.model_dump_json(indent=2), encoding="utf-8")
-    return path
+def save_script(script: Script, lang: str = "zh") -> None:
+    """Persist *script* to the DB and invalidate the in-memory cache."""
+    _db.upsert_script(script, lang)
+    invalidate_script_cache(lang)
 
 
-def save_puzzle(puzzle: Puzzle, lang: str = "zh") -> Path:
-    """Persist *puzzle* as JSON in data/puzzles/{lang}/{puzzle.id}.json.
-
-    Creates the language subdirectory if it does not exist.
-    Returns the path written.
-    """
-    lang_dir = PUZZLES_DIR / lang
-    lang_dir.mkdir(parents=True, exist_ok=True)
-    path = lang_dir / f"{puzzle.id}.json"
-    path.write_text(puzzle.model_dump_json(indent=2), encoding="utf-8")
-    return path
+# ---------------------------------------------------------------------------
+# Cache invalidation
+# ---------------------------------------------------------------------------
 
 
 def invalidate_puzzle_cache(lang: str | None = None) -> None:
@@ -129,8 +110,8 @@ def invalidate_puzzle_cache(lang: str | None = None) -> None:
 def invalidate_script_cache(lang: str | None = None) -> None:
     """Evict the script cache for *lang* (or all languages if None).
 
-    After calling this, the next load_scripts() call re-reads all JSON
-    files from disk, picking up newly uploaded scripts.
+    After calling this, the next load_scripts() call reloads from the DB,
+    picking up any scripts just written by save_script().
     """
     if lang is None:
         _script_cache.clear()

@@ -87,11 +87,11 @@ public class APIManager : MonoBehaviour
 
     // ── Puzzles & Scripts ────────────────────────────────────────────────────
 
-    public UniTask<List<PuzzleSummary>> ListPuzzles(string lang = "zh")
-        => Request<List<PuzzleSummary>>($"/api/puzzles?lang={lang}");
+    public UniTask<List<PuzzleSummary>> ListPuzzles(string lang = "zh", int skip = 0, int limit = 20)
+        => Request<List<PuzzleSummary>>($"/api/puzzles?lang={lang}&skip={skip}&limit={limit}");
 
-    public UniTask<List<ScriptSummary>> ListScripts(string lang = "zh")
-        => Request<List<ScriptSummary>>($"/api/scripts?lang={lang}");
+    public UniTask<List<ScriptSummary>> ListScripts(string lang = "zh", int skip = 0, int limit = 20)
+        => Request<List<ScriptSummary>>($"/api/scripts?lang={lang}&skip={skip}&limit={limit}");
 
     public UniTask<List<CommunityScript>> GetCommunityScripts(string lang = "zh", string search = "")
         => Request<List<CommunityScript>>($"/api/community/scripts?lang={lang}&search={UnityWebRequest.EscapeURL(search)}");
