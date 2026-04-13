@@ -140,6 +140,9 @@ public class WebSocketManager : MonoBehaviour
     private void HandleDisconnect()
     {
         IsConnected = false;
+        // Guard: callback may fire after the GameObject is destroyed (scene change / stop play)
+        if (this == null || !this) return;
+
         if (_retryCount >= MaxRetries)
         {
             IsReconnecting = false;

@@ -41,6 +41,7 @@ public class GameRoomController : MonoBehaviour
 
     [Header("Clue Panel")]
     [SerializeField] private GameObject      cluePanel;
+    [SerializeField] private Button          clueCloseButton;
     [SerializeField] private Transform       clueListContainer;
     [SerializeField] private GameObject      clueItemPrefab;
 
@@ -75,10 +76,11 @@ public class GameRoomController : MonoBehaviour
         sendButton?.onClick.AddListener(OnSend);
         backButton?.onClick.AddListener(OnBack);
         leaveButton?.onClick.AddListener(OnBack);
-        cluesButton?.onClick.AddListener(() => cluePanel?.SetActive(true));
+        if (cluePanel) cluesButton?.onClick.AddListener(() => cluePanel.SetActive(true));
+        if (cluePanel) clueCloseButton?.onClick.AddListener(() => cluePanel.SetActive(false));
         inputField?.onValueChanged.AddListener(_ => RefreshSendButton());
 
-        cluePanel?.SetActive(false);
+        if (cluePanel) cluePanel.SetActive(false);
         winBanner?.SetActive(false);
         turnBanner?.SetActive(false);
         statusStrip?.SetActive(false);
