@@ -134,6 +134,14 @@ function StreamingText({ fullText, isStreaming }: { fullText: string; isStreamin
     fullTextRef.current = fullText;
   });
 
+  // When streaming ends, snap to full length immediately so the cursor
+  // doesn't linger while the interval catches up character-by-character.
+  useEffect(() => {
+    if (!isStreaming) {
+      setDisplayed(fullTextRef.current.length);
+    }
+  }, [isStreaming]);
+
   useEffect(() => {
     const id = setInterval(() => {
       setDisplayed((prev) => {
@@ -506,7 +514,17 @@ export function RoomPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const token = localStorage.getItem('ai_dm_token') ?? '';
-  const playerName = user?.name ?? '';
+  // Auth is optional — unauthenticated users play as guests.
+  // Use a stable guest name stored in sessionStorage so it persists across
+  // reconnects within the same tab but doesn't bleed into other sessions.
+  const playerName = user?.name ?? (() => {
+    const key = 'ai_dm_guest_name';
+    const stored = sessionStorage.getItem(key);
+    if (stored) return stored;
+    const generated = `Guest_${Math.random().toString(36).slice(2, 7)}`;
+    sessionStorage.setItem(key, generated);
+    return generated;
+  })();
 
   const {
     messages, players, clues, connected, progress, truth, puzzle, error,
@@ -589,14 +607,6 @@ export function RoomPage() {
     setTimeout(() => privateEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   }
 
-  if (!playerName) {
-    return (
-      <div className="lobby-screen" style={{ textAlign: 'center', paddingTop: 80 }}>
-        <p className="error-text">{t('room.no_player_name')}</p>
-        <button className="btn btn-primary" onClick={() => navigate('/')}>{t('room.back_lobby')}</button>
-      </div>
-    );
-  }
 
   // Turtle soup game over
   if (gameType === 'turtle_soup' && truth) {

@@ -453,111 +453,119 @@ async def _handle_reconstruction_answer(room: Room, player_id: str, player_name:
     if not questions:
         return
 
-    q_index = room._reconstruction_q_index
-    if q_index >= len(questions):
-        return  # all questions already answered
-
-    current_q = questions[q_index]
-    player_answer = (data.get("answer") or "").strip()
-    if not player_answer:
-        return
-
-    lang = getattr(room, "language", "zh")
-    total = len(questions)
-
-    # Echo player's answer as a player_message
-    answer_echo: dict[str, Any] = {
-        "type": "player_message",
-        "player_name": player_name,
-        "text": player_answer,
-        "timestamp": time.time(),
-    }
-    room.message_history.append(answer_echo)
-    await room.broadcast(answer_echo)
-
-    # Score the answer
+    # Hold the lock for the entire question-answer cycle to prevent two concurrent
+    # answers from double-advancing q_index or firing reconstruction_complete twice.
+    # The lock is released BEFORE asyncio.sleep + _advance_mm_phase to avoid
+    # blocking all player messages for 3+ seconds at end of reconstruction.
+    advance_to_reveal = False
     async with room._lock:
+        q_index = room._reconstruction_q_index
+        if q_index >= len(questions):
+            return  # all questions already answered
+
+        current_q = questions[q_index]
+        player_answer = (data.get("answer") or "").strip()
+        if not player_answer:
+            return
+
+        lang = getattr(room, "language", "zh")
+        total = len(questions)
+
+        # Echo player's answer as a player_message
+        answer_echo: dict[str, Any] = {
+            "type": "player_message",
+            "player_name": player_name,
+            "text": player_answer,
+            "timestamp": time.time(),
+        }
+        room.message_history.append(answer_echo)
+        await room.broadcast(answer_echo)
+
+        # Score the answer
         result = await room.orchestrator.score_reconstruction_answer(player_answer, current_q.answer)
 
-    score = 2 if result == "correct" else (1 if result == "partial" else 0)
-    room._reconstruction_score += score
-    room._reconstruction_answers.append(
-        {
-            "q_id": current_q.id,
-            "player_name": player_name,
-            "answer": player_answer,
+        score = 2 if result == "correct" else (1 if result == "partial" else 0)
+        room._reconstruction_score += score
+        room._reconstruction_answers.append(
+            {
+                "q_id": current_q.id,
+                "player_name": player_name,
+                "answer": player_answer,
+                "result": result,
+                "score": score,
+            }
+        )
+
+        # Build result text
+        if result == "correct":
+            if lang == "en":
+                result_text = f"✓ Correct! +2 points. Reference: {current_q.answer}"
+            else:
+                result_text = f"✓ 正确！+2分。参考答案：{current_q.answer}"
+        elif result == "partial":
+            if lang == "en":
+                result_text = f"△ Partially correct. +1 point. Reference: {current_q.answer}"
+            else:
+                result_text = f"△ 部分正确。+1分。参考答案：{current_q.answer}"
+        else:
+            if lang == "en":
+                result_text = f"✗ Not quite. +0 points. Reference: {current_q.answer}"
+            else:
+                result_text = f"✗ 还差一些。+0分。参考答案：{current_q.answer}"
+
+        result_msg: dict[str, Any] = {
+            "type": "reconstruction_result",
+            "question_id": current_q.id,
+            "index": q_index,
             "result": result,
             "score": score,
-        }
-    )
-
-    # Build result text
-    if result == "correct":
-        if lang == "en":
-            result_text = f"✓ Correct! +2 points. Reference: {current_q.answer}"
-        else:
-            result_text = f"✓ 正确！+2分。参考答案：{current_q.answer}"
-    elif result == "partial":
-        if lang == "en":
-            result_text = f"△ Partially correct. +1 point. Reference: {current_q.answer}"
-        else:
-            result_text = f"△ 部分正确。+1分。参考答案：{current_q.answer}"
-    else:
-        if lang == "en":
-            result_text = f"✗ Not quite. +0 points. Reference: {current_q.answer}"
-        else:
-            result_text = f"✗ 还差一些。+0分。参考答案：{current_q.answer}"
-
-    result_msg: dict[str, Any] = {
-        "type": "reconstruction_result",
-        "question_id": current_q.id,
-        "index": q_index,
-        "result": result,
-        "score": score,
-        "total_score": room._reconstruction_score,
-        "text": result_text,
-        "timestamp": time.time(),
-    }
-    room.message_history.append(result_msg)
-    await room.broadcast(result_msg)
-
-    # Advance to next question or finish
-    next_index = q_index + 1
-    room._reconstruction_q_index = next_index
-
-    if next_index < len(questions):
-        next_q = questions[next_index]
-        next_q_msg: dict[str, Any] = {
-            "type": "reconstruction_question",
-            "index": next_index,
-            "total": total,
-            "question_id": next_q.id,
-            "question": next_q.question,
-            "timestamp": time.time(),
-        }
-        room.message_history.append(next_q_msg)
-        await room.broadcast(next_q_msg)
-    else:
-        # All questions answered — compute final score and advance to reveal
-        max_score = total * 2
-        pct = int(room._reconstruction_score / max_score * 100) if max_score > 0 else 0
-        if lang == "en":
-            done_text = f"All questions answered! Final score: {room._reconstruction_score}/{max_score} ({pct}%). Revealing the full truth now…"
-        else:
-            done_text = f"所有问题已回答完毕！最终得分：{room._reconstruction_score}/{max_score}（{pct}%）。即将揭晓完整真相……"
-
-        done_msg: dict[str, Any] = {
-            "type": "reconstruction_complete",
             "total_score": room._reconstruction_score,
-            "max_score": max_score,
-            "pct": pct,
-            "text": done_text,
+            "text": result_text,
             "timestamp": time.time(),
         }
-        room.message_history.append(done_msg)
-        await room.broadcast(done_msg)
+        room.message_history.append(result_msg)
+        await room.broadcast(result_msg)
 
-        # Auto-advance to reveal after a brief pause
+        # Advance to next question or finish
+        next_index = q_index + 1
+        room._reconstruction_q_index = next_index
+
+        if next_index < len(questions):
+            next_q = questions[next_index]
+            next_q_msg: dict[str, Any] = {
+                "type": "reconstruction_question",
+                "index": next_index,
+                "total": total,
+                "question_id": next_q.id,
+                "question": next_q.question,
+                "timestamp": time.time(),
+            }
+            room.message_history.append(next_q_msg)
+            await room.broadcast(next_q_msg)
+        else:
+            # All questions answered — compute final score and advance to reveal
+            max_score = total * 2
+            pct = int(room._reconstruction_score / max_score * 100) if max_score > 0 else 0
+            if lang == "en":
+                done_text = f"All questions answered! Final score: {room._reconstruction_score}/{max_score} ({pct}%). Revealing the full truth now…"
+            else:
+                done_text = f"所有问题已回答完毕！最终得分：{room._reconstruction_score}/{max_score}（{pct}%）。即将揭晓完整真相……"
+
+            done_msg: dict[str, Any] = {
+                "type": "reconstruction_complete",
+                "total_score": room._reconstruction_score,
+                "max_score": max_score,
+                "pct": pct,
+                "text": done_text,
+                "timestamp": time.time(),
+            }
+            room.message_history.append(done_msg)
+            await room.broadcast(done_msg)
+            advance_to_reveal = True
+
+    # Phase advance happens outside the lock so player messages aren't blocked
+    # during the 3-second pause or the LLM-backed reveal narration.
+    if advance_to_reveal:
         await asyncio.sleep(3)
         await _advance_mm_phase(room)
 
@@ -595,31 +603,33 @@ async def _handle_mm_vote(room: Room, player_id: str, player_name: str, data: di
             culprit_id=room.script.truth.culprit,
         )
 
-    try:
-        room.voting.cast_vote(player_id, target)
-    except VoteError as exc:
-        await room.send_to(player_id, {"type": "error", "text": str(exc)})
-        return
+    # Lock the entire cast + count + resolve sequence so concurrent votes from
+    # multiple players don't produce stale counts or double-resolve.
+    async with room._lock:
+        try:
+            room.voting.cast_vote(player_id, target)
+        except VoteError as exc:
+            await room.send_to(player_id, {"type": "error", "text": str(exc)})
+            return
 
-    count = room.voting.vote_count()
-    total = len(room.players)
+        count = room.voting.vote_count()
+        total = len(room.players)
 
-    # Anonymous broadcast
-    _vc_lang = getattr(room, "language", "zh")
-    _vc_text = f"Someone voted ({count}/{total} voted)" if _vc_lang == "en" else f"有人投票了（{count}/{total} 人已投票）"
-    vote_cast_msg: dict[str, Any] = {
-        "type": "vote_cast",
-        "text": _vc_text,
-        "count": count,
-        "total": total,
-        "timestamp": time.time(),
-    }
-    room.message_history.append(vote_cast_msg)
-    await room.broadcast(vote_cast_msg)
+        # Anonymous broadcast
+        _vc_lang = getattr(room, "language", "zh")
+        _vc_text = f"Someone voted ({count}/{total} voted)" if _vc_lang == "en" else f"有人投票了（{count}/{total} 人已投票）"
+        vote_cast_msg: dict[str, Any] = {
+            "type": "vote_cast",
+            "text": _vc_text,
+            "count": count,
+            "total": total,
+            "timestamp": time.time(),
+        }
+        room.message_history.append(vote_cast_msg)
+        await room.broadcast(vote_cast_msg)
 
-    # All voted → tally and advance
-    if room.voting.all_voted():
-        await _resolve_mm_votes(room)
+        if room.voting.all_voted() and not room.voting.is_resolved():
+            await _resolve_mm_votes(room)
 
 
 async def _resolve_mm_votes(room: Room) -> None:
@@ -1283,10 +1293,10 @@ async def websocket_endpoint(
                     "question": current_q.question,
                     "timestamp": time.time(),
                 })
-        else:
-            # Turtle soup: deliver private clues
-            assert room.game_session is not None
-            assert room.puzzle is not None
+    else:
+        # Turtle soup reconnect: re-deliver private clues (not stored in message_history,
+        # so they are not replayed via the history replay above).
+        if room.game_session is not None and room.puzzle is not None:
             player_slot = room.game_session.player_slot_map.get(player_id, "")
             private_frags = room.puzzle.private_clues.get(player_slot, [])
             if private_frags:

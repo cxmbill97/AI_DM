@@ -34,20 +34,51 @@ final class WebSocketService: ObservableObject {
         self.roomId = roomId
         self.token = token.isEmpty ? Self.stableGuestToken() : token
         self.retryCount = 0
+        // Reset the stream so the caller always gets a fresh for-await sequence.
+        // This is safe here because we're not yet connected — no active consumer exists.
+        resetStream()
         DebugLog.log("WS", "connect() roomId=\(roomId) token=\(self.token.prefix(20))...")
         openConnection()
     }
 
     private static func stableGuestToken() -> String {
-        let key = "ws_guest_stable_id"
-        let stored = UserDefaults.standard.string(forKey: key) ?? ""
-        let guestId: String
-        if stored.count >= 12 {
-            guestId = stored
-        } else {
-            guestId = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        // Store in Keychain so it persists across reinstalls and is not iCloud-backed.
+        // Using a dedicated Keychain entry separate from the JWT token.
+        let service = "com.aidm.AIDungeonMaster"
+        let account = "ws_guest_stable_id"
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: account,
+            kSecReturnData: true,
+            kSecMatchLimit: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        if SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+           let data = result as? Data,
+           let stored = String(data: data, encoding: .utf8),
+           stored.count >= 12 {
+            return "guest:\(stored)"
+        }
+        // Generate and save a new guest ID.
+        let guestId = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        let saveQuery: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: account,
+            kSecValueData: Data(guestId.utf8),
+        ]
+        SecItemDelete(saveQuery as CFDictionary)
+        SecItemAdd(saveQuery as CFDictionary, nil)
+
+        #if DEBUG
+        // Simulator Keychain may fail without code signing — fall back to UserDefaults in DEBUG
+        if SecItemCopyMatching(query as CFDictionary, &result) != errSecSuccess {
+            let key = "ws_guest_stable_id"
             UserDefaults.standard.set(guestId, forKey: key)
         }
+        #endif
+
         return "guest:\(guestId)"
     }
 
@@ -68,7 +99,8 @@ final class WebSocketService: ObservableObject {
         DebugLog.log("WS", "openConnection → \(urlString)")
         task = URLSession.shared.webSocketTask(with: url)
         task?.resume()
-        isConnected = true
+        // isConnected is set to true on first successful receive in listen(),
+        // not here — the handshake is asynchronous and the server may reject the connection.
         reconnecting = false
         listen(connectionId: connId)
         startPingLoop()
@@ -98,12 +130,19 @@ final class WebSocketService: ObservableObject {
                 return
             }
             DebugLog.log("WS", "listen loop STARTED connId=\(connectionId.uuidString.prefix(8))")
+            var firstMessage = true
             do {
                 while !Task.isCancelled, connectionId == self.currentConnectionId {
                     let msg = try await ws.receive()
                     guard connectionId == self.currentConnectionId else {
                         DebugLog.log("WS", "connectionId rotated, exiting listen loop")
                         break
+                    }
+                    if firstMessage {
+                        // Handshake confirmed — server accepted the connection.
+                        firstMessage = false
+                        await MainActor.run { self.isConnected = true }
+                        DebugLog.log("WS", "first message received → isConnected = true")
                     }
                     if case .string(let text) = msg {
                         DebugLog.log("WS", "RAW ← \(String(text.prefix(150)))")
@@ -173,7 +212,10 @@ final class WebSocketService: ObservableObject {
         task = nil
         isConnected = false
         reconnecting = false
+        // Finish the current stream so any active for-await consumer exits cleanly.
+        // Do NOT call resetStream() here — that would orphan the new stream with no consumer.
+        // connect() calls resetStream() at the start of the next connection.
         continuation?.finish()
-        resetStream()
+        continuation = nil
     }
 }

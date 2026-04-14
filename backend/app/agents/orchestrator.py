@@ -460,7 +460,7 @@ class AgentOrchestrator:
         )
         fallback_text = _REGENERATION_FALLBACK_EN if self._language == "en" else _REGENERATION_FALLBACK_ZH
 
-        trace_dict = dataclasses.asdict(trace)
+        trace_dict = trace.to_dict()
         if result["safe"]:
             logger.info("[ORCH] safety pass → dm_stream_end (safe)")
             yield {

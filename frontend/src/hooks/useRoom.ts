@@ -257,6 +257,10 @@ export function useRoom(roomId: string, token: string) {
   const mountedRef = useRef(true);
   // Tracks the streamId of the currently-streaming DM message
   const streamingIdRef = useRef<string | null>(null);
+  // Keep token in a ref so changes don't invalidate the connect callback and
+  // tear down a live WebSocket mid-game.
+  const tokenRef = useRef(token);
+  useEffect(() => { tokenRef.current = token; }, [token]);
 
   // Note: mmTimeRemaining is the server-authoritative initial value for the current phase.
   // PhaseBar.tsx handles its own client-side countdown from this seed — no duplicate interval here.
@@ -279,7 +283,7 @@ export function useRoom(roomId: string, token: string) {
     // HTTPS (ngrok / cloudflare tunnel). Relative WebSocket URLs are non-standard
     // and silently break in some browsers when the page protocol is https:.
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}?token=${encodeURIComponent(token)}`;
+    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}?token=${encodeURIComponent(tokenRef.current)}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -666,6 +670,15 @@ export function useRoom(roomId: string, token: string) {
         return;
       }
 
+      // ---- Lobby: game started by host ----
+      // The server broadcasts this when POST /api/rooms/{id}/start is called.
+      // A room_snapshot follows immediately, which fully restores game state.
+      // We just need to acknowledge it so non-host players exit the waiting UI.
+      if (type === 'game_started') {
+        retriesRef.current = 0;
+        return;
+      }
+
       // ---- Reconstruction: all questions done ----
       if (type === 'reconstruction_complete') {
         const complete: ReconstructionComplete = {
@@ -700,7 +713,7 @@ export function useRoom(roomId: string, token: string) {
         setError(t('room.disconnect_error'));
       }
     };
-  }, [roomId, token, appendMessage, addClue]);
+  }, [roomId, appendMessage, addClue]);
 
   useEffect(() => {
     mountedRef.current = true;

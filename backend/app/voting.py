@@ -98,6 +98,10 @@ class VotingModule:
             return set(self._runoff_votes.keys()) == self._player_ids
         return set(self._votes.keys()) == self._player_ids
 
+    def is_resolved(self) -> bool:
+        """Return True if resolve() has already been called and a result is recorded."""
+        return self.status == VoteStatus.CLOSED
+
     def resolve(self) -> VoteResult:
         """Tally votes and determine the outcome.
 

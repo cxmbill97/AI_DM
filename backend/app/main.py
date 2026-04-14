@@ -161,9 +161,16 @@ async def auth_config() -> dict:
     return {"google": bool(settings.google_client_id), "dev": not bool(settings.google_client_id)}
 
 
+def _require_dev_mode() -> None:
+    """Raise 404 if Google OAuth is configured — dev login is only allowed when OAuth is absent."""
+    if settings.google_client_id:
+        raise HTTPException(status_code=404, detail="Not found")
+
+
 @app.get("/auth/dev-login")
 async def auth_dev_login(name: str = "Dev User") -> RedirectResponse:
-    """Dev-only login bypass. Always available in development; blocked in production (no JWT_SECRET set)."""
+    """Dev-only login bypass. Disabled when GOOGLE_CLIENT_ID is set."""
+    _require_dev_mode()
     user = upsert_user(
         provider_sub=f"dev:{name}",
         name=name,
@@ -176,7 +183,8 @@ async def auth_dev_login(name: str = "Dev User") -> RedirectResponse:
 
 @app.get("/auth/dev-login/mobile")
 async def auth_dev_login_mobile(name: str = "Dev User") -> RedirectResponse:
-    """Dev-only mobile login bypass — redirects to aidm:// deep link."""
+    """Dev-only mobile login bypass — redirects to aidm:// deep link. Disabled when GOOGLE_CLIENT_ID is set."""
+    _require_dev_mode()
     user = upsert_user(
         provider_sub=f"dev:{name}",
         name=name,
@@ -693,7 +701,9 @@ async def start_room(room_id: str, user: dict | None = Depends(_optional_user)) 
         raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
     if room.started:
         return {"ok": True, "already_started": True}
-    # Verify the caller is the host (if authenticated)
+    # Verify the caller is the host.
+    # Authenticated host: match by user id stored at room creation.
+    # Guest host (no host_user_id): no auth check possible here — WS join order enforces host_player_id.
     if user and room.host_user_id and str(user["id"]) != room.host_user_id:
         raise HTTPException(status_code=403, detail="Only the host can start the game")
     # Phase 0: require at least 2 players for turn-mode games
@@ -728,6 +738,7 @@ async def patch_room(room_id: str, body: PatchRoomRequest, user: dict | None = D
     room = room_manager.get_room(room_id)
     if room is None:
         raise HTTPException(status_code=404, detail=f"Room not found: {room_id!r}")
+    # Same guest-host caveat as POST /start: only enforced when host is authenticated.
     if user and room.host_user_id and str(user["id"]) != room.host_user_id:
         raise HTTPException(status_code=403, detail="Only the host can modify room settings")
     if body.is_public is not None:
@@ -901,6 +912,8 @@ _ADMIN_USER_IDS: set[str] = set(filter(None, os.environ.get("ADMIN_USER_IDS", ""
 
 
 def _require_admin(user: dict = Depends(_require_user)) -> dict:
+    # When ADMIN_USER_IDS is not set, all authenticated users have admin access (dev behaviour).
+    # In production, set ADMIN_USER_IDS=id1,id2 to restrict access.
     if _ADMIN_USER_IDS and user["id"] not in _ADMIN_USER_IDS:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user

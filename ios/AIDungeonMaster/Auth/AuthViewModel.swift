@@ -8,6 +8,10 @@ final class AuthViewModel: NSObject, ObservableObject {
     @Published var error: String?
     @Published var debugRoomId: String? = nil
 
+    // Strong reference — ASWebAuthenticationSession must be retained by the caller
+    // or ARC will deallocate it before the OAuth flow completes.
+    private var webAuthSession: ASWebAuthenticationSession?
+
     override init() {
         super.init()
         #if DEBUG
@@ -90,6 +94,7 @@ final class AuthViewModel: NSObject, ObservableObject {
             callbackURLScheme: "aidm"
         ) { [weak self] callbackURL, sessionError in
             guard let self else { return }
+            self.webAuthSession = nil  // release after completion
             if let sessionError {
                 let nsError = sessionError as NSError
                 if nsError.code != ASWebAuthenticationSessionError.canceledLogin.rawValue {
@@ -102,6 +107,7 @@ final class AuthViewModel: NSObject, ObservableObject {
         }
         session.presentationContextProvider = self
         session.prefersEphemeralWebBrowserSession = false
+        webAuthSession = session  // retain so ARC doesn't deallocate before callback fires
         session.start()
     }
 

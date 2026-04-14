@@ -72,6 +72,7 @@ export function LobbyPage() {
   const [uploadScriptOpen, setUploadScriptOpen] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('ai_dm_theme') ?? 'dark');
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -126,20 +127,26 @@ export function LobbyPage() {
 
   async function handleCreateRoom(puzzleId?: string) {
     setBusy(true);
+    setCreateError(null);
     try {
       const { room_id } = await createRoom({ game_type: 'turtle_soup', puzzle_id: puzzleId, language: lang });
       const token = localStorage.getItem('ai_dm_token') ?? '';
       navigate(`/room/${room_id}`, { state: { token } });
-    } catch { /* ignore */ } finally { setBusy(false); }
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : 'Failed to create room. Is the server running?');
+    } finally { setBusy(false); }
   }
 
   async function handleCreateMMRoom(scriptId: string) {
     setBusy(true);
+    setCreateError(null);
     try {
       const { room_id } = await createRoom({ game_type: 'murder_mystery', script_id: scriptId, language: lang });
       const token = localStorage.getItem('ai_dm_token') ?? '';
       navigate(`/room/${room_id}`, { state: { token } });
-    } catch { /* ignore */ } finally { setBusy(false); }
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : 'Failed to create room. Is the server running?');
+    } finally { setBusy(false); }
   }
 
   async function handleLike(scriptId: string) {
@@ -259,6 +266,13 @@ export function LobbyPage() {
           <div className="join-strip-divider" />
           <span className="join-strip-hint">or browse below</span>
         </div>
+
+        {/* Room creation error */}
+        {createError && (
+          <div style={{ margin: '0 0 12px', padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, color: '#f87171', fontSize: 13 }}>
+            {createError}
+          </div>
+        )}
 
         {/* Section header */}
         <div className="section-hdr">
