@@ -443,9 +443,9 @@ public static class SceneSetupWizard
         var safe    = NewChild("SafeAreaPanel", canvas.gameObject);
         Stretch(safe.GetComponent<RectTransform>());
 
-        // Sky background
+        // Sky/garden background — warm amber-teal gradient (matches reference)
         var bgImg = safe.AddComponent<Image>();
-        bgImg.color = BgDark;
+        bgImg.color = new Color(0.64f, 0.82f, 0.76f); // soft teal-green like the shrine garden
 
         // Cherry blossom layer (behind everything)
         var blossomGO = NewChild("CherryBlossom", safe);
@@ -456,13 +456,41 @@ public static class SceneSetupWizard
         var content = NewChild("ContentArea", safe);
         Stretch(content.GetComponent<RectTransform>());
 
-        // Character art (left 40%) — loads character1.png if available, purple placeholder otherwise
+        // ── Announcement marquee bar (below top HUD) ─────────────────────────
+        var marqueeBg = NewChild("MarqueeBg", content);
+        var marqueeRT = marqueeBg.GetComponent<RectTransform>();
+        marqueeRT.anchorMin = new Vector2(0, 1); marqueeRT.anchorMax = new Vector2(1, 1);
+        marqueeRT.pivot = new Vector2(0.5f, 1f);
+        marqueeRT.sizeDelta = new Vector2(0, 36);
+        marqueeRT.anchoredPosition = new Vector2(0, -70); // just below top HUD
+        marqueeBg.AddComponent<Image>().color = new Color(0.10f, 0.07f, 0.20f, 0.80f);
+
+        // Mask so text clips at edges
+        var maskGO = NewChild("MarqueeMask", marqueeBg);
+        Stretch(maskGO.GetComponent<RectTransform>());
+        maskGO.AddComponent<Image>().color = Color.clear;
+        maskGO.AddComponent<Mask>().showMaskGraphic = false;
+
+        var marqueeTextGO = NewChild("AnnouncementText", maskGO);
+        var marqueeTextRT = marqueeTextGO.GetComponent<RectTransform>();
+        marqueeTextRT.anchorMin = new Vector2(0, 0); marqueeTextRT.anchorMax = new Vector2(0, 1);
+        marqueeTextRT.pivot = new Vector2(0, 0.5f);
+        marqueeTextRT.sizeDelta = new Vector2(1200, 0);
+        marqueeTextRT.anchoredPosition = Vector2.zero;
+        var marqueeText = marqueeTextGO.AddComponent<TextMeshProUGUI>();
+        marqueeText.text      = "New Event: Shrine Festival!  New Pet: Nine-Tailed Fox  Limited Puzzle: The Vanishing Magistrate";
+        marqueeText.fontSize  = 22;
+        marqueeText.color     = new Color(1f, 0.90f, 0.55f);
+        marqueeText.alignment = TextAlignmentOptions.MidlineLeft;
+
+        // Character art — center/right, full height (anchor 0.05..0.82 wide, bottom-aligned)
         var charRoot = NewChild("CharacterRoot", content);
         var charRT   = charRoot.GetComponent<RectTransform>();
-        charRT.anchorMin = new Vector2(0, 0);
-        charRT.anchorMax = new Vector2(0.42f, 1f);
+        charRT.anchorMin = new Vector2(0.05f, 0f);
+        charRT.anchorMax = new Vector2(0.82f, 1f);
         charRT.offsetMin = charRT.offsetMax = Vector2.zero;
         var charImg  = charRoot.AddComponent<Image>();
+        charImg.raycastTarget = false; // character doesn't block button clicks
 
         const string charSpritePath = "Assets/Art/MainMenu/Character/character1.png";
         var charSprite = AssetDatabase.LoadAssetAtPath<Sprite>(charSpritePath);
@@ -480,7 +508,18 @@ public static class SceneSetupWizard
             Debug.LogWarning("[AI DM Setup] Character sprite not found at " + charSpritePath + " — using colour placeholder");
         }
 
-        // Top HUD bar
+        // Pet companion — bottom-right corner, small (~120×120)
+        var petGO  = NewChild("PetRoot", content);
+        var petRT  = petGO.GetComponent<RectTransform>();
+        petRT.anchorMin = new Vector2(0.72f, 0f);
+        petRT.anchorMax = new Vector2(0.72f, 0f);
+        petRT.pivot     = new Vector2(0.5f, 0f);
+        petRT.sizeDelta = new Vector2(130, 130);
+        petRT.anchoredPosition = new Vector2(0, 85); // just above bottom nav
+        var petImg = petGO.AddComponent<Image>();
+        petImg.color = new Color(1f, 1f, 1f, 0.85f); // white placeholder — swap with pet sprite
+
+        // Top HUD bar (70px, anchored top)
         var hud = NewChild("TopHUD", content);
         var hudRT = hud.GetComponent<RectTransform>();
         hudRT.anchorMin = new Vector2(0, 1); hudRT.anchorMax = new Vector2(1, 1);
@@ -488,21 +527,34 @@ public static class SceneSetupWizard
         hudRT.sizeDelta = new Vector2(0, 70);
         hudRT.anchoredPosition = Vector2.zero;
         var hudBg = hud.AddComponent<Image>();
-        hudBg.color = new Color(0.05f, 0.05f, 0.09f, 0.88f);
+        hudBg.color = new Color(0.07f, 0.04f, 0.14f, 0.82f);
 
-        var logoLbl  = MakeTMP("LogoLabel",       hud, "AI DM", 28, bold: true, color: Accent);
-        RectAt(logoLbl, 0.12f, 0.5f, 120, 45);
+        // Level badge (left)
+        var levelBadge = NewChild("LevelBadge", hud);
+        var lvlRT = levelBadge.GetComponent<RectTransform>();
+        lvlRT.anchorMin = lvlRT.anchorMax = new Vector2(0.06f, 0.5f);
+        lvlRT.pivot = new Vector2(0.5f, 0.5f);
+        lvlRT.sizeDelta = new Vector2(38, 38);
+        lvlRT.anchoredPosition = Vector2.zero;
+        levelBadge.AddComponent<Image>().color = new Color(0.56f, 0.27f, 0.68f); // purple badge
+        var lvlLbl = MakeTMP("LevelLabel", levelBadge, "3", 18, bold: true, color: Color.white);
+        Stretch(lvlLbl.GetComponent<RectTransform>());
 
-        var playerLbl = MakeTMP("PlayerNameLabel", hud, "Adventurer", 20, color: TextLight);
-        RectAt(playerLbl, 0.72f, 0.5f, 200, 35);
+        var playerLbl = MakeTMP("PlayerNameLabel", hud, "Adventurer", 18, color: TextLight);
+        RectAt(playerLbl, 0.20f, 0.5f, 160, 35);
 
-        var coinLbl  = MakeTMP("CoinLabel",        hud, "—",  20, color: Accent);
-        RectAt(coinLbl, 0.88f, 0.5f, 100, 35);
+        // Gold coins (center-right)
+        var coinLbl = MakeTMP("CoinLabel", hud, "0", 18, color: Accent);
+        RectAt(coinLbl, 0.60f, 0.5f, 110, 35);
+
+        // Gems (right of coins)
+        var gemLbl = MakeTMP("GemLabel", hud, "0", 18, color: new Color(0.4f, 0.8f, 1f));
+        RectAt(gemLbl, 0.78f, 0.5f, 90, 35);
 
         // Avatar bg circle
         var avatarGO  = NewChild("AvatarBg", hud);
         var avatarRT  = avatarGO.GetComponent<RectTransform>();
-        avatarRT.anchorMin = avatarRT.anchorMax = new Vector2(0.62f, 0.5f);
+        avatarRT.anchorMin = avatarRT.anchorMax = new Vector2(0.44f, 0.5f);
         avatarRT.pivot = new Vector2(0.5f, 0.5f);
         avatarRT.sizeDelta = new Vector2(44, 44);
         avatarRT.anchoredPosition = Vector2.zero;
@@ -513,33 +565,59 @@ public static class SceneSetupWizard
             bold: true, color: BgDark);
         Stretch(initLbl.GetComponent<RectTransform>());
 
-        // Right panel — three game mode buttons
+        // ── Game mode buttons — bottom-center, overlapping lower character area ──
+        // Two large wooden-panel buttons stacked, centered horizontally
         var btnPanel = NewChild("ButtonPanel", content);
         var btnPanelRT = btnPanel.GetComponent<RectTransform>();
-        btnPanelRT.anchorMin = new Vector2(0.52f, 0.3f);
-        btnPanelRT.anchorMax = new Vector2(0.96f, 0.85f);
+        btnPanelRT.anchorMin = new Vector2(0.05f, 0.12f);
+        btnPanelRT.anchorMax = new Vector2(0.95f, 0.42f);
         btnPanelRT.offsetMin = btnPanelRT.offsetMax = Vector2.zero;
 
-        var tsBtn  = MakeButton("TurtleSoupButton",    btnPanel, "Turtle Soup",
-                                ButtonNorm, TextLight, 22);
-        var mmBtn  = MakeButton("MurderMysteryButton", btnPanel, "Murder Mystery",
-                                ButtonNorm, TextLight, 22);
-        var flBtn  = MakeButton("FriendsLobbyButton",  btnPanel, "Friends / Lobby",
-                                ButtonNorm, TextLight, 22);
+        // Wooden panel background for the whole button area
+        var btnPanelBg = btnPanel.AddComponent<Image>();
+        btnPanelBg.color = new Color(0.32f, 0.16f, 0.06f, 0.72f); // dark wood brown
 
-        // Stack the three buttons vertically
-        LayoutButton(tsBtn,  btnPanelRT, 0.83f);
+        var tsBtn  = MakeButton("TurtleSoupButton",    btnPanel, "Turtle Soup",
+                                new Color(0.40f, 0.20f, 0.05f, 0.90f), TextLight, 24);
+        var mmBtn  = MakeButton("MurderMysteryButton", btnPanel, "Murder Mystery",
+                                new Color(0.40f, 0.20f, 0.05f, 0.90f), TextLight, 24);
+        var flBtn  = MakeButton("FriendsLobbyButton",  btnPanel, "Friends / Lobby",
+                                new Color(0.40f, 0.20f, 0.05f, 0.90f), TextLight, 20);
+
+        // Stack three buttons vertically inside btnPanel
+        LayoutButton(tsBtn,  btnPanelRT, 0.80f);
         LayoutButton(mmBtn,  btnPanelRT, 0.50f);
-        LayoutButton(flBtn,  btnPanelRT, 0.17f);
+        LayoutButton(flBtn,  btnPanelRT, 0.20f);
+
+        // ── Skill bubbles (optional decorative UI near character) ─────────────
+        var bubble1 = NewChild("SkillBubble1", content);
+        var bub1RT  = bubble1.GetComponent<RectTransform>();
+        bub1RT.anchorMin = bub1RT.anchorMax = new Vector2(0.08f, 0.55f);
+        bub1RT.sizeDelta = new Vector2(54, 54);
+        bub1RT.anchoredPosition = Vector2.zero;
+        bubble1.AddComponent<Image>().color = new Color(0.95f, 0.76f, 0.20f, 0.85f);
+
+        var bubble2 = NewChild("SkillBubble2", content);
+        var bub2RT  = bubble2.GetComponent<RectTransform>();
+        bub2RT.anchorMin = bub2RT.anchorMax = new Vector2(0.08f, 0.68f);
+        bub2RT.sizeDelta = new Vector2(54, 54);
+        bub2RT.anchoredPosition = Vector2.zero;
+        bubble2.AddComponent<Image>().color = new Color(0.30f, 0.75f, 0.90f, 0.85f);
 
         // MainMenuController
         var ctrl = content.AddComponent<MainMenuController>();
         SetField(ctrl, "characterRoot",       charRT);
         SetField(ctrl, "characterImage",      charImg);
+        SetField(ctrl, "petRoot",             petRT);
+        SetField(ctrl, "petImage",            petImg);
+        SetField(ctrl, "skillBubble1",        bub1RT);
+        SetField(ctrl, "skillBubble2",        bub2RT);
         SetField(ctrl, "playerNameLabel",     playerLbl.GetComponent<TMP_Text>());
         SetField(ctrl, "coinBalanceLabel",    coinLbl.GetComponent<TMP_Text>());
         SetField(ctrl, "playerAvatarBg",      avatarImg);
         SetField(ctrl, "playerInitialLabel",  initLbl.GetComponent<TMP_Text>());
+        SetField(ctrl, "announcementMarquee", marqueeText);
+        SetField(ctrl, "marqueeRect",         marqueeTextRT);
         SetField(ctrl, "turtleSoupButton",    tsBtn.GetComponent<Button>());
         SetField(ctrl, "murderMysteryButton", mmBtn.GetComponent<Button>());
         SetField(ctrl, "friendsLobbyButton",  flBtn.GetComponent<Button>());

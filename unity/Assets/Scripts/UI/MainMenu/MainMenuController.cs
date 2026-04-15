@@ -1,5 +1,5 @@
-// Mahjong Soul-style main menu — no DOTween dependency.
-// All animations use coroutines (character entrance, idle breath, parallax, button press).
+// Mystery Shrine main menu — Mahjong Soul-inspired home screen.
+// Character entrance, idle breath, parallax bg, game mode banners, pet companion.
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,20 +12,35 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private RectTransform characterRoot;
     [SerializeField] private Image         characterImage;
 
-    [Header("Top HUD")]
+    [Header("Pet Companion")]
+    [SerializeField] private RectTransform petRoot;
+    [SerializeField] private Image         petImage;
+
+    [Header("Skill Bubbles")]
+    [SerializeField] private RectTransform skillBubble1;
+    [SerializeField] private RectTransform skillBubble2;
+
+    [Header("Top HUD (legacy — now handled by TopHUD component)")]
     [SerializeField] private TMP_Text playerNameLabel;
     [SerializeField] private TMP_Text coinBalanceLabel;
     [SerializeField] private Image    playerAvatarBg;
     [SerializeField] private TMP_Text playerInitialLabel;
 
-    [Header("Game Buttons")]
-    [SerializeField] private Button   turtleSoupButton;
-    [SerializeField] private Button   murderMysteryButton;
-    [SerializeField] private Button   friendsLobbyButton;
+    [Header("Game Mode Banners")]
+    [SerializeField] private Button turtleSoupButton;
+    [SerializeField] private Button murderMysteryButton;
+    [SerializeField] private Button friendsLobbyButton;
+    [SerializeField] private Image  turtleSoupBannerBg;
+    [SerializeField] private Image  murderMysteryBannerBg;
 
     [Header("Parallax")]
     [SerializeField] private RectTransform[] parallaxLayers;
     [SerializeField] private float[]         parallaxSpeeds;
+
+    [Header("Announcement")]
+    [SerializeField] private TMP_Text announcementMarquee;
+    [SerializeField] private RectTransform marqueeRect;
+    [SerializeField] private float marqueeSpeed = 60f;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -38,6 +53,9 @@ public class MainMenuController : MonoBehaviour
         StartCoroutine(CharacterEntrance());
         StartCoroutine(IdleBreath());
         StartCoroutine(ParallaxLoop());
+        StartCoroutine(PetFloat());
+        StartCoroutine(SkillBubbleFloat());
+        if (marqueeRect != null) StartCoroutine(MarqueeScroll());
         HookButtonPressAnimations();
         LoadPlayerHUD().Forget();
     }
@@ -48,7 +66,6 @@ public class MainMenuController : MonoBehaviour
     {
         if (characterRoot == null) yield break;
 
-        // Start transparent and offset left
         var startPos = characterRoot.anchoredPosition;
         characterRoot.anchoredPosition = new Vector2(startPos.x - 120f, startPos.y);
         if (characterImage)
@@ -83,6 +100,67 @@ public class MainMenuController : MonoBehaviour
         {
             yield return ScaleTo(characterRoot, new Vector3(1f, 1.02f, 1f), 2f);
             yield return ScaleTo(characterRoot, Vector3.one, 2f);
+        }
+    }
+
+    private IEnumerator PetFloat()
+    {
+        if (petRoot == null) yield break;
+        var origin = petRoot.anchoredPosition;
+        float time = 0f;
+        while (petRoot != null)
+        {
+            time += Time.deltaTime;
+            float y = origin.y + Mathf.Sin(time * 1.5f) * 8f;
+            float x = origin.x + Mathf.Sin(time * 0.7f) * 4f;
+            petRoot.anchoredPosition = new Vector2(x, y);
+            yield return null;
+        }
+    }
+
+    private IEnumerator SkillBubbleFloat()
+    {
+        if (skillBubble1 == null && skillBubble2 == null) yield break;
+
+        Vector2 origin1 = skillBubble1 != null ? skillBubble1.anchoredPosition : Vector2.zero;
+        Vector2 origin2 = skillBubble2 != null ? skillBubble2.anchoredPosition : Vector2.zero;
+        float time = 0f;
+
+        while (true)
+        {
+            time += Time.deltaTime;
+            if (skillBubble1 != null)
+            {
+                float y = origin1.y + Mathf.Sin(time * 1.2f) * 6f;
+                skillBubble1.anchoredPosition = new Vector2(origin1.x, y);
+            }
+            if (skillBubble2 != null)
+            {
+                float y = origin2.y + Mathf.Sin(time * 1.2f + Mathf.PI) * 6f;
+                skillBubble2.anchoredPosition = new Vector2(origin2.x, y);
+            }
+            yield return null;
+        }
+    }
+
+    private IEnumerator MarqueeScroll()
+    {
+        if (marqueeRect == null || announcementMarquee == null) yield break;
+
+        var parent = marqueeRect.parent as RectTransform;
+        float parentW = parent != null ? parent.rect.width : 600f;
+        float textW = announcementMarquee.preferredWidth;
+
+        marqueeRect.anchoredPosition = new Vector2(parentW, marqueeRect.anchoredPosition.y);
+
+        while (true)
+        {
+            var pos = marqueeRect.anchoredPosition;
+            pos.x -= marqueeSpeed * Time.deltaTime;
+            if (pos.x < -(textW + 50f))
+                pos.x = parentW;
+            marqueeRect.anchoredPosition = pos;
+            yield return null;
         }
     }
 

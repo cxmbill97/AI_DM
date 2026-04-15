@@ -26,7 +26,18 @@ public class SceneLoader : MonoBehaviour
     public static void ClearData(string key)             => _sceneData.Remove(key);
 
     public static void LoadScene(string sceneName)
-        => Instance.StartCoroutine(Instance.LoadAsync(sceneName));
+    {
+        // Guard: don't reload the scene we're already on
+        if (SceneManager.GetActiveScene().name == sceneName) return;
+
+        if (Instance == null)
+        {
+            // Fallback: no Boot scene loaded — direct sync load
+            SceneManager.LoadScene(sceneName);
+            return;
+        }
+        Instance.StartCoroutine(Instance.LoadAsync(sceneName));
+    }
 
     /// Overload that accepts key-value pairs to store before loading.
     public static void LoadScene(string sceneName, params (string key, string value)[] data)
