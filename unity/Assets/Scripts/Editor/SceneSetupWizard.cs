@@ -456,14 +456,29 @@ public static class SceneSetupWizard
         var content = NewChild("ContentArea", safe);
         Stretch(content.GetComponent<RectTransform>());
 
-        // Character placeholder (left 40%)
+        // Character art (left 40%) — loads character1.png if available, purple placeholder otherwise
         var charRoot = NewChild("CharacterRoot", content);
         var charRT   = charRoot.GetComponent<RectTransform>();
         charRT.anchorMin = new Vector2(0, 0);
         charRT.anchorMax = new Vector2(0.42f, 1f);
         charRT.offsetMin = charRT.offsetMax = Vector2.zero;
         var charImg  = charRoot.AddComponent<Image>();
-        charImg.color = new Color(0.22f, 0.12f, 0.38f, 1f);  // dark purple silhouette placeholder
+
+        const string charSpritePath = "Assets/Art/MainMenu/Character/character1.png";
+        var charSprite = AssetDatabase.LoadAssetAtPath<Sprite>(charSpritePath);
+        if (charSprite != null)
+        {
+            charImg.sprite         = charSprite;
+            charImg.color          = Color.white;
+            charImg.type           = Image.Type.Simple;
+            charImg.preserveAspect = true;
+            Debug.Log("[AI DM Setup] Character sprite loaded: " + charSpritePath);
+        }
+        else
+        {
+            charImg.color = new Color(0.22f, 0.12f, 0.38f, 1f);  // dark purple placeholder
+            Debug.LogWarning("[AI DM Setup] Character sprite not found at " + charSpritePath + " — using colour placeholder");
+        }
 
         // Top HUD bar
         var hud = NewChild("TopHUD", content);
