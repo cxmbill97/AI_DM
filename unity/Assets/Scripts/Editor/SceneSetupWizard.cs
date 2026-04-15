@@ -439,197 +439,399 @@ public static class SceneSetupWizard
         var scene = OpenScene("MainMenu");
         ClearScene();
 
-        var canvas  = MakeCanvas("Canvas");
-        var safe    = NewChild("SafeAreaPanel", canvas.gameObject);
+        var canvas = MakeCanvas("Canvas");
+        var safe   = NewChild("SafeAreaPanel", canvas.gameObject);
         Stretch(safe.GetComponent<RectTransform>());
 
-        // Sky/garden background — warm amber-teal gradient (matches reference)
-        var bgImg = safe.AddComponent<Image>();
-        bgImg.color = new Color(0.64f, 0.82f, 0.76f); // soft teal-green like the shrine garden
+        // ── BACKGROUND LAYERS (back → front) ─────────────────────────────────
+        // Layer 0: Sky (swap Image.sprite with real shrine background art later)
+        var bgSky = safe.AddComponent<Image>();
+        bgSky.color = new Color(0.47f, 0.72f, 0.88f); // daytime sky blue
 
-        // Cherry blossom layer (behind everything)
+        // Layer 1: Midground — shrine/forest silhouette strip (10%–55%)
+        // Replace Image.sprite with a layered environment illustration
+        var bgMid = NewChild("BgMidground", safe);
+        var bgMidRT = bgMid.GetComponent<RectTransform>();
+        bgMidRT.anchorMin = new Vector2(0f, 0.08f);
+        bgMidRT.anchorMax = new Vector2(1f, 0.58f);
+        bgMidRT.offsetMin = bgMidRT.offsetMax = Vector2.zero;
+        bgMid.AddComponent<Image>().color = new Color(0.14f, 0.28f, 0.14f, 0.50f);
+
+        // Layer 2: Ground strip (bottom 10%)
+        var bgGround = NewChild("BgGround", safe);
+        var bgGroundRT = bgGround.GetComponent<RectTransform>();
+        bgGroundRT.anchorMin = Vector2.zero;
+        bgGroundRT.anchorMax = new Vector2(1f, 0.12f);
+        bgGroundRT.offsetMin = bgGroundRT.offsetMax = Vector2.zero;
+        bgGround.AddComponent<Image>().color = new Color(0.16f, 0.30f, 0.12f);
+
+        // Layer 3: Cherry blossom particles
         var blossomGO = NewChild("CherryBlossom", safe);
-        blossomGO.transform.SetSiblingIndex(0);
         blossomGO.AddComponent<CherryBlossomSystem>();
 
-        // Content area
+        // Content area (UI elements above background)
         var content = NewChild("ContentArea", safe);
         Stretch(content.GetComponent<RectTransform>());
 
-        // ── Announcement marquee bar (below top HUD) ─────────────────────────
-        var marqueeBg = NewChild("MarqueeBg", content);
-        var marqueeRT = marqueeBg.GetComponent<RectTransform>();
-        marqueeRT.anchorMin = new Vector2(0, 1); marqueeRT.anchorMax = new Vector2(1, 1);
-        marqueeRT.pivot = new Vector2(0.5f, 1f);
-        marqueeRT.sizeDelta = new Vector2(0, 36);
-        marqueeRT.anchoredPosition = new Vector2(0, -70); // just below top HUD
-        marqueeBg.AddComponent<Image>().color = new Color(0.10f, 0.07f, 0.20f, 0.80f);
-
-        // Mask so text clips at edges
-        var maskGO = NewChild("MarqueeMask", marqueeBg);
-        Stretch(maskGO.GetComponent<RectTransform>());
-        maskGO.AddComponent<Image>().color = Color.clear;
-        maskGO.AddComponent<Mask>().showMaskGraphic = false;
-
-        var marqueeTextGO = NewChild("AnnouncementText", maskGO);
-        var marqueeTextRT = marqueeTextGO.GetComponent<RectTransform>();
-        marqueeTextRT.anchorMin = new Vector2(0, 0); marqueeTextRT.anchorMax = new Vector2(0, 1);
-        marqueeTextRT.pivot = new Vector2(0, 0.5f);
-        marqueeTextRT.sizeDelta = new Vector2(1200, 0);
-        marqueeTextRT.anchoredPosition = Vector2.zero;
-        var marqueeText = marqueeTextGO.AddComponent<TextMeshProUGUI>();
-        marqueeText.text      = "New Event: Shrine Festival!  New Pet: Nine-Tailed Fox  Limited Puzzle: The Vanishing Magistrate";
-        marqueeText.fontSize  = 22;
-        marqueeText.color     = new Color(1f, 0.90f, 0.55f);
-        marqueeText.alignment = TextAlignmentOptions.MidlineLeft;
-
-        // Character art — center/right, full height (anchor 0.05..0.82 wide, bottom-aligned)
+        // ── CHARACTER (center, full height, behind buttons) ──────────────────
         var charRoot = NewChild("CharacterRoot", content);
         var charRT   = charRoot.GetComponent<RectTransform>();
         charRT.anchorMin = new Vector2(0.05f, 0f);
-        charRT.anchorMax = new Vector2(0.82f, 1f);
+        charRT.anchorMax = new Vector2(0.85f, 1f);
         charRT.offsetMin = charRT.offsetMax = Vector2.zero;
-        var charImg  = charRoot.AddComponent<Image>();
-        charImg.raycastTarget = false; // character doesn't block button clicks
+        var charImg = charRoot.AddComponent<Image>();
+        charImg.raycastTarget = false;
 
         const string charSpritePath = "Assets/Art/MainMenu/Character/character1.png";
         var charSprite = AssetDatabase.LoadAssetAtPath<Sprite>(charSpritePath);
         if (charSprite != null)
         {
-            charImg.sprite         = charSprite;
-            charImg.color          = Color.white;
-            charImg.type           = Image.Type.Simple;
-            charImg.preserveAspect = true;
-            Debug.Log("[AI DM Setup] Character sprite loaded: " + charSpritePath);
+            charImg.sprite = charSprite; charImg.color = Color.white;
+            charImg.type = Image.Type.Simple; charImg.preserveAspect = true;
+            Debug.Log("[AI DM Setup] Character sprite loaded.");
         }
         else
         {
-            charImg.color = new Color(0.22f, 0.12f, 0.38f, 1f);  // dark purple placeholder
-            Debug.LogWarning("[AI DM Setup] Character sprite not found at " + charSpritePath + " — using colour placeholder");
+            charImg.color = new Color(0.22f, 0.12f, 0.38f);
+            Debug.LogWarning("[AI DM Setup] Character sprite not found — using placeholder.");
         }
 
-        // Pet companion — bottom-right corner, small (~120×120)
-        var petGO  = NewChild("PetRoot", content);
-        var petRT  = petGO.GetComponent<RectTransform>();
-        petRT.anchorMin = new Vector2(0.72f, 0f);
-        petRT.anchorMax = new Vector2(0.72f, 0f);
-        petRT.pivot     = new Vector2(0.5f, 0f);
-        petRT.sizeDelta = new Vector2(130, 130);
-        petRT.anchoredPosition = new Vector2(0, 85); // just above bottom nav
+        // ── PET COMPANION — bottom-right above nav bar ────────────────────────
+        var petGO = NewChild("PetRoot", content);
+        var petRT = petGO.GetComponent<RectTransform>();
+        petRT.anchorMin = petRT.anchorMax = new Vector2(0.80f, 0f);
+        petRT.pivot = new Vector2(0.5f, 0f);
+        petRT.sizeDelta = new Vector2(110, 110);
+        petRT.anchoredPosition = new Vector2(0, 82);
         var petImg = petGO.AddComponent<Image>();
-        petImg.color = new Color(1f, 1f, 1f, 0.85f); // white placeholder — swap with pet sprite
+        petImg.color = new Color(1f, 1f, 1f, 0.80f); // swap sprite: pet icon
 
-        // Top HUD bar (70px, anchored top)
-        var hud = NewChild("TopHUD", content);
+        // ── TOP HUD BAR (72px) ────────────────────────────────────────────────
+        var hud   = NewChild("TopHUD", content);
         var hudRT = hud.GetComponent<RectTransform>();
         hudRT.anchorMin = new Vector2(0, 1); hudRT.anchorMax = new Vector2(1, 1);
         hudRT.pivot = new Vector2(0.5f, 1f);
-        hudRT.sizeDelta = new Vector2(0, 70);
+        hudRT.sizeDelta = new Vector2(0, 72);
         hudRT.anchoredPosition = Vector2.zero;
-        var hudBg = hud.AddComponent<Image>();
-        hudBg.color = new Color(0.07f, 0.04f, 0.14f, 0.82f);
+        hud.AddComponent<Image>().color = new Color(0.06f, 0.04f, 0.14f, 0.85f);
 
-        // Level badge (left)
-        var levelBadge = NewChild("LevelBadge", hud);
-        var lvlRT = levelBadge.GetComponent<RectTransform>();
-        lvlRT.anchorMin = lvlRT.anchorMax = new Vector2(0.06f, 0.5f);
-        lvlRT.pivot = new Vector2(0.5f, 0.5f);
-        lvlRT.sizeDelta = new Vector2(38, 38);
-        lvlRT.anchoredPosition = Vector2.zero;
-        levelBadge.AddComponent<Image>().color = new Color(0.56f, 0.27f, 0.68f); // purple badge
-        var lvlLbl = MakeTMP("LevelLabel", levelBadge, "3", 18, bold: true, color: Color.white);
-        Stretch(lvlLbl.GetComponent<RectTransform>());
+        // Ornate avatar frame (left) — outer gold ring + inner colored circle
+        var afGO = NewChild("AvatarFrame", hud);
+        var afRT = afGO.GetComponent<RectTransform>();
+        afRT.anchorMin = afRT.anchorMax = new Vector2(0f, 0.5f);
+        afRT.pivot = new Vector2(0f, 0.5f);
+        afRT.sizeDelta = new Vector2(58, 58);
+        afRT.anchoredPosition = new Vector2(8, 0);
+        afGO.AddComponent<Image>().color = Accent; // gold outer ring
 
-        var playerLbl = MakeTMP("PlayerNameLabel", hud, "Adventurer", 18, color: TextLight);
-        RectAt(playerLbl, 0.20f, 0.5f, 160, 35);
+        var afInner = NewChild("AvatarInner", afGO);
+        var afInnerRT = afInner.GetComponent<RectTransform>();
+        afInnerRT.anchorMin = new Vector2(0.10f, 0.10f);
+        afInnerRT.anchorMax = new Vector2(0.90f, 0.90f);
+        afInnerRT.offsetMin = afInnerRT.offsetMax = Vector2.zero;
+        var avatarImg = afInner.AddComponent<Image>();
+        avatarImg.color = new Color(0.45f, 0.22f, 0.65f); // set by controller at runtime
 
-        // Gold coins (center-right)
-        var coinLbl = MakeTMP("CoinLabel", hud, "0", 18, color: Accent);
-        RectAt(coinLbl, 0.60f, 0.5f, 110, 35);
-
-        // Gems (right of coins)
-        var gemLbl = MakeTMP("GemLabel", hud, "0", 18, color: new Color(0.4f, 0.8f, 1f));
-        RectAt(gemLbl, 0.78f, 0.5f, 90, 35);
-
-        // Avatar bg circle
-        var avatarGO  = NewChild("AvatarBg", hud);
-        var avatarRT  = avatarGO.GetComponent<RectTransform>();
-        avatarRT.anchorMin = avatarRT.anchorMax = new Vector2(0.44f, 0.5f);
-        avatarRT.pivot = new Vector2(0.5f, 0.5f);
-        avatarRT.sizeDelta = new Vector2(44, 44);
-        avatarRT.anchoredPosition = Vector2.zero;
-        var avatarImg  = avatarGO.AddComponent<Image>();
-        avatarImg.color = Accent;
-
-        var initLbl = MakeTMP("PlayerInitialLabel", avatarGO, "?", 20,
-            bold: true, color: BgDark);
+        var initLbl = MakeTMP("PlayerInitialLabel", afInner, "?", 22, bold: true, color: Color.white);
         Stretch(initLbl.GetComponent<RectTransform>());
 
-        // ── Game mode buttons — bottom-center, overlapping lower character area ──
-        // Two large wooden-panel buttons stacked, centered horizontally
-        var btnPanel = NewChild("ButtonPanel", content);
+        // Rank badge — overlapping bottom edge of avatar frame
+        var rankGO = NewChild("RankBadge", afGO);
+        var rankRT = rankGO.GetComponent<RectTransform>();
+        rankRT.anchorMin = rankRT.anchorMax = new Vector2(0.5f, 0f);
+        rankRT.pivot = new Vector2(0.5f, 0f);
+        rankRT.sizeDelta = new Vector2(46, 18);
+        rankRT.anchoredPosition = new Vector2(0, -3);
+        rankGO.AddComponent<Image>().color = new Color(0.36f, 0.14f, 0.54f);
+        var rankLbl = MakeTMP("RankLabel", rankGO, "Beginner", 11, color: Color.white);
+        Stretch(rankLbl.GetComponent<RectTransform>());
+
+        // Player name (right of avatar frame)
+        var playerLbl = MakeTMP("PlayerNameLabel", hud, "Adventurer", 18, color: TextLight);
+        RectAt(playerLbl, 0.23f, 0.5f, 150, 32);
+
+        // Gold coin frame
+        var coinFrame = NewChild("CoinFrame", hud);
+        var cfRT = coinFrame.GetComponent<RectTransform>();
+        cfRT.anchorMin = cfRT.anchorMax = new Vector2(0.50f, 0.5f);
+        cfRT.pivot = new Vector2(0.5f, 0.5f);
+        cfRT.sizeDelta = new Vector2(108, 34);
+        cfRT.anchoredPosition = Vector2.zero;
+        coinFrame.AddComponent<Image>().color = new Color(0.12f, 0.08f, 0.04f, 0.90f);
+        var coinBorder = NewChild("CoinBorder", coinFrame);
+        var coinBorderRT = coinBorder.GetComponent<RectTransform>();
+        coinBorderRT.anchorMin = Vector2.zero; coinBorderRT.anchorMax = Vector2.one;
+        coinBorderRT.offsetMin = new Vector2(2, 2); coinBorderRT.offsetMax = new Vector2(-2, -2);
+        coinBorder.AddComponent<Image>().color = new Color(Accent.r, Accent.g, Accent.b, 0.50f);
+        var coinIcon = MakeTMP("CoinIcon", coinFrame, "★", 18, bold: true, color: Accent);
+        RectAt(coinIcon, 0.16f, 0.5f, 22, 28);
+        var coinLbl = MakeTMP("CoinLabel", coinFrame, "0", 17, color: TextLight);
+        RectAt(coinLbl, 0.60f, 0.5f, 70, 28);
+
+        // Gem frame
+        var gemFrame = NewChild("GemFrame", hud);
+        var gfRT = gemFrame.GetComponent<RectTransform>();
+        gfRT.anchorMin = gfRT.anchorMax = new Vector2(0.72f, 0.5f);
+        gfRT.pivot = new Vector2(0.5f, 0.5f);
+        gfRT.sizeDelta = new Vector2(96, 34);
+        gfRT.anchoredPosition = Vector2.zero;
+        gemFrame.AddComponent<Image>().color = new Color(0.04f, 0.08f, 0.18f, 0.90f);
+        var gemBorder = NewChild("GemBorder", gemFrame);
+        var gemBorderRT = gemBorder.GetComponent<RectTransform>();
+        gemBorderRT.anchorMin = Vector2.zero; gemBorderRT.anchorMax = Vector2.one;
+        gemBorderRT.offsetMin = new Vector2(2, 2); gemBorderRT.offsetMax = new Vector2(-2, -2);
+        gemBorder.AddComponent<Image>().color = new Color(0.38f, 0.76f, 1f, 0.45f);
+        var gemIcon = MakeTMP("GemIcon", gemFrame, "◆", 16, bold: true, color: new Color(0.4f, 0.8f, 1f));
+        RectAt(gemIcon, 0.17f, 0.5f, 20, 28);
+        var gemLbl = MakeTMP("GemLabel", gemFrame, "0", 17, color: TextLight);
+        RectAt(gemLbl, 0.60f, 0.5f, 60, 28);
+
+        // Top-right utility icons: mailbox, announcement bell, settings gear
+        MakeHudIconBtn("MailBtn",     hud, "✉", 0.85f);
+        MakeHudIconBtn("BellBtn",     hud, "◎", 0.91f);
+        MakeHudIconBtn("SettingsBtn", hud, "⚙", 0.97f);
+
+        // ── ANNOUNCEMENT MARQUEE (just below top HUD) ─────────────────────────
+        var marqBar = NewChild("MarqueeBar", content);
+        var marqBarRT = marqBar.GetComponent<RectTransform>();
+        marqBarRT.anchorMin = new Vector2(0, 1); marqBarRT.anchorMax = new Vector2(1, 1);
+        marqBarRT.pivot = new Vector2(0.5f, 1f);
+        marqBarRT.sizeDelta = new Vector2(0, 30);
+        marqBarRT.anchoredPosition = new Vector2(0, -72);
+        marqBar.AddComponent<Image>().color = new Color(0.08f, 0.04f, 0.18f, 0.78f);
+
+        var marqMask = NewChild("MarqueeMask", marqBar);
+        Stretch(marqMask.GetComponent<RectTransform>());
+        marqMask.AddComponent<Image>().color = Color.clear;
+        marqMask.AddComponent<Mask>().showMaskGraphic = false;
+
+        var marqTextGO = NewChild("AnnouncementText", marqMask);
+        var marqTextRT = marqTextGO.GetComponent<RectTransform>();
+        marqTextRT.anchorMin = new Vector2(0, 0); marqTextRT.anchorMax = new Vector2(0, 1);
+        marqTextRT.pivot = new Vector2(0, 0.5f);
+        marqTextRT.sizeDelta = new Vector2(1400, 0);
+        marqTextRT.anchoredPosition = Vector2.zero;
+        var marqTMP = marqTextGO.AddComponent<TextMeshProUGUI>();
+        marqTMP.font = DefaultFont();
+        marqTMP.text = "New Event: Shrine Festival!   New Pet: Nine-Tailed Fox   Limited Puzzle: The Vanishing Magistrate";
+        marqTMP.fontSize = 19; marqTMP.color = new Color(1f, 0.90f, 0.55f);
+        marqTMP.alignment = TextAlignmentOptions.MidlineLeft;
+        marqTMP.raycastTarget = false;
+
+        // ── SKILL BADGE SLOTS (left edge, next to character) ─────────────────
+        var skillBadge1 = BuildSkillBadge("SkillBadge1", content, new Vector2(0.07f, 0.65f), "Hint");
+        var skillBadge2 = BuildSkillBadge("SkillBadge2", content, new Vector2(0.07f, 0.52f), "Clue");
+        var bSlot1RT    = skillBadge1.GetComponent<RectTransform>();
+        var bSlot2RT    = skillBadge2.GetComponent<RectTransform>();
+
+        // ── GAME MODE BUTTONS — 2 modes, bottom-center ────────────────────────
+        var btnPanel   = NewChild("ButtonPanel", content);
         var btnPanelRT = btnPanel.GetComponent<RectTransform>();
-        btnPanelRT.anchorMin = new Vector2(0.05f, 0.12f);
-        btnPanelRT.anchorMax = new Vector2(0.95f, 0.42f);
+        btnPanelRT.anchorMin = new Vector2(0.06f, 0.10f);
+        btnPanelRT.anchorMax = new Vector2(0.94f, 0.42f);
         btnPanelRT.offsetMin = btnPanelRT.offsetMax = Vector2.zero;
 
-        // Wooden panel background for the whole button area
-        var btnPanelBg = btnPanel.AddComponent<Image>();
-        btnPanelBg.color = new Color(0.32f, 0.16f, 0.06f, 0.72f); // dark wood brown
+        var tsBtn = BuildOrnateButton("TurtleSoupButton",    btnPanel, "Turtle Soup",     "海龟汤", "◉");
+        var mmBtn = BuildOrnateButton("MurderMysteryButton", btnPanel, "Murder Mystery",  "剧本杀", "⬡");
 
-        var tsBtn  = MakeButton("TurtleSoupButton",    btnPanel, "Turtle Soup",
-                                new Color(0.40f, 0.20f, 0.05f, 0.90f), TextLight, 24);
-        var mmBtn  = MakeButton("MurderMysteryButton", btnPanel, "Murder Mystery",
-                                new Color(0.40f, 0.20f, 0.05f, 0.90f), TextLight, 24);
-        var flBtn  = MakeButton("FriendsLobbyButton",  btnPanel, "Friends / Lobby",
-                                new Color(0.40f, 0.20f, 0.05f, 0.90f), TextLight, 20);
+        // Two buttons stacked, larger gap
+        LayoutButton(tsBtn, btnPanelRT, 0.73f);
+        LayoutButton(mmBtn, btnPanelRT, 0.27f);
 
-        // Stack three buttons vertically inside btnPanel
-        LayoutButton(tsBtn,  btnPanelRT, 0.80f);
-        LayoutButton(mmBtn,  btnPanelRT, 0.50f);
-        LayoutButton(flBtn,  btnPanelRT, 0.20f);
+        // ── BOTTOM NAVIGATION — 4 tabs ────────────────────────────────────────
+        var bottomNav = NewChild("BottomNav", content);
+        var bnRT = bottomNav.GetComponent<RectTransform>();
+        bnRT.anchorMin = Vector2.zero; bnRT.anchorMax = new Vector2(1, 0);
+        bnRT.pivot = new Vector2(0.5f, 0f);
+        bnRT.sizeDelta = new Vector2(0, 80);
+        bnRT.anchoredPosition = Vector2.zero;
+        bottomNav.AddComponent<Image>().color = new Color(0.07f, 0.04f, 0.14f, 0.94f);
 
-        // ── Skill bubbles (optional decorative UI near character) ─────────────
-        var bubble1 = NewChild("SkillBubble1", content);
-        var bub1RT  = bubble1.GetComponent<RectTransform>();
-        bub1RT.anchorMin = bub1RT.anchorMax = new Vector2(0.08f, 0.55f);
-        bub1RT.sizeDelta = new Vector2(54, 54);
-        bub1RT.anchoredPosition = Vector2.zero;
-        bubble1.AddComponent<Image>().color = new Color(0.95f, 0.76f, 0.20f, 0.85f);
+        // Gold separator line at top of nav bar
+        var navLine = NewChild("NavLine", bottomNav);
+        var nlRT    = navLine.GetComponent<RectTransform>();
+        nlRT.anchorMin = new Vector2(0, 1); nlRT.anchorMax = new Vector2(1, 1);
+        nlRT.pivot = new Vector2(0.5f, 1f);
+        nlRT.sizeDelta = new Vector2(0, 2);
+        nlRT.anchoredPosition = Vector2.zero;
+        navLine.AddComponent<Image>().color = new Color(Accent.r, Accent.g, Accent.b, 0.55f);
 
-        var bubble2 = NewChild("SkillBubble2", content);
-        var bub2RT  = bubble2.GetComponent<RectTransform>();
-        bub2RT.anchorMin = bub2RT.anchorMax = new Vector2(0.08f, 0.68f);
-        bub2RT.sizeDelta = new Vector2(54, 54);
-        bub2RT.anchoredPosition = Vector2.zero;
-        bubble2.AddComponent<Image>().color = new Color(0.30f, 0.75f, 0.90f, 0.85f);
+        BuildNavTab("ShopTab",     bottomNav, "⊞", "Shop",    0.125f);
+        BuildNavTab("FriendsTab",  bottomNav, "⊕", "Friends", 0.375f);
+        BuildNavTab("BackpackTab", bottomNav, "⊟", "Pack",    0.625f);
+        BuildNavTab("PetTab",      bottomNav, "⊛", "Pet",     0.875f);
 
-        // MainMenuController
+        // ── MAIN MENU CONTROLLER ─────────────────────────────────────────────
         var ctrl = content.AddComponent<MainMenuController>();
         SetField(ctrl, "characterRoot",       charRT);
         SetField(ctrl, "characterImage",      charImg);
         SetField(ctrl, "petRoot",             petRT);
         SetField(ctrl, "petImage",            petImg);
-        SetField(ctrl, "skillBubble1",        bub1RT);
-        SetField(ctrl, "skillBubble2",        bub2RT);
+        SetField(ctrl, "skillBubble1",        bSlot1RT);
+        SetField(ctrl, "skillBubble2",        bSlot2RT);
         SetField(ctrl, "playerNameLabel",     playerLbl.GetComponent<TMP_Text>());
         SetField(ctrl, "coinBalanceLabel",    coinLbl.GetComponent<TMP_Text>());
         SetField(ctrl, "playerAvatarBg",      avatarImg);
         SetField(ctrl, "playerInitialLabel",  initLbl.GetComponent<TMP_Text>());
-        SetField(ctrl, "announcementMarquee", marqueeText);
-        SetField(ctrl, "marqueeRect",         marqueeTextRT);
+        SetField(ctrl, "announcementMarquee", marqTMP);
+        SetField(ctrl, "marqueeRect",         marqTextRT);
         SetField(ctrl, "turtleSoupButton",    tsBtn.GetComponent<Button>());
         SetField(ctrl, "murderMysteryButton", mmBtn.GetComponent<Button>());
-        SetField(ctrl, "friendsLobbyButton",  flBtn.GetComponent<Button>());
+        // friendsLobbyButton intentionally null — Friends moved to bottom nav
 
         SaveScene(scene, "MainMenu");
+    }
+
+    // ── Ornate game-mode button (two-row text, left icon, right chevron) ──────
+    static GameObject BuildOrnateButton(string name, GameObject parent,
+        string titleEn, string titleZh, string iconSymbol)
+    {
+        // Outer dark wood frame
+        var go  = NewChild(name, parent);
+        go.AddComponent<Image>().color = new Color(0.13f, 0.07f, 0.03f, 0.96f);
+        go.AddComponent<Button>();
+
+        // Gold border (3 px inset each side)
+        var border   = NewChild("Border", go);
+        var borderRT = border.GetComponent<RectTransform>();
+        borderRT.anchorMin = Vector2.zero; borderRT.anchorMax = Vector2.one;
+        borderRT.offsetMin = new Vector2(3, 3); borderRT.offsetMax = new Vector2(-3, -3);
+        border.AddComponent<Image>().color = new Color(0.80f, 0.62f, 0.15f, 0.68f);
+
+        // Inner content panel (slightly inset from border)
+        var inner   = NewChild("Inner", go);
+        var innerRT = inner.GetComponent<RectTransform>();
+        innerRT.anchorMin = Vector2.zero; innerRT.anchorMax = Vector2.one;
+        innerRT.offsetMin = new Vector2(5, 5); innerRT.offsetMax = new Vector2(-5, -5);
+        inner.AddComponent<Image>().color = new Color(0.20f, 0.11f, 0.05f, 0.92f);
+
+        // Left icon panel
+        var iconPanel   = NewChild("IconPanel", inner);
+        var ipRT        = iconPanel.GetComponent<RectTransform>();
+        ipRT.anchorMin  = new Vector2(0, 0); ipRT.anchorMax = new Vector2(0, 1);
+        ipRT.pivot      = new Vector2(0, 0.5f);
+        ipRT.sizeDelta  = new Vector2(68, 0);
+        ipRT.anchoredPosition = new Vector2(4, 0);
+        iconPanel.AddComponent<Image>().color = new Color(0.09f, 0.05f, 0.02f, 0.85f);
+        var iconLbl = MakeTMP("IconLbl", iconPanel, iconSymbol, 26, bold: true, color: Accent);
+        Stretch(iconLbl.GetComponent<RectTransform>());
+
+        // English title (upper half, left-aligned)
+        var titleEnGO  = MakeTMP("TitleEn", inner, titleEn, 22, bold: true, color: TextLight);
+        var titleEnRT  = titleEnGO.GetComponent<RectTransform>();
+        titleEnRT.anchorMin = new Vector2(0.21f, 0.52f); titleEnRT.anchorMax = new Vector2(0.84f, 1f);
+        titleEnRT.offsetMin = titleEnRT.offsetMax = Vector2.zero;
+        titleEnGO.GetComponent<TMP_Text>().alignment = TextAlignmentOptions.MidlineLeft;
+
+        // Chinese subtitle (lower half, left-aligned, dimmer gold)
+        var titleZhGO  = MakeTMP("TitleZh", inner, titleZh, 17, color: new Color(0.85f, 0.72f, 0.42f));
+        var titleZhRT  = titleZhGO.GetComponent<RectTransform>();
+        titleZhRT.anchorMin = new Vector2(0.21f, 0f); titleZhRT.anchorMax = new Vector2(0.84f, 0.50f);
+        titleZhRT.offsetMin = titleZhRT.offsetMax = Vector2.zero;
+        titleZhGO.GetComponent<TMP_Text>().alignment = TextAlignmentOptions.MidlineLeft;
+
+        // Right chevron
+        var chevGO  = MakeTMP("Chevron", inner, "›", 30, bold: true,
+                               color: new Color(Accent.r, Accent.g, Accent.b, 0.80f));
+        var chevRT  = chevGO.GetComponent<RectTransform>();
+        chevRT.anchorMin = new Vector2(0.86f, 0f); chevRT.anchorMax = new Vector2(1f, 1f);
+        chevRT.offsetMin = chevRT.offsetMax = Vector2.zero;
+
+        return go;
+    }
+
+    // ── Skill badge: gold ring + dark fill + icon symbol + name label + level ─
+    static GameObject BuildSkillBadge(string name, GameObject parent,
+        Vector2 anchorCenter, string skillName)
+    {
+        var go = NewChild(name, parent);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = anchorCenter;
+        rt.pivot     = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(64, 82);
+        rt.anchoredPosition = Vector2.zero;
+
+        // Gold outer ring (top 78% of the badge height = the circle)
+        var ring   = NewChild("Ring", go);
+        var ringRT = ring.GetComponent<RectTransform>();
+        ringRT.anchorMin = new Vector2(0f, 0.22f); ringRT.anchorMax = new Vector2(1f, 1f);
+        ringRT.offsetMin = ringRT.offsetMax = Vector2.zero;
+        ring.AddComponent<Image>().color = Accent;
+
+        // Dark inner fill
+        var fill   = NewChild("Fill", ring);
+        var fillRT = fill.GetComponent<RectTransform>();
+        fillRT.anchorMin = new Vector2(0.10f, 0.10f); fillRT.anchorMax = new Vector2(0.90f, 0.90f);
+        fillRT.offsetMin = fillRT.offsetMax = Vector2.zero;
+        fill.AddComponent<Image>().color = new Color(0.11f, 0.06f, 0.20f);
+
+        // Skill icon
+        var iconGO = MakeTMP("SkillIcon", fill, "◉", 22, bold: true,
+                              color: new Color(1f, 0.85f, 0.40f));
+        Stretch(iconGO.GetComponent<RectTransform>());
+
+        // Level badge — top-right corner of ring
+        var lvlGO  = NewChild("LevelBadge", ring);
+        var lvlRT  = lvlGO.GetComponent<RectTransform>();
+        lvlRT.anchorMin = lvlRT.anchorMax = new Vector2(1f, 1f);
+        lvlRT.pivot     = new Vector2(0.5f, 0.5f);
+        lvlRT.sizeDelta = new Vector2(22, 22);
+        lvlRT.anchoredPosition = new Vector2(-5, -5);
+        lvlGO.AddComponent<Image>().color = new Color(0.56f, 0.27f, 0.68f);
+        var lvlLbl = MakeTMP("LvlLbl", lvlGO, "1", 12, bold: true, color: Color.white);
+        Stretch(lvlLbl.GetComponent<RectTransform>());
+
+        // Skill name label (bottom strip)
+        var nameLbl = MakeTMP("NameLabel", go, skillName, 13, color: TextLight);
+        var nameLblRT = nameLbl.GetComponent<RectTransform>();
+        nameLblRT.anchorMin = new Vector2(0f, 0f); nameLblRT.anchorMax = new Vector2(1f, 0.22f);
+        nameLblRT.offsetMin = nameLblRT.offsetMax = Vector2.zero;
+
+        return go;
+    }
+
+    // ── Small HUD icon button (top-right cluster) ─────────────────────────────
+    static void MakeHudIconBtn(string name, GameObject parent, string symbol, float xAnchor)
+    {
+        var go = NewChild(name, parent);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = new Vector2(xAnchor, 0.5f);
+        rt.pivot     = new Vector2(1f, 0.5f);
+        rt.sizeDelta = new Vector2(36, 36);
+        rt.anchoredPosition = new Vector2(-4, 0);
+        go.AddComponent<Image>().color = new Color(0.18f, 0.12f, 0.28f, 0.75f);
+        go.AddComponent<Button>();
+        var lbl = MakeTMP("Icon", go, symbol, 20, color: new Color(0.86f, 0.80f, 0.65f));
+        Stretch(lbl.GetComponent<RectTransform>());
+    }
+
+    // ── Bottom nav tab (icon + label) ─────────────────────────────────────────
+    static void BuildNavTab(string name, GameObject parent, string symbol,
+        string label, float xAnchorCenter)
+    {
+        var go = NewChild(name, parent);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(xAnchorCenter - 0.115f, 0f);
+        rt.anchorMax = new Vector2(xAnchorCenter + 0.115f, 1f);
+        rt.offsetMin = rt.offsetMax = Vector2.zero;
+        go.AddComponent<Button>();
+
+        var iconGO = MakeTMP("Icon",  go, symbol, 26, color: new Color(0.84f, 0.75f, 0.58f));
+        var iconRT = iconGO.GetComponent<RectTransform>();
+        iconRT.anchorMin = new Vector2(0f, 0.42f); iconRT.anchorMax = new Vector2(1f, 1f);
+        iconRT.offsetMin = iconRT.offsetMax = Vector2.zero;
+
+        var lblGO  = MakeTMP("Label", go, label,  15, color: new Color(0.74f, 0.66f, 0.54f));
+        var lblRT  = lblGO.GetComponent<RectTransform>();
+        lblRT.anchorMin = new Vector2(0f, 0f); lblRT.anchorMax = new Vector2(1f, 0.40f);
+        lblRT.offsetMin = lblRT.offsetMax = Vector2.zero;
     }
 
     static void LayoutButton(GameObject btn, RectTransform parent, float anchorY)
     {
         var rt = btn.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0f, anchorY - 0.14f);
-        rt.anchorMax = new Vector2(1f, anchorY + 0.14f);
+        rt.anchorMin = new Vector2(0f, anchorY - 0.20f);
+        rt.anchorMax = new Vector2(1f, anchorY + 0.20f);
         rt.offsetMin = rt.offsetMax = Vector2.zero;
     }
 
