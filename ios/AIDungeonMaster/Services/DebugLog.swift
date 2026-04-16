@@ -2,6 +2,7 @@ import SwiftUI
 
 // —————————————————————————
 // Drop-in debug logger — shows last N entries as an overlay on any view.
+// ALL logging is compiled out of release builds via #if DEBUG guards.
 //
 // Usage:  someView.overlay(alignment: .top) { DebugOverlay() }
 //
@@ -15,6 +16,7 @@ final class DebugLog: ObservableObject {
     private let maxEntries = 80
 
     static func log(_ tag: String, _ msg: String) {
+        #if DEBUG
         let ts = ISO8601DateFormatter().string(from: Date())
             .suffix(12)            // HH:mm:ss.SSS
             .replacingOccurrences(of: "Z", with: "")
@@ -34,12 +36,15 @@ final class DebugLog: ObservableObject {
                 }
             }
         }
+        #endif
     }
 
     static func clear() {
+        #if DEBUG
         Task { @MainActor in
             shared.entries.removeAll()
         }
+        #endif
     }
 }
 
@@ -48,6 +53,7 @@ struct DebugOverlay: View {
     @State private var expanded = false
 
     var body: some View {
+        #if DEBUG
         VStack(alignment: .leading, spacing: 0) {
             // Toggle button
             Button {
@@ -106,6 +112,9 @@ struct DebugOverlay: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(true)
+        #else
+        EmptyView()
+        #endif
     }
 
     private func colorFor(_ entry: String) -> Color {

@@ -90,8 +90,12 @@ class Room:
         # Full chronological log; used to replay missed messages on reconnect
         self.message_history: list[dict[str, Any]] = []
 
-        # Serialize concurrent DM turns / orchestrator calls
+        # Serialize fast state mutations (vote, reconnect, skip, reconstruction answer).
         self._lock = asyncio.Lock()
+        # Serialize slow murder-mystery chat turns (holds across LLM I/O).
+        # Kept separate from _lock so votes and reconstruction answers are never
+        # blocked while a streaming orchestrator call is in flight.
+        self._chat_lock = asyncio.Lock()
 
         # Proactive DM intervention engine
         self.intervention = InterventionEngine(self)

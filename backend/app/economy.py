@@ -1,8 +1,16 @@
-"""Economy system — currency, shop, gacha with pity."""
+"""Economy system — currency, shop, gacha with pity.
+
+State is persisted in the auth.db SQLite database (economy table) so that
+player balances and pity counters survive server restarts.
+"""
 from __future__ import annotations
 
+import json
 import random
+import sqlite3
+import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 
 EARN_PER_MATCH = 10
 EARN_MVP_BONUS = 5
@@ -25,6 +33,68 @@ _GACHA_POOL: dict[str, list[dict]] = {
     for rarity in ("R", "SR", "SSR")
 }
 
+# ---------------------------------------------------------------------------
+# SQLite persistence
+# ---------------------------------------------------------------------------
+
+_DB_PATH = Path(__file__).parent.parent / "data" / "auth.db"
+_db_lock = threading.Lock()
+
+
+def _conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_economy_db() -> None:
+    """Create the economy table if it does not exist. Call once at startup."""
+    _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with _db_lock, _conn() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS economy (
+                user_id        TEXT PRIMARY KEY,
+                balance        INTEGER NOT NULL DEFAULT 0,
+                inventory_json TEXT NOT NULL DEFAULT '[]',
+                pity           INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+
+
+def _db_load(user_id: str) -> "_UserEconomy":
+    with _db_lock, _conn() as conn:
+        row = conn.execute(
+            "SELECT balance, inventory_json, pity FROM economy WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        return _UserEconomy()
+    return _UserEconomy(
+        balance=row["balance"],
+        inventory=json.loads(row["inventory_json"]),
+        pity=row["pity"],
+    )
+
+
+def _db_save(user_id: str, u: "_UserEconomy") -> None:
+    with _db_lock, _conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO economy (user_id, balance, inventory_json, pity)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                balance        = excluded.balance,
+                inventory_json = excluded.inventory_json,
+                pity           = excluded.pity
+            """,
+            (user_id, u.balance, json.dumps(u.inventory), u.pity),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Data model
+# ---------------------------------------------------------------------------
+
 
 @dataclass
 class _UserEconomy:
@@ -33,18 +103,28 @@ class _UserEconomy:
     pity: int = 0  # pulls since last SSR
 
 
+# ---------------------------------------------------------------------------
+# Manager
+# ---------------------------------------------------------------------------
+
+
 class EconomyManager:
     def __init__(self) -> None:
-        self._store: dict[str, _UserEconomy] = {}
+        # In-process cache to avoid a DB round-trip on every call.
+        self._cache: dict[str, _UserEconomy] = {}
 
     def _get(self, user_id: str) -> _UserEconomy:
-        if user_id not in self._store:
-            self._store[user_id] = _UserEconomy()
-        return self._store[user_id]
+        if user_id not in self._cache:
+            self._cache[user_id] = _db_load(user_id)
+        return self._cache[user_id]
+
+    def _save(self, user_id: str) -> None:
+        _db_save(user_id, self._cache[user_id])
 
     def earn_coins(self, user_id: str, amount: int) -> int:
         u = self._get(user_id)
         u.balance += amount
+        self._save(user_id)
         return u.balance
 
     def get_balance(self, user_id: str) -> int:
@@ -61,6 +141,7 @@ class EconomyManager:
             raise ValueError("Insufficient funds")
         u.balance -= item["cost"]
         u.inventory.append(item_id)
+        self._save(user_id)
         return {"ok": True}
 
     def get_inventory(self, user_id: str) -> list[str]:
@@ -103,6 +184,7 @@ class GachaEngine:
         if item["id"] not in u.inventory:
             u.inventory.append(item["id"])
 
+        self._eco._save(user_id)
         return {"item": item, "rarity": rarity, "pity_count": u.pity}
 
     def get_pity(self, user_id: str) -> int:

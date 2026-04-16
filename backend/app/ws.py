@@ -704,11 +704,13 @@ async def _handle_mm_chat(room: Room, player_id: str, player_name: str, text: st
     room.message_history.append(player_msg)
     await room.broadcast(player_msg)
 
-    # Run streaming orchestrator pipeline
+    # Run streaming orchestrator pipeline.
+    # Use _chat_lock (not _lock) so concurrent votes and reconstruction answers
+    # are never blocked while LLM network I/O is in flight.
     dm_started = False
     try:
-        async with room._lock:
-            logger.debug("[MM-CHAT] lock acquired, starting orchestrator stream")
+        async with room._chat_lock:
+            logger.debug("[MM-CHAT] chat_lock acquired, starting orchestrator stream")
             stream_gen = await room.orchestrator.handle_message_stream(player_id, text)
             async for event in stream_gen:
                 event_type = event.get("type", "")
@@ -1047,7 +1049,7 @@ async def websocket_endpoint(
     # Authenticate via JWT
     user_id: str | None = None
     player_name = ""
-    jwt_sub: str | None = None          # JWT sub, even when signature is invalid
+    jwt_sub: str | None = None          # set only from a verified JWT payload
     try:
         payload = decode_jwt(token)
         jwt_sub = payload.get("sub")
@@ -1056,19 +1058,11 @@ async def websocket_endpoint(
             user_id = user["id"]
             player_name = user["name"]
     except (ValueError, KeyError):
-        # JWT signature invalid (e.g. JWT_SECRET rotated after backend restart).
-        # Extract sub WITHOUT verifying the signature — used only to derive a
-        # stable display name so the player doesn't appear as a new random guest
-        # on every reconnect.  This does NOT grant authentication privileges.
-        try:
-            import base64 as _b64, json as _json
-            _parts = token.split(".")
-            if len(_parts) == 3:
-                _pad = _parts[1] + "=="
-                _pl = _json.loads(_b64.urlsafe_b64decode(_pad))
-                jwt_sub = _pl.get("sub")
-        except Exception:
-            pass
+        # JWT signature invalid or token malformed — fall through to guest name.
+        # Do NOT attempt to decode without signature verification; the sub field
+        # must not be trusted for identity or reconnect detection when the
+        # signature check has failed.
+        pass
 
     if not player_name:
         # Priority order for stable identity (reconnect detection requires
@@ -1105,41 +1099,47 @@ async def websocket_endpoint(
 
     # ----------------------------------------------------------------
     # Determine join / reconnect / reject
+    # Hold room._lock for the entire slot-detection block to prevent a TOCTOU
+    # race where two concurrent connections for the same player_name both pass
+    # find_player_by_name and overwrite each other's websocket non-deterministically.
     # ----------------------------------------------------------------
     player_id: str
     is_reconnect = False
     reconnect_timestamp: float = 0.0
-
     reconnect_gap: float = 0.0
-    existing_id = room.find_player_by_name(player_name)
-    if existing_id is not None:
-        slot = room.players[existing_id]
-        if slot["connected"]:
-            # Same player reconnecting (e.g. navigating from lobby→game room on mobile).
-            # Force-take the slot: mark old connection dead, treat as immediate reconnect.
-            room.disconnect_player(existing_id)
-        reconnect_gap = time.time() - slot["last_seen"]
-        if reconnect_gap <= RECONNECT_WINDOW_SECS:
-            is_reconnect = True
-            player_id = existing_id
-            reconnect_timestamp = slot["last_seen"]
-            room.reconnect_player(player_id, websocket)
+    _reject_msg: str | None = None
+
+    async with room._lock:
+        existing_id = room.find_player_by_name(player_name)
+        if existing_id is not None:
+            slot = room.players[existing_id]
+            if slot["connected"]:
+                # Same player reconnecting (e.g. navigating from lobby→game room on mobile).
+                # Force-take the slot: mark old connection dead, treat as immediate reconnect.
+                room.disconnect_player(existing_id)
+            reconnect_gap = time.time() - slot["last_seen"]
+            if reconnect_gap <= RECONNECT_WINDOW_SECS:
+                is_reconnect = True
+                player_id = existing_id
+                reconnect_timestamp = slot["last_seen"]
+                room.reconnect_player(player_id, websocket)
+            else:
+                if room.is_full():
+                    _reject_msg = "Room is full (max 6 players)" if getattr(room, "language", "zh") == "en" else "房间已满（最多6人）"
+                else:
+                    player_id = str(uuid.uuid4())
+                    room.add_player(player_id, player_name, websocket)
         else:
             if room.is_full():
-                _full_msg = "Room is full (max 6 players)" if getattr(room, "language", "zh") == "en" else "房间已满（最多6人）"
-                await websocket.send_json({"type": "error", "text": _full_msg})
-                await websocket.close(code=4429)
-                return
-            player_id = str(uuid.uuid4())
-            room.add_player(player_id, player_name, websocket)
-    else:
-        if room.is_full():
-            _full_msg = "Room is full (max 6 players)" if getattr(room, "language", "zh") == "en" else "房间已满（最多6人）"
-            await websocket.send_json({"type": "error", "text": _full_msg})
-            await websocket.close(code=4429)
-            return
-        player_id = str(uuid.uuid4())
-        room.add_player(player_id, player_name, websocket)
+                _reject_msg = "Room is full (max 6 players)" if getattr(room, "language", "zh") == "en" else "房间已满（最多6人）"
+            else:
+                player_id = str(uuid.uuid4())
+                room.add_player(player_id, player_name, websocket)
+
+    if _reject_msg is not None:
+        await websocket.send_json({"type": "error", "text": _reject_msg})
+        await websocket.close(code=4429)
+        return
 
     # ----------------------------------------------------------------
     # Announce presence
@@ -1585,8 +1585,7 @@ async def websocket_endpoint(
             await room.broadcast(dm_end_msg)
             room.intervention.record_dm_spoke()
 
-            # Also store trace in trace_store (compatible with existing store_trace call)
-            store_trace(room.room_id, {})
+            # Turtle soup does not produce an AgentTrace; nothing to store here.
 
             # ---- Phase 2: game_over broadcast with MVP ----
             if winner_name is not None:

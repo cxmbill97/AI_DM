@@ -33,8 +33,10 @@ VOICES: dict[str, str] = {
 # Cache
 # ---------------------------------------------------------------------------
 
-CACHE_DIR = Path("tts_cache")
-CACHE_DIR.mkdir(exist_ok=True)
+# Use an absolute path so the cache is always relative to this source file,
+# regardless of where uvicorn is launched from.
+CACHE_DIR = Path(__file__).parent.parent / "tts_cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 MAX_CACHE_FILES = 200
 
 

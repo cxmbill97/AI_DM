@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import time
 import uuid
+from collections import defaultdict
 
 import httpx
 import asyncio
@@ -33,6 +35,7 @@ from app.auth import (
     upsert_user,
 )
 from app.community import init_db, like_script, list_community_scripts, upsert_script
+from app.economy import init_economy_db
 from app.config import settings
 from app.dm import dm_turn, dm_turn_stream
 from app.models import (
@@ -73,6 +76,7 @@ app.include_router(pet_router.router)
 async def _startup() -> None:
     init_db()
     init_auth_db()
+    init_economy_db()
 
 
 @app.exception_handler(APIError)
@@ -997,16 +1001,45 @@ async def get_anomalies(room_id: str, _admin: dict = Depends(_require_admin)) ->
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# TTS rate limiter — sliding window: max 30 requests per IP per 60 seconds.
+# Prevents abuse of the unauthenticated Edge TTS endpoint.
+# ---------------------------------------------------------------------------
+_TTS_RATE_WINDOW = 60       # seconds
+_TTS_RATE_MAX = 30          # requests per window per IP
+_tts_requests: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_tts_rate(ip: str) -> bool:
+    """Return True if this IP is within the rate limit, False if exceeded."""
+    now = time.time()
+    window_start = now - _TTS_RATE_WINDOW
+    # Prune expired timestamps for this IP
+    _tts_requests[ip] = [t for t in _tts_requests[ip] if t > window_start]
+    if len(_tts_requests[ip]) >= _TTS_RATE_MAX:
+        return False
+    _tts_requests[ip].append(now)
+    # Evict IPs that have gone quiet to prevent unbounded dict growth.
+    if len(_tts_requests) > 10_000:
+        stale = [k for k, v in _tts_requests.items() if not v]
+        for k in stale:
+            del _tts_requests[k]
+    return True
+
+
 @app.get("/api/tts")
-async def tts_endpoint(text: str = "", lang: str = "zh") -> Response:
+async def tts_endpoint(request: Request, text: str = "", lang: str = "zh") -> Response:
     """GET /api/tts?text=…&lang=zh|en
 
     Returns audio/mpeg (MP3).  Max text length is enforced inside synthesize().
-    No auth required — audio content is the DM's public narration text.
-    Cached responses carry a 1-hour public cache header.
+    Rate-limited to 30 req/min per IP.  Cached responses carry a 1-hour public
+    cache header.
     """
     if not text or not text.strip():
         return Response(status_code=400)
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_tts_rate(client_ip):
+        return Response(status_code=429, content="Too many TTS requests")
     mp3 = await tts_synthesize(text, language=lang)
     return Response(
         content=mp3,

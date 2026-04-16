@@ -96,7 +96,8 @@ final class WebSocketService: ObservableObject {
             DebugLog.log("WS", "ERROR: invalid URL: \(urlString)")
             return
         }
-        DebugLog.log("WS", "openConnection → \(urlString)")
+        // Log only the room path, never the token — token is a credential.
+        DebugLog.log("WS", "openConnection → /ws/\(roomId)")
         task = URLSession.shared.webSocketTask(with: url)
         task?.resume()
         // isConnected is set to true on first successful receive in listen(),
@@ -107,11 +108,19 @@ final class WebSocketService: ObservableObject {
     }
 
     private func startPingLoop() {
-        pingTask = Task {
+        pingTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 20_000_000_000)
-                guard !Task.isCancelled, let t = task else { break }
-                t.sendPing { _ in }
+                guard !Task.isCancelled, let self, let t = self.task else { break }
+                t.sendPing { error in
+                    // A failed ping means the TCP connection silently dropped
+                    // (common on iOS when switching Wi-Fi ↔ cellular). Trigger
+                    // reconnect so the user isn't left in a stale-connected state.
+                    if let error {
+                        DebugLog.log("WS", "ping failed: \(error) — triggering reconnect")
+                        Task { @MainActor in self.handleDisconnect() }
+                    }
+                }
             }
         }
     }
